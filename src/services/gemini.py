@@ -215,24 +215,52 @@ async def generate_report(
         weight_text = f"No weights logged during this period. Profile weight is {profile.get('weight_kg')} kg.\n"
 
     lang_name = "Russian" if language == "ru" else "English"
-    prompt = (
-        f"You are a professional nutrition and fitness coach. "
-        f"Generate a {report_type} report for the user in the language: {lang_name}. "
-        f"Format the output using Telegram-compatible Markdown (bolding, lists, code blocks for tables).\n\n"
-        f"--- USER PROFILE ---\n{profile_text}\n"
-        f"--- FOOD LOGS FOR PERIOD ---\n{food_text}\n"
-        f"--- WEIGHT LOGS FOR PERIOD ---\n{weight_text}\n\n"
-        f"INSTRUCTIONS:\n"
-        f"1. Summarize total calories and macronutrients consumed versus user targets. "
-        f"Calculate the average daily values and percentages of completion.\n"
-        f"2. Detail the weight changes. Analyze if the weight trend aligns with their goal (Goal: {profile.get('goal')}).\n"
-        f"   - If their goal is to lose weight, weight should decrease. If it increased or stayed same, note the deviation.\n"
-        f"   - If their goal is to gain weight/muscle, weight should increase. If it decreased or stayed same, note the deviation.\n"
-        f"   - If weight is moving in a different direction than their aim, issue a distinct, polite, and encouraging WARNING, "
-        f"and explain WHY it might be happening (e.g., fluid retention, underestimating portions, too high/low calorie targets).\n"
-        f"3. Provide actionable recommendations (e.g., adjust caloric intake, increase protein, watch out for specific food categories, adjust water/physical activity level).\n"
-        f"4. Keep the tone encouraging, professional, and clear. Avoid writing long introductions. Start directly with the report."
-    )
+    
+    if report_type == "daily":
+        prompt = (
+            f"You are a professional nutrition and fitness coach. "
+            f"Generate a daily report for the user in the language: {lang_name}. "
+            f"Format the output using Telegram-compatible Markdown (bolding, lists, code blocks for tables).\n\n"
+            f"--- USER PROFILE ---\n{profile_text}\n"
+            f"--- FOOD LOGS FOR TODAY ---\n{food_text}\n"
+            f"--- WEIGHT LOGS ---\n{weight_text}\n\n"
+            f"INSTRUCTIONS:\n"
+            f"1. Explain what they have eaten today and analyze their meals.\n"
+            f"2. Give them a list of specific things they need to focus on more (e.g., eating more protein, choosing healthier fats, staying hydrated, getting active, adjusting calorie/macro intake relative to targets).\n"
+            f"3. Keep the tone encouraging, professional, and clear. Keep the text concise and under 2500 characters so it fits within Telegram limits. Avoid long introductions. Start directly with the report."
+        )
+    elif report_type == "weekly":
+        prompt = (
+            f"You are a professional nutrition and fitness coach. "
+            f"Generate a weekly report for the user in the language: {lang_name}. "
+            f"Format the output using Telegram-compatible Markdown (bolding, lists, code blocks for tables).\n\n"
+            f"--- USER PROFILE ---\n{profile_text}\n"
+            f"--- FOOD LOGS FOR PREVIOUS WEEK ---\n{food_text}\n"
+            f"--- WEIGHT LOGS ---\n{weight_text}\n\n"
+            f"INSTRUCTIONS:\n"
+            f"1. Explain what they have eaten during the previous week and analyze their meals.\n"
+            f"2. Give them a list of specific things they need to focus on more (e.g., eating more protein, choosing healthier fats, staying hydrated, getting active, adjusting calorie/macro intake relative to targets).\n"
+            f"3. Keep the tone encouraging, professional, and clear. Keep the text concise and under 2500 characters so it fits within Telegram limits. Avoid long introductions. Start directly with the report."
+        )
+    else:
+        prompt = (
+            f"You are a professional nutrition and fitness coach. "
+            f"Generate a {report_type} report for the user in the language: {lang_name}. "
+            f"Format the output using Telegram-compatible Markdown (bolding, lists, code blocks for tables).\n\n"
+            f"--- USER PROFILE ---\n{profile_text}\n"
+            f"--- FOOD LOGS FOR PERIOD ---\n{food_text}\n"
+            f"--- WEIGHT LOGS FOR PERIOD ---\n{weight_text}\n\n"
+            f"INSTRUCTIONS:\n"
+            f"1. Summarize total calories and macronutrients consumed versus user targets. "
+            f"Calculate the average daily values and percentages of completion.\n"
+            f"2. Detail the weight changes. Analyze if the weight trend aligns with their goal (Goal: {profile.get('goal')}).\n"
+            f"   - If their goal is to lose weight, weight should decrease. If it increased or stayed same, note the deviation.\n"
+            f"   - If their goal is to gain weight/muscle, weight should increase. If it decreased or stayed same, note the deviation.\n"
+            f"   - If weight is moving in a different direction than their aim, issue a distinct, polite, and encouraging WARNING, "
+            f"and explain WHY it might be happening (e.g., fluid retention, underestimating portions, too high/low calorie targets).\n"
+            f"3. Provide actionable recommendations (e.g., adjust caloric intake, increase protein, watch out for specific food categories, adjust water/physical activity level).\n"
+            f"4. Keep the tone encouraging, professional, and clear. Keep the text concise and under 2500 characters. Avoid writing long introductions. Start directly with the report."
+        )
     
     try:
         response = await call_gemini_with_retry(

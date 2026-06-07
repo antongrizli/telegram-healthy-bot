@@ -59,3 +59,18 @@ def test_clean_telegram_markdown_mixed_escaping():
         "```"
     )
     assert clean_telegram_markdown(raw_input) == expected_output
+
+def test_split_message():
+    from src.utils.escape import split_message
+    
+    # 1. Short text
+    assert split_message("hello") == ["hello"]
+    assert split_message("") == []
+    
+    # 2. Text split at newline
+    long_text = "line1\nline2\nline3"
+    assert split_message(long_text, max_length=12) == ["line1\nline2", "line3"]
+    
+    # 3. Text split force (single line exceeding max_length)
+    assert split_message("abcdefgh", max_length=3) == ["abc", "def", "gh"]
+

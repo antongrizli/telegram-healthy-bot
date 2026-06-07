@@ -51,7 +51,10 @@ def get_cancel_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_setup_profile_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
-    kb = [[KeyboardButton(text=get_text("btn_setup_profile", lang))]]
+    kb = [
+        [KeyboardButton(text=get_text("btn_setup_profile", lang))],
+        [KeyboardButton(text="⬅️ Back to Main Menu" if lang == "en" else "⬅️ Главное меню")]
+    ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_sex_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:

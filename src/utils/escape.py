@@ -86,3 +86,33 @@ def clean_text_block(text: str) -> str:
     text = text.replace('\x02', '_')
 
     return text
+
+def split_message(text: str, max_length: int = 4000) -> list:
+    """
+    Splits a message into multiple parts of at most `max_length` characters,
+    splitting on newlines where possible to maintain readable blocks.
+    """
+    if not text:
+        return []
+    if len(text) <= max_length:
+        return [text]
+        
+    parts = []
+    current_part = ""
+    for line in text.split("\n"):
+        if len(current_part) + len(line) + 1 > max_length:
+            if current_part:
+                parts.append(current_part.strip())
+                current_part = line + "\n"
+            else:
+                while len(line) > max_length:
+                    parts.append(line[:max_length])
+                    line = line[max_length:]
+                current_part = line + "\n"
+        else:
+            current_part += line + "\n"
+            
+    if current_part:
+        parts.append(current_part.strip())
+    return parts
+

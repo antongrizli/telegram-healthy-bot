@@ -65,7 +65,7 @@ LOCALES = {
         "broadcast_sent": "📢 Broadcast message sent to {count} users.",
         "broadcast_failed": "⚠️ Failed to send broadcast message.",
         
-        "daily_reminder": "🔔 Hey! Don't forget to log your meals today to stay on track with your calorie targets!",
+        "daily_reminder": "🔔 Please add what you've eaten during the day to ensure there are no gaps in your diet.",
         
         "sex_male": "Male",
         "sex_female": "Female",
@@ -172,7 +172,7 @@ LOCALES = {
         "broadcast_sent": "📢 Сообщение разослано {count} пользователям.",
         "broadcast_failed": "⚠️ Не удалось разослать сообщение.",
         
-        "daily_reminder": "🔔 Привет! Не забудьте записать сегодняшнюю еду, чтобы контролировать свою норму калорий!",
+        "daily_reminder": "🔔 Пожалуйста, запишите, что вы съели за день, чтобы избежать пропусков в вашем рационе питания.",
         
         "sex_male": "Мужской",
         "sex_female": "Женский",

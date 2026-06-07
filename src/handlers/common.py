@@ -101,3 +101,11 @@ async def trigger_weekly_report(message: Message, user_language: str, db_user):
         await cmd_start(message, user_language, db_user)
         return
     await send_weekly_report(message.bot, message.from_user.id)
+
+@router.message(F.text.in_(["⬅️ Back to Main Menu", "⬅️ Главное меню"]))
+async def cmd_back_to_main_menu(message: Message, user_language: str, db_user):
+    is_admin = db_user.telegram_id in settings.ADMIN_USER_IDS or db_user.is_admin if db_user else False
+    await message.answer(
+        "Returning to main menu..." if user_language == "en" else "Возвращаюсь в главное меню...",
+        reply_markup=reply.get_main_menu(user_language, is_admin=is_admin)
+    )

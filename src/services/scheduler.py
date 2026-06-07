@@ -7,8 +7,26 @@ from src.database.connection import AsyncSessionLocal
 from src.database import crud
 from src.services import gemini
 from src.utils import i18n_locales
+from src.utils.escape import split_message
 
 scheduler = AsyncIOScheduler()
+
+async def send_multipart_message(bot: Bot, chat_id: int, text: str, parse_mode: str = "Markdown"):
+    """
+    Sends a potentially large message to a user, splitting it if it exceeds the max limit.
+    Falls back to unparsed mode if the formatting tags break across splits.
+    """
+    parts = split_message(text, max_length=4000)
+    for part in parts:
+        if not part.strip():
+            continue
+        try:
+            await bot.send_message(chat_id, part, parse_mode=parse_mode)
+        except Exception:
+            try:
+                await bot.send_message(chat_id, part)
+            except Exception as e:
+                print(f"Failed to send plain message part to {chat_id}: {e}")
 
 async def send_daily_reminder(bot: Bot, user_id: int):
     async with AsyncSessionLocal() as db:
@@ -92,7 +110,7 @@ async def send_daily_report(bot: Bot, user_id: int):
                 f"• *Carbs*: {total_c:.1f} / {user.target_carb}g\n\n"
             )
             
-            await bot.send_message(user_id, header + report, parse_mode="Markdown")
+            await send_multipart_message(bot, user_id, header + report, parse_mode="Markdown")
         except Exception as e:
             print(f"Error sending daily report to {user_id}: {e}")
 
@@ -135,7 +153,7 @@ async def send_weekly_report(bot: Bot, user_id: int):
             
             report = await gemini.generate_report(profile_dict, food_logs, weight_logs, "weekly", user.language)
             header = f"{i18n_locales.get_text('weekly_report_header', user.language)}\n\n"
-            await bot.send_message(user_id, header + report, parse_mode="Markdown")
+            await send_multipart_message(bot, user_id, header + report, parse_mode="Markdown")
         except Exception as e:
             print(f"Error sending weekly report to {user_id}: {e}")
 
@@ -178,7 +196,7 @@ async def send_monthly_report(bot: Bot, user_id: int):
             
             report = await gemini.generate_report(profile_dict, food_logs, weight_logs, "monthly", user.language)
             header = f"{i18n_locales.get_text('monthly_report_header', user.language)}\n\n"
-            await bot.send_message(user_id, header + report, parse_mode="Markdown")
+            await send_multipart_message(bot, user_id, header + report, parse_mode="Markdown")
         except Exception as e:
             print(f"Error sending monthly report to {user_id}: {e}")
 

@@ -37,14 +37,6 @@ async def cancel_admin_action(message: Message, state: FSMContext, user_language
         parse_mode="Markdown"
     )
 
-@router.message(F.text.in_(["⬅️ Back to Main Menu", "⬅️ Главное меню"]))
-async def cmd_back_to_main_menu(message: Message, user_language: str, db_user):
-    is_admin = db_user.telegram_id in settings.ADMIN_USER_IDS or db_user.is_admin if db_user else False
-    await message.answer(
-        "Returning to main menu..." if user_language == "en" else "Возвращаюсь в главное меню...",
-        reply_markup=reply.get_main_menu(user_language, is_admin=is_admin)
-    )
-
 @router.message(F.text.in_(["📊 Stats", "📊 Статистика"]))
 async def cmd_admin_stats(message: Message, user_language: str):
     async with AsyncSessionLocal() as db:

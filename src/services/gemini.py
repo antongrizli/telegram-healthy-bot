@@ -41,10 +41,11 @@ async def analyze_food_input(
     """
     Sends text or image food input to Gemini 2.5 Flash and returns structured nutritional facts.
     """
+    lang_name = "Russian" if language == "ru" else "English"
     prompt = (
         f"You are a professional nutrition expert. Analyze the food described in the text or image. "
         f"Estimate the name, portion size, calories, protein, fat, and carbs. "
-        f"Provide the response in the language: {language}. "
+        f"Provide the response in the language: {lang_name}. "
         f"Make sure to sum up the values correctly."
     )
     
@@ -64,7 +65,7 @@ async def analyze_food_input(
     
     try:
         response = client.models.generate_content(
-            model="gemma-4-31b-it",
+            model="gemini-2.5-flash",
             contents=contents,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -89,18 +90,19 @@ async def adjust_food_analysis(
     """
     Re-evaluates a food analysis based on the user's text corrections.
     """
+    lang_name = "Russian" if language == "ru" else "English"
     prompt = (
         f"You are a professional nutrition expert. The user previously logged food, and it was analyzed as follows:\n"
         f"{json.dumps(original_data, indent=2)}\n\n"
         f"The user has now provided the following corrections:\n"
         f"'{correction_text}'\n\n"
         f"Please adjust the food items list, portion sizes, calories, and macros based on these corrections. "
-        f"Provide the output in the language: {language}."
+        f"Provide the output in the language: {lang_name}."
     )
     
     try:
         response = client.models.generate_content(
-            model="gemma-4-31b-it",
+            model="gemini-2.5-flash",
             contents=[prompt],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -173,9 +175,10 @@ async def generate_report(
     if not weight_text:
         weight_text = f"No weights logged during this period. Profile weight is {profile.get('weight_kg')} kg.\n"
 
+    lang_name = "Russian" if language == "ru" else "English"
     prompt = (
         f"You are a professional nutrition and fitness coach. "
-        f"Generate a {report_type} report for the user in the language: {language}. "
+        f"Generate a {report_type} report for the user in the language: {lang_name}. "
         f"Format the output using Telegram-compatible Markdown (bolding, lists, code blocks for tables).\n\n"
         f"--- USER PROFILE ---\n{profile_text}\n"
         f"--- FOOD LOGS FOR PERIOD ---\n{food_text}\n"
@@ -194,7 +197,7 @@ async def generate_report(
     
     try:
         response = client.models.generate_content(
-            model="gemma-4-31b-it",
+            model="gemini-2.5-flash",
             contents=[prompt],
             config=types.GenerateContentConfig(
                 temperature=0.3

@@ -3,8 +3,6 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from src.config import settings
-from src.database.connection import engine
-from src.database.models import Base
 from src.handlers import common, profile, food, weight, admin
 from src.middlewares.i18n import LanguageMiddleware
 from src.middlewares.logging import InteractionLoggingMiddleware
@@ -19,17 +17,8 @@ async def main():
     )
     logger = logging.getLogger(__name__)
 
-    logger.info("Initializing database schema...")
-    async with engine.begin() as conn:
-        # Auto-create tables if they do not exist
-        await conn.run_sync(Base.metadata.create_all)
-        
-        # Add timezone column to existing PostgreSQL users table if it doesn't exist
-        import sqlalchemy as sa
-        try:
-            await conn.execute(sa.text("ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(50) NOT NULL DEFAULT 'UTC'"))
-        except Exception as e:
-            logger.info(f"Timezone column check/migration skipped or handled: {e}")
+    from src.database.init_db import init_db
+    await init_db()
 
     logger.info("Initializing Bot and Dispatcher...")
     bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)

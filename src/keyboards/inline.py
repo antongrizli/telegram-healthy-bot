@@ -152,3 +152,81 @@ def get_regional_timezone_keyboard(region: str, page: int, lang: str = "en") -> 
     kb.append([InlineKeyboardButton(text=back_regions_label, callback_data="tz:regions")])
     
     return InlineKeyboardMarkup(inline_keyboard=kb)
+
+def get_meals_keyboard(meals: list, target_date_str: str, show_next: bool, lang: str = "en") -> InlineKeyboardMarkup:
+    """
+    Creates an inline keyboard containing:
+    1. Buttons for each meal in rows: [✏️ Edit #N] and [❌ Delete #N]
+    2. A navigation row: [⬅️ Previous Day] and optionally [Next Day ➡️]
+    """
+    kb = []
+    
+    # 1. Edit & Delete buttons for each meal
+    for idx, meal in enumerate(meals):
+        num = idx + 1
+        btn_edit_text = get_text("btn_edit_meal", lang, num=num)
+        btn_delete_text = get_text("btn_delete_meal", lang, num=num)
+        
+        # Format: meal:edit:<meal_id>:<target_date_str>
+        # Format: meal:delete:<meal_id>:<target_date_str>
+        kb.append([
+            InlineKeyboardButton(text=btn_edit_text, callback_data=f"meal:edit:{meal.id}:{target_date_str}"),
+            InlineKeyboardButton(text=btn_delete_text, callback_data=f"meal:delete:{meal.id}:{target_date_str}")
+        ])
+        
+    # 2. Navigation buttons
+    from datetime import datetime, timedelta
+    try:
+        current_date = datetime.strptime(target_date_str, "%Y-%m-%d").date()
+    except ValueError:
+        current_date = datetime.utcnow().date()
+        
+    prev_date_str = (current_date - timedelta(days=1)).strftime("%Y-%m-%d")
+    next_date_str = (current_date + timedelta(days=1)).strftime("%Y-%m-%d")
+    
+    nav_row = [
+        InlineKeyboardButton(text=get_text("btn_prev_day", lang), callback_data=f"meal:list:{prev_date_str}")
+    ]
+    if show_next:
+        nav_row.append(
+            InlineKeyboardButton(text=get_text("btn_next_day", lang), callback_data=f"meal:list:{next_date_str}")
+        )
+        
+    kb.append(nav_row)
+    return InlineKeyboardMarkup(inline_keyboard=kb)
+
+def get_meal_edit_confirm_keyboard(lang: str = "en") -> InlineKeyboardMarkup:
+    """
+    Returns the confirmation keyboard for meal edits.
+    """
+    kb = [
+        [
+            InlineKeyboardButton(text=get_text("btn_accept", lang), callback_data="mealedit:accept"),
+            InlineKeyboardButton(text=get_text("btn_correct", lang), callback_data="mealedit:correct")
+        ],
+        [
+            InlineKeyboardButton(text=get_text("btn_cancel", lang), callback_data="mealedit:cancel")
+        ]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=kb)
+
+def get_meal_type_keyboard(lang: str = "en") -> InlineKeyboardMarkup:
+    """
+    Returns the keyboard to choose a meal type (breakfast, lunch, dinner, snack, food).
+    """
+    kb = [
+        [
+            InlineKeyboardButton(text=get_text("meal_type_breakfast", lang), callback_data="meal_type:breakfast"),
+            InlineKeyboardButton(text=get_text("meal_type_lunch", lang), callback_data="meal_type:lunch")
+        ],
+        [
+            InlineKeyboardButton(text=get_text("meal_type_dinner", lang), callback_data="meal_type:dinner"),
+            InlineKeyboardButton(text=get_text("meal_type_snack", lang), callback_data="meal_type:snack")
+        ],
+        [
+            InlineKeyboardButton(text=get_text("meal_type_food", lang), callback_data="meal_type:food")
+        ]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=kb)
+
+

@@ -49,7 +49,8 @@ async def add_food_log(
     fats: float,
     carbs: float,
     image_file_id: str = None,
-    raw_text: str = None
+    raw_text: str = None,
+    meal_type: str = "food"
 ) -> FoodLog:
     food_log = FoodLog(
         user_id=user_id,
@@ -60,6 +61,7 @@ async def add_food_log(
         carbs=carbs,
         image_file_id=image_file_id,
         raw_text=raw_text,
+        meal_type=meal_type,
         logged_at=datetime.now(UTC).replace(tzinfo=None)
     )
     db.add(food_log)
@@ -178,3 +180,61 @@ async def get_admin_stats(db: AsyncSession) -> dict:
         "food_logs_24h": food_logs_24h,
         "messages_24h": messages_24h
     }
+
+async def delete_food_log(db: AsyncSession, log_id: int, user_id: int) -> bool:
+    result = await db.execute(
+        select(FoodLog).where(
+            and_(
+                FoodLog.id == log_id,
+                FoodLog.user_id == user_id
+            )
+        )
+    )
+    food_log = result.scalars().first()
+    if food_log:
+        await db.delete(food_log)
+        await db.commit()
+        return True
+    return False
+
+async def get_food_log_by_id(db: AsyncSession, log_id: int, user_id: int) -> FoodLog | None:
+    result = await db.execute(
+        select(FoodLog).where(
+            and_(
+                FoodLog.id == log_id,
+                FoodLog.user_id == user_id
+            )
+        )
+    )
+    return result.scalars().first()
+
+async def update_food_log(
+    db: AsyncSession,
+    log_id: int,
+    user_id: int,
+    items_json: list,
+    calories: int,
+    proteins: float,
+    fats: float,
+    carbs: float
+) -> FoodLog | None:
+    result = await db.execute(
+        select(FoodLog).where(
+            and_(
+                FoodLog.id == log_id,
+                FoodLog.user_id == user_id
+            )
+        )
+    )
+    food_log = result.scalars().first()
+    if food_log:
+        food_log.items_json = items_json
+        food_log.calories = calories
+        food_log.proteins = proteins
+        food_log.fats = fats
+        food_log.carbs = carbs
+        await db.commit()
+        await db.refresh(food_log)
+        return food_log
+    return None
+

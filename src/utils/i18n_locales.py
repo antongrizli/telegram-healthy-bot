@@ -83,7 +83,28 @@ LOCALES = {
         "no": "No",
         
         "enabled": "Enabled",
-        "disabled": "Disabled"
+        "disabled": "Disabled",
+        
+        "btn_my_meals": "🍽️ My Meals",
+        "no_meals_day": "You didn't log any meals on this day!",
+        "meals_day_header": "🍽️ *Your Meals on {date}*:\n",
+        "meals_today_header": "🍽️ *Your Meals Today*:\n",
+        "meals_yesterday_header": "🍽️ *Your Meals Yesterday*:\n",
+        "meals_today_select": "Select a meal to edit or delete:",
+        "meal_deleted": "✅ Meal deleted successfully!",
+        "edit_meal_prompt": "You are editing the meal logged at *{time}*.\n\nCurrent items:\n{items}\n\nPlease describe the correction (e.g., 'Actually it was 3 eggs instead of 2') or write the new meal description:",
+        "edit_meal_success": "✅ Meal updated successfully!",
+        "btn_edit_meal": "✏️ Edit #{num}",
+        "btn_delete_meal": "❌ Delete #{num}",
+        "btn_prev_day": "⬅️ Previous Day",
+        "btn_next_day": "Next Day ➡️",
+        
+        "meal_type_prompt": "Select the meal type:",
+        "meal_type_breakfast": "🍳 Breakfast",
+        "meal_type_lunch": "🍲 Lunch",
+        "meal_type_dinner": "🍝 Dinner",
+        "meal_type_snack": "🍎 Snack",
+        "meal_type_food": "🍽️ Food (Other)"
     },
     "ru": {
         "welcome": "Добро пожаловать в *Healthy Tracker Bot*! 🍏\n\nЯ помогу вам записывать еду (по фото или тексту), отслеживать вес и получать ежедневные/еженедельные/ежемесячные отчеты с персональными рекомендациями с помощью ИИ.\n\nДавайте сначала настроим ваш профиль. Нажмите *Настроить профиль*, чтобы начать!",
@@ -169,7 +190,28 @@ LOCALES = {
         "no": "Нет",
         
         "enabled": "Включены",
-        "disabled": "Выключены"
+        "disabled": "Выключены",
+        
+        "btn_my_meals": "🍽️ Моя еда",
+        "no_meals_day": "Вы не записывали еду в этот день!",
+        "meals_day_header": "🍽️ *Ваша еда за {date}*:\n",
+        "meals_today_header": "🍽️ *Ваша еда за сегодня*:\n",
+        "meals_yesterday_header": "🍽️ *Ваша еда за вчера*:\n",
+        "meals_today_select": "Выберите прием пищи для редактирования или удаления:",
+        "meal_deleted": "✅ Запись еды успешно удалена!",
+        "edit_meal_prompt": "Вы редактируете еду, записанную в *{time}*.\n\nТекущие продукты:\n{items}\n\nОпишите исправления (например, 'На самом деле было 3 яйца вместо 2') или напишите новое описание:",
+        "edit_meal_success": "✅ Запись еды успешно обновлена!",
+        "btn_edit_meal": "✏️ Изменить #{num}",
+        "btn_delete_meal": "❌ Удалить #{num}",
+        "btn_prev_day": "⬅️ Предыдущий день",
+        "btn_next_day": "Следующий день ➡️",
+        
+        "meal_type_prompt": "Выберите тип приема пищи:",
+        "meal_type_breakfast": "🍳 Завтрак",
+        "meal_type_lunch": "🍲 Обед",
+        "meal_type_dinner": "🍝 Ужин",
+        "meal_type_snack": "🍎 Перекус",
+        "meal_type_food": "🍽️ Другое"
     }
 }
 

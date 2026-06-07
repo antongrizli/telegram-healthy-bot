@@ -46,6 +46,7 @@ class FoodLog(Base):
     proteins = Column(Float, nullable=False)
     fats = Column(Float, nullable=False)
     carbs = Column(Float, nullable=False)
+    meal_type = Column(String(20), nullable=False, default="food")
     logged_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
 
     user = relationship("User", back_populates="food_logs")

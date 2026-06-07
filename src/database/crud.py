@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, UTC, timedelta
 from sqlalchemy import select, update, func, desc, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.models import User, FoodLog, WeightLog, MessageStat
@@ -60,7 +60,7 @@ async def add_food_log(
         carbs=carbs,
         image_file_id=image_file_id,
         raw_text=raw_text,
-        logged_at=datetime.utcnow()
+        logged_at=datetime.now(UTC).replace(tzinfo=None)
     )
     db.add(food_log)
     await db.commit()
@@ -85,7 +85,7 @@ async def add_weight_log(db: AsyncSession, user_id: int, weight: float) -> Weigh
     weight_log = WeightLog(
         user_id=user_id,
         weight=weight,
-        logged_at=datetime.utcnow()
+        logged_at=datetime.now(UTC).replace(tzinfo=None)
     )
     db.add(weight_log)
     await db.commit()
@@ -129,14 +129,14 @@ async def log_message_stat(db: AsyncSession, user_id: int, message_type: str) ->
     stat = MessageStat(
         user_id=user_id,
         message_type=message_type,
-        sent_at=datetime.utcnow()
+        sent_at=datetime.now(UTC).replace(tzinfo=None)
     )
     db.add(stat)
     await db.commit()
     return stat
 
 async def get_admin_stats(db: AsyncSession) -> dict:
-    now = datetime.utcnow()
+    now = datetime.now(UTC).replace(tzinfo=None)
     one_day_ago = now - timedelta(days=1)
     seven_days_ago = now - timedelta(days=7)
     

@@ -23,6 +23,13 @@ async def main():
     async with engine.begin() as conn:
         # Auto-create tables if they do not exist
         await conn.run_sync(Base.metadata.create_all)
+        
+        # Add timezone column to existing PostgreSQL users table if it doesn't exist
+        import sqlalchemy as sa
+        try:
+            await conn.execute(sa.text("ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(50) NOT NULL DEFAULT 'UTC'"))
+        except Exception as e:
+            logger.info(f"Timezone column check/migration skipped or handled: {e}")
 
     logger.info("Initializing Bot and Dispatcher...")
     bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)

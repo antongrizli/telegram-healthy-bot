@@ -74,6 +74,7 @@ async def view_profile(message: Message, user_language: str, db_user):
         activity=activity_str,
         goal=goal_str,
         language=i18n_locales.get_text(f"lang_{db_user.language}", user_language),
+        timezone=db_user.timezone or "UTC",
         target_calories=db_user.target_calories,
         target_protein=db_user.target_protein,
         target_fat=db_user.target_fat,

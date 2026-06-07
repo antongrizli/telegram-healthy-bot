@@ -87,3 +87,68 @@ def get_admin_cancel_keyboard(lang: str = "en") -> InlineKeyboardMarkup:
 def get_admin_back_keyboard(lang: str = "en") -> InlineKeyboardMarkup:
     kb = [[InlineKeyboardButton(text="⬅️ Back to Menu" if lang == "en" else "⬅️ Назад в меню", callback_data="admin:menu")]]
     return InlineKeyboardMarkup(inline_keyboard=kb)
+
+def get_timezone_list_button_keyboard(lang: str = "en") -> InlineKeyboardMarkup:
+    kb = [
+        [InlineKeyboardButton(text=get_text("btn_timezone_list", lang), callback_data="tz:regions")]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=kb)
+
+def get_timezone_regions_keyboard(lang: str = "en") -> InlineKeyboardMarkup:
+    regions = ["Africa", "America", "Asia", "Atlantic", "Australia", "Europe", "Indian", "Pacific", "UTC"]
+    kb = []
+    for i in range(0, len(regions), 3):
+        row = []
+        for r in regions[i:i+3]:
+            if r == "UTC":
+                row.append(InlineKeyboardButton(text="UTC", callback_data="settz:UTC"))
+            else:
+                row.append(InlineKeyboardButton(text=r, callback_data=f"tzreg:{r}:0"))
+        kb.append(row)
+    
+    back_label = "🔙 Back" if lang == "en" else "🔙 Назад"
+    kb.append([InlineKeyboardButton(text=back_label, callback_data="tz:start")])
+    return InlineKeyboardMarkup(inline_keyboard=kb)
+
+def get_regional_timezone_keyboard(region: str, page: int, lang: str = "en") -> InlineKeyboardMarkup:
+    from zoneinfo import available_timezones
+    # Gather all timezones starting with this region
+    all_tzs = sorted([tz for tz in available_timezones() if tz.startswith(f"{region}/")])
+    
+    PAGE_SIZE = 10
+    start_idx = page * PAGE_SIZE
+    end_idx = start_idx + PAGE_SIZE
+    page_tzs = all_tzs[start_idx:end_idx]
+    
+    total_pages = (len(all_tzs) + PAGE_SIZE - 1) // PAGE_SIZE
+    if total_pages == 0:
+        total_pages = 1
+    
+    kb = []
+    for i in range(0, len(page_tzs), 2):
+        row = []
+        tz1 = page_tzs[i]
+        label1 = tz1.replace(f"{region}/", "").replace("_", " ")
+        row.append(InlineKeyboardButton(text=label1, callback_data=f"settz:{tz1}"))
+        
+        if i + 1 < len(page_tzs):
+            tz2 = page_tzs[i+1]
+            label2 = tz2.replace(f"{region}/", "").replace("_", " ")
+            row.append(InlineKeyboardButton(text=label2, callback_data=f"settz:{tz2}"))
+        kb.append(row)
+        
+    nav_row = []
+    if page > 0:
+        nav_row.append(InlineKeyboardButton(text="⬅️", callback_data=f"tzreg:{region}:{page-1}"))
+    
+    nav_row.append(InlineKeyboardButton(text=f"{page+1}/{total_pages}", callback_data="tz:noop"))
+    
+    if page < total_pages - 1:
+        nav_row.append(InlineKeyboardButton(text="➡️", callback_data=f"tzreg:{region}:{page+1}"))
+        
+    kb.append(nav_row)
+    
+    back_regions_label = "🔙 Back to Regions" if lang == "en" else "🔙 К регионам"
+    kb.append([InlineKeyboardButton(text=back_regions_label, callback_data="tz:regions")])
+    
+    return InlineKeyboardMarkup(inline_keyboard=kb)

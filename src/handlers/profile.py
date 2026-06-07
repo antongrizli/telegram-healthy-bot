@@ -1,4 +1,5 @@
 from datetime import datetime, time
+from zoneinfo import ZoneInfo
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -23,6 +24,7 @@ class ProfileStatesGroup(StatesGroup):
     language = State()
     notifications = State()
     report_time = State()
+    timezone = State()
 
 @router.callback_query(F.data == "profile:start")
 async def start_profile_setup(callback: CallbackQuery, state: FSMContext, user_language: str):
@@ -173,8 +175,120 @@ async def process_report_time(message: Message, state: FSMContext, user_language
         await message.answer(i18n_locales.get_text("invalid_time", lang))
         return
         
-    # All inputs collected, proceed with calculation & database insertion
-    # Calculate Mifflin-St Jeor daily allowances
+    await state.update_data(daily_report_time=parsed_time)
+    await state.set_state(ProfileStatesGroup.timezone)
+    await message.answer(
+        i18n_locales.get_text("profile_prompt_timezone", lang),
+        reply_markup=inline.get_timezone_list_button_keyboard(lang),
+        parse_mode="Markdown"
+    )
+
+@router.callback_query(ProfileStatesGroup.timezone, F.data == "tz:start")
+async def process_timezone_start(callback: CallbackQuery, state: FSMContext, user_language: str):
+    await callback.answer()
+    state_data = await state.get_data()
+    lang = state_data.get("language", user_language)
+    await callback.message.edit_text(
+        i18n_locales.get_text("profile_prompt_timezone", lang),
+        reply_markup=inline.get_timezone_list_button_keyboard(lang),
+        parse_mode="Markdown"
+    )
+
+@router.callback_query(ProfileStatesGroup.timezone, F.data == "tz:regions")
+async def process_timezone_regions(callback: CallbackQuery, state: FSMContext, user_language: str):
+    await callback.answer()
+    state_data = await state.get_data()
+    lang = state_data.get("language", user_language)
+    
+    msg_text = (
+        "Select your geographical region:" if lang == "en"
+        else "Выберите ваш географический регион:"
+    )
+    await callback.message.edit_text(
+        msg_text,
+        reply_markup=inline.get_timezone_regions_keyboard(lang),
+        parse_mode="Markdown"
+    )
+
+@router.callback_query(ProfileStatesGroup.timezone, F.data.startswith("tzreg:"))
+async def process_regional_timezones(callback: CallbackQuery, state: FSMContext, user_language: str):
+    await callback.answer()
+    state_data = await state.get_data()
+    lang = state_data.get("language", user_language)
+    
+    parts = callback.data.split(":")
+    region = parts[1]
+    page = int(parts[2])
+    
+    msg_text = (
+        f"Select timezone in *{region}* (by default UTC is used):" if lang == "en"
+        else f"Выберите часовой пояс в регионе *{region}* (по умолчанию UTC):"
+    )
+    await callback.message.edit_text(
+        msg_text,
+        reply_markup=inline.get_regional_timezone_keyboard(region, page, lang),
+        parse_mode="Markdown"
+    )
+
+@router.callback_query(ProfileStatesGroup.timezone, F.data == "tz:noop")
+async def process_tz_noop(callback: CallbackQuery):
+    await callback.answer()
+
+@router.callback_query(ProfileStatesGroup.timezone, F.data.startswith("settz:"))
+async def process_timezone_callback(callback: CallbackQuery, state: FSMContext, user_language: str):
+    await callback.answer()
+    selected_tz = callback.data.split(":")[1]
+    
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+        
+    await complete_profile_setup(
+        callback.message,
+        state,
+        user_language,
+        selected_tz,
+        callback.from_user.id,
+        callback.from_user.username
+    )
+
+@router.message(ProfileStatesGroup.timezone)
+async def process_timezone_text(message: Message, state: FSMContext, user_language: str):
+    state_data = await state.get_data()
+    lang = state_data.get("language", user_language)
+    tz_input = message.text.strip()
+    
+    try:
+        ZoneInfo(tz_input)
+    except Exception:
+        await message.answer(
+            i18n_locales.get_text("invalid_timezone", lang),
+            reply_markup=inline.get_timezone_list_button_keyboard(lang),
+            parse_mode="Markdown"
+        )
+        return
+        
+    await complete_profile_setup(
+        message,
+        state,
+        user_language,
+        tz_input,
+        message.from_user.id,
+        message.from_user.username
+    )
+
+async def complete_profile_setup(
+    message: Message,
+    state: FSMContext,
+    user_language: str,
+    selected_tz: str,
+    user_id: int,
+    username: str = None
+):
+    state_data = await state.get_data()
+    lang = state_data.get("language", user_language)
+    
     name = state_data["name"]
     sex = state_data["sex"]
     age = state_data["age"]
@@ -183,6 +297,7 @@ async def process_report_time(message: Message, state: FSMContext, user_language
     activity = state_data["activity"]
     goal = state_data["goal"]
     notifications_enabled = state_data["notifications_enabled"]
+    daily_report_time = state_data["daily_report_time"]
     
     targets = formulas.calculate_targets(
         weight_kg=weight,
@@ -194,11 +309,10 @@ async def process_report_time(message: Message, state: FSMContext, user_language
     )
     
     async with AsyncSessionLocal() as db:
-        # 1. Update/Create User
         db_user = await crud.create_or_update_user(
             db,
-            telegram_id=message.from_user.id,
-            username=message.from_user.username,
+            telegram_id=user_id,
+            username=username,
             name=name,
             sex=sex,
             age=age,
@@ -207,21 +321,19 @@ async def process_report_time(message: Message, state: FSMContext, user_language
             activity_level=activity,
             goal=goal,
             language=lang,
+            timezone=selected_tz,
             notifications_enabled=notifications_enabled,
-            daily_report_time=parsed_time,
+            daily_report_time=daily_report_time,
             target_calories=targets["calories"],
             target_protein=targets["protein"],
             target_fat=targets["fat"],
             target_carb=targets["carb"]
         )
         
-        # 2. Add Baseline Weight Log
-        await crud.add_weight_log(db, user_id=message.from_user.id, weight=weight)
+        await crud.add_weight_log(db, user_id=user_id, weight=weight)
         
-    # Configure scheduler cron timings
     reschedule_user_jobs(message.bot, db_user)
     
-    # Complete state
     await state.clear()
     
     complete_msg = i18n_locales.get_text(

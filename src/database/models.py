@@ -1,4 +1,4 @@
-from datetime import datetime, time
+from datetime import datetime, time, UTC
 from sqlalchemy import BigInteger, Column, Integer, Float, String, Boolean, DateTime, Time, ForeignKey, JSON
 from sqlalchemy.orm import declarative_base, relationship
 
@@ -17,6 +17,7 @@ class User(Base):
     activity_level = Column(String(20), nullable=False) # 'sedentary', 'light', 'moderate', 'active'
     goal = Column(String(20), nullable=False) # 'lose_weight', 'maintain', 'gain_weight', 'gain_muscle'
     language = Column(String(5), nullable=False, default="en") # 'en', 'ru'
+    timezone = Column(String(50), nullable=False, default="UTC")
     notifications_enabled = Column(Boolean, default=True)
     daily_report_time = Column(Time, default=time(21, 0))
     weekly_report_day = Column(Integer, default=0) # 0 = Sunday, 6 = Saturday
@@ -27,7 +28,7 @@ class User(Base):
     target_carb = Column(Integer, nullable=False)
     is_blocked = Column(Boolean, default=False)
     is_admin = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
 
     food_logs = relationship("FoodLog", back_populates="user", cascade="all, delete-orphan")
     weight_logs = relationship("WeightLog", back_populates="user", cascade="all, delete-orphan")
@@ -45,7 +46,7 @@ class FoodLog(Base):
     proteins = Column(Float, nullable=False)
     fats = Column(Float, nullable=False)
     carbs = Column(Float, nullable=False)
-    logged_at = Column(DateTime, default=datetime.utcnow)
+    logged_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
 
     user = relationship("User", back_populates="food_logs")
 
@@ -55,7 +56,7 @@ class WeightLog(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False)
     weight = Column(Float, nullable=False)
-    logged_at = Column(DateTime, default=datetime.utcnow)
+    logged_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
 
     user = relationship("User", back_populates="weight_logs")
 
@@ -65,6 +66,6 @@ class MessageStat(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False)
     message_type = Column(String(50), nullable=False) # 'text', 'photo', 'voice', etc.
-    sent_at = Column(DateTime, default=datetime.utcnow)
+    sent_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
 
     user = relationship("User", back_populates="message_stats")

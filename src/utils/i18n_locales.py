@@ -19,15 +19,18 @@ LOCALES = {
         "profile_prompt_language": "Choose your default language:",
         "profile_prompt_reminders": "Do you want to enable daily/weekly reminder notifications?",
         "profile_prompt_report_time": "What time would you like to receive your *daily report*? (format HH:MM, e.g., 21:00):",
+        "profile_prompt_timezone": "Please choose your timezone. By default, UTC is used. Click the button below to view a list of common timezones, or write your timezone name (e.g. Europe/London, US/Eastern):",
         
         "invalid_age": "⚠️ Invalid age. Please enter a valid number (e.g., 25):",
         "invalid_height": "⚠️ Invalid height. Please enter a number in cm (e.g., 180):",
         "invalid_weight": "⚠️ Invalid weight. Please enter a number in kg (e.g., 75.4):",
         "invalid_time": "⚠️ Invalid time format. Please write in HH:MM format (e.g., 21:30):",
+        "invalid_timezone": "⚠️ Invalid timezone. Please choose from the list or write a valid timezone name (e.g., Europe/London):",
+        "btn_timezone_list": "🌐 Select timezone",
         
         "profile_complete": "✅ *Profile Setup Complete!*\n\nBased on your settings, your estimated daily allowances are:\n• *Target Calories*: {calories} kcal\n• *Protein*: {protein}g\n• *Fat*: {fat}g\n• *Carbs*: {carb}g\n\nYou can start logging your food and weight now!",
         
-        "profile_view": "👤 *Your Profile*:\n\n• *Name*: {name}\n• *Sex*: {sex}\n• *Age*: {age} years\n• *Height*: {height} cm\n• *Weight*: {weight} kg\n• *Activity Level*: {activity}\n• *Goal*: {goal}\n• *Language*: {language}\n\n📊 *Targets*:\n• *Calories*: {target_calories} kcal\n• *Protein*: {target_protein}g | *Fat*: {target_fat}g | *Carbs*: {target_carb}g\n\n🔔 *Notifications*: {notifications}\n• *Daily Report*: {report_time}\n• *Weekly Report*: Sunday at 21:00\n• *Monthly Report*: 1st of month at 21:00",
+        "profile_view": "👤 *Your Profile*:\n\n• *Name*: {name}\n• *Sex*: {sex}\n• *Age*: {age} years\n• *Height*: {height} cm\n• *Weight*: {weight} kg\n• *Activity Level*: {activity}\n• *Goal*: {goal}\n• *Language*: {language}\n• *Timezone*: {timezone}\n\n📊 *Targets*:\n• *Calories*: {target_calories} kcal\n• *Protein*: {target_protein}g | *Fat*: {target_fat}g | *Carbs*: {target_carb}g\n\n🔔 *Notifications*: {notifications}\n• *Daily Report*: {report_time}\n• *Weekly Report*: Sunday at 21:00\n• *Monthly Report*: 1st of month at 21:00",
         
         "food_prompt": "Send me a photo of your meal 📸 or describe what you ate in a text message ✍️:",
         "food_analyzing": "🔄 Analyzing your food with Gemini AI... Please wait.",
@@ -102,15 +105,18 @@ LOCALES = {
         "profile_prompt_language": "Выберите язык бота:",
         "profile_prompt_reminders": "Включить напоминания (дневные/недельные)?",
         "profile_prompt_report_time": "В какое время вы хотите получать *дневной отчет*? (формат ЧЧ:ММ, например, 21:00):",
+        "profile_prompt_timezone": "Пожалуйста, выберите ваш часовой пояс. По умолчанию используется UTC. Нажмите кнопку ниже для просмотра списка популярных часовых поясов или напишите название вашего часового пояса (например, Europe/Moscow, US/Eastern):",
         
         "invalid_age": "⚠️ Неверный формат возраста. Пожалуйста, введите число (например, 25):",
         "invalid_height": "⚠️ Неверный формат роста. Пожалуйста, введите число в см (например, 180):",
         "invalid_weight": "⚠️ Неверный формат веса. Пожалуйста, введите число в кг (например, 75.4):",
         "invalid_time": "⚠️ Неверный формат времени. Напишите в формате ЧЧ:ММ (например, 21:30):",
+        "invalid_timezone": "⚠️ Неверный часовой пояс. Пожалуйста, выберите из списка или напишите корректное название (например, Europe/Moscow):",
+        "btn_timezone_list": "🌐 Выбрать часовой пояс",
         
         "profile_complete": "✅ *Настройка профиля завершена!*\n\nНа основе ваших данных, ваши суточные нормы составляют:\n• *Цель по калориям*: {calories} ккал\n• *Белки*: {protein} г\n• *Жиры*: {fat} г\n• *Углеводы*: {carb} г\n\nТеперь вы можете начать записывать еду и вес!",
         
-        "profile_view": "👤 *Ваш профиль*:\n\n• *Имя*: {name}\n• *Пол*: {sex}\n• *Возраст*: {age} лет\n• *Рост*: {height} см\n• *Вес*: {weight} кг\n• *Активность*: {activity}\n• *Цель*: {goal}\n• *Язык*: {language}\n\n📊 *Цели*:\n• *Калории*: {target_calories} ккал\n• *Белки*: {target_protein} г | *Жиры*: {target_fat} г | *Углеводы*: {target_carb} г\n\n🔔 *Уведомления*: {notifications}\n• *Дневной отчет*: {report_time}\n• *Недельный отчет*: Воскресенье в 21:00\n• *Ежемесячный отчет*: 1-е число месяца в 21:00",
+        "profile_view": "👤 *Ваш профиль*:\n\n• *Имя*: {name}\n• *Пол*: {sex}\n• *Возраст*: {age} лет\n• *Рост*: {height} см\n• *Вес*: {weight} кг\n• *Активность*: {activity}\n• *Цель*: {goal}\n• *Язык*: {language}\n• *Часовой пояс*: {timezone}\n\n📊 *Цели*:\n• *Калории*: {target_calories} ккал\n• *Белки*: {target_protein} г | *Жиры*: {target_fat} г | *Углеводы*: {target_carb} г\n\n🔔 *Уведомления*: {notifications}\n• *Дневной отчет*: {report_time}\n• *Недельный отчет*: Воскресенье в 21:00\n• *Ежемесячный отчет*: 1-е число месяца в 21:00",
         
         "food_prompt": "Отправьте мне фотографию блюда 📸 или опишите его текстом ✍️:",
         "food_analyzing": "🔄 Анализирую еду с помощью Gemini AI... Пожалуйста, подождите.",

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   db:
     image: postgres:16-alpine
@@ -14,13 +12,16 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
       interval: 5s
       timeout: 5s
       retries: 5
 
   bot:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/antongrizli/telegram-heathy-bot:latest
     container_name: healthy_bot_app
     restart: always
     depends_on:
@@ -31,8 +32,6 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-postgres_password}@db:5432/${DB_NAME:-healthy_bot}
       - PYTHONUNBUFFERED=1
-    volumes:
-      - ./src:/app/src
 
 volumes:
   pgdata:

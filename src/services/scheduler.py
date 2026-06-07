@@ -1,4 +1,5 @@
-from datetime import datetime, time, timedelta
+from datetime import datetime, UTC, time, timedelta
+from zoneinfo import ZoneInfo
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from aiogram import Bot
@@ -16,9 +17,17 @@ async def send_daily_reminder(bot: Bot, user_id: int):
             return
         
         # Check if they logged any food today. If yes, skip reminder.
-        now = datetime.utcnow()
-        start_of_day = datetime(now.year, now.month, now.day)
-        logs = await crud.get_food_logs(db, user_id, start_of_day, now)
+        try:
+            user_tz = ZoneInfo(user.timezone or "UTC")
+        except Exception:
+            user_tz = ZoneInfo("UTC")
+            
+        now_local = datetime.now(user_tz)
+        start_of_day_local = datetime(now_local.year, now_local.month, now_local.day, tzinfo=user_tz)
+        start_date = start_of_day_local.astimezone(UTC).replace(tzinfo=None)
+        end_date = now_local.astimezone(UTC).replace(tzinfo=None)
+        
+        logs = await crud.get_food_logs(db, user_id, start_date, end_date)
         if len(logs) > 0:
             return
 
@@ -34,12 +43,22 @@ async def send_daily_report(bot: Bot, user_id: int):
         if not user or user.is_blocked:
             return
         
-        now = datetime.utcnow()
-        start_of_day = datetime(now.year, now.month, now.day)
-        food_logs = await crud.get_food_logs(db, user_id, start_of_day, now)
+        try:
+            user_tz = ZoneInfo(user.timezone or "UTC")
+        except Exception:
+            user_tz = ZoneInfo("UTC")
+            
+        now_local = datetime.now(user_tz)
+        start_of_day_local = datetime(now_local.year, now_local.month, now_local.day, tzinfo=user_tz)
+        
+        start_date = start_of_day_local.astimezone(UTC).replace(tzinfo=None)
+        end_date = now_local.astimezone(UTC).replace(tzinfo=None)
+        
+        food_logs = await crud.get_food_logs(db, user_id, start_date, end_date)
         
         # Past 7 days weight logs to show trend
-        weight_logs = await crud.get_weight_logs(db, user_id, now - timedelta(days=7), now)
+        start_weight_date = (start_of_day_local - timedelta(days=7)).astimezone(UTC).replace(tzinfo=None)
+        weight_logs = await crud.get_weight_logs(db, user_id, start_weight_date, end_date)
         
         try:
             await bot.send_message(user_id, i18n_locales.get_text("report_calculating", user.language), parse_mode="Markdown")
@@ -83,10 +102,19 @@ async def send_weekly_report(bot: Bot, user_id: int):
         if not user or user.is_blocked:
             return
         
-        now = datetime.utcnow()
-        start_of_week = now - timedelta(days=7)
-        food_logs = await crud.get_food_logs(db, user_id, start_of_week, now)
-        weight_logs = await crud.get_weight_logs(db, user_id, start_of_week, now)
+        try:
+            user_tz = ZoneInfo(user.timezone or "UTC")
+        except Exception:
+            user_tz = ZoneInfo("UTC")
+            
+        now_local = datetime.now(user_tz)
+        start_of_week_local = now_local - timedelta(days=7)
+        
+        start_date = start_of_week_local.astimezone(UTC).replace(tzinfo=None)
+        end_date = now_local.astimezone(UTC).replace(tzinfo=None)
+        
+        food_logs = await crud.get_food_logs(db, user_id, start_date, end_date)
+        weight_logs = await crud.get_weight_logs(db, user_id, start_date, end_date)
         
         try:
             await bot.send_message(user_id, i18n_locales.get_text("report_calculating", user.language), parse_mode="Markdown")
@@ -117,10 +145,19 @@ async def send_monthly_report(bot: Bot, user_id: int):
         if not user or user.is_blocked:
             return
         
-        now = datetime.utcnow()
-        start_of_month = now - timedelta(days=30)
-        food_logs = await crud.get_food_logs(db, user_id, start_of_month, now)
-        weight_logs = await crud.get_weight_logs(db, user_id, start_of_month, now)
+        try:
+            user_tz = ZoneInfo(user.timezone or "UTC")
+        except Exception:
+            user_tz = ZoneInfo("UTC")
+            
+        now_local = datetime.now(user_tz)
+        start_of_month_local = now_local - timedelta(days=30)
+        
+        start_date = start_of_month_local.astimezone(UTC).replace(tzinfo=None)
+        end_date = now_local.astimezone(UTC).replace(tzinfo=None)
+        
+        food_logs = await crud.get_food_logs(db, user_id, start_date, end_date)
+        weight_logs = await crud.get_weight_logs(db, user_id, start_date, end_date)
         
         try:
             await bot.send_message(user_id, i18n_locales.get_text("report_calculating", user.language), parse_mode="Markdown")
@@ -157,12 +194,17 @@ def reschedule_user_jobs(bot: Bot, user):
     if user.is_blocked:
         return
         
+    try:
+        user_tz = ZoneInfo(user.timezone or "UTC")
+    except Exception:
+        user_tz = ZoneInfo("UTC")
+        
     if user.notifications_enabled:
         # 1. Daily Food Log Reminder
         r_time = user.food_reminder_time or time(11, 0)
         scheduler.add_job(
             send_daily_reminder,
-            CronTrigger(hour=r_time.hour, minute=r_time.minute),
+            CronTrigger(hour=r_time.hour, minute=r_time.minute, timezone=user_tz),
             id=f"user_{user_id}_reminder",
             args=[bot, user_id],
             replace_existing=True
@@ -172,7 +214,7 @@ def reschedule_user_jobs(bot: Bot, user):
         d_time = user.daily_report_time or time(21, 0)
         scheduler.add_job(
             send_daily_report,
-            CronTrigger(hour=d_time.hour, minute=d_time.minute),
+            CronTrigger(hour=d_time.hour, minute=d_time.minute, timezone=user_tz),
             id=f"user_{user_id}_daily",
             args=[bot, user_id],
             replace_existing=True
@@ -182,7 +224,7 @@ def reschedule_user_jobs(bot: Bot, user):
         w_day = user.weekly_report_day or 0  # 0 = Sunday
         scheduler.add_job(
             send_weekly_report,
-            CronTrigger(day_of_week=w_day, hour=21, minute=0),
+            CronTrigger(day_of_week=w_day, hour=21, minute=0, timezone=user_tz),
             id=f"user_{user_id}_weekly",
             args=[bot, user_id],
             replace_existing=True
@@ -191,7 +233,7 @@ def reschedule_user_jobs(bot: Bot, user):
         # 4. Monthly Report
         scheduler.add_job(
             send_monthly_report,
-            CronTrigger(day=1, hour=21, minute=0),
+            CronTrigger(day=1, hour=21, minute=0, timezone=user_tz),
             id=f"user_{user_id}_monthly",
             args=[bot, user_id],
             replace_existing=True

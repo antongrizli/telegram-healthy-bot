@@ -1,10 +1,10 @@
 from aiogram import Router, F
 from aiogram.filters import CommandStart, Command
-from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import Message
 from src.utils import i18n_locales
 from src.utils.escape import escape_markdown
 from src.config import settings
-from src.keyboards import reply, inline
+from src.keyboards import reply
 from src.services.scheduler import send_daily_report, send_weekly_report
 
 router = Router()
@@ -20,11 +20,7 @@ async def cmd_start(message: Message, user_language: str, db_user):
         )
     else:
         # Unregistered or blocked user starts fresh setup
-        kb = [[InlineKeyboardButton(
-            text=i18n_locales.get_text("btn_setup_profile", user_language),
-            callback_data="profile:start"
-        )]]
-        markup = InlineKeyboardMarkup(inline_keyboard=kb)
+        markup = reply.get_setup_profile_keyboard(user_language)
         await message.answer(
             i18n_locales.get_text("welcome", user_language),
             reply_markup=markup,
@@ -83,11 +79,7 @@ async def view_profile(message: Message, user_language: str, db_user):
         report_time=daily_time
     )
     
-    kb = [[InlineKeyboardButton(
-        text=i18n_locales.get_text("btn_setup_profile", user_language),
-        callback_data="profile:start"
-    )]]
-    markup = InlineKeyboardMarkup(inline_keyboard=kb)
+    markup = reply.get_setup_profile_keyboard(user_language)
     await message.answer(profile_text, reply_markup=markup, parse_mode="Markdown")
 
 @router.message(F.text.in_([

@@ -23,12 +23,36 @@ async def test_analyze_food_input_success(mock_gemini_client):
     assert res.food_items[0].name == "Eggs"
 
 async def test_analyze_food_input_failure(mock_gemini_client):
-    # Setup mock exception
+    # Setup mock exception (non-transient generic error)
     mock_gemini_client.models.generate_content.side_effect = Exception("API Error")
 
     res = await gemini.analyze_food_input(text_description="2 boiled eggs")
     
     assert res is None
+
+async def test_analyze_food_input_transient_retry(mock_gemini_client):
+    # Setup mock response
+    mock_response = MagicMock()
+    mock_response.text = (
+        '{"food_items": [{"name": "Eggs", "portion": "2 eggs", "calories": 140, "protein": 12.0, "fat": 10.0, "carb": 1.0}],'
+        ' "total_calories": 140, "total_protein": 12.0, "total_fat": 10.0, "total_carb": 1.0}'
+    )
+    
+    call_count = 0
+    def side_effect(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count <= 2:
+            raise Exception("503 Service Unavailable: This model is currently experiencing high demand.")
+        return mock_response
+        
+    mock_gemini_client.models.generate_content.side_effect = side_effect
+
+    res = await gemini.analyze_food_input(text_description="2 boiled eggs")
+    
+    assert res is not None
+    assert res.total_calories == 140
+    assert call_count == 3  # Two failed attempts (retried), third call succeeds
 
 async def test_adjust_food_analysis_success(mock_gemini_client):
     # Setup mock response
@@ -65,7 +89,6 @@ async def test_generate_report_success(mock_gemini_client):
     report = await gemini.generate_report(profile, [], [], "daily", "en")
     
     # Verify report is cleaned for Telegram Markdown V1
-    # Expected output: *Daily Report*\n• *Goal:* lose\_weight
     assert report == "*Daily Report*\n• *Goal:* lose\\_weight"
 
 async def test_generate_report_failure(mock_gemini_client):

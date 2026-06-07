@@ -1,9 +1,13 @@
 import json
+import asyncio
+import logging
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
 from src.config import settings
+
+logger = logging.getLogger(__name__)
 
 def extract_json(text: str) -> str:
     if not text:
@@ -33,6 +37,48 @@ class FoodAnalysisResponse(BaseModel):
 # Initialize the Gemini Client
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
+async def call_gemini_with_retry(
+    contents,
+    config=None,
+    model="gemini-2.5-flash",
+    max_retries=4,
+    initial_delay=0.1,
+    backoff_factor=2.0
+):
+    """
+    Calls Gemini generate_content in a non-blocking thread,
+    retrying with exponential backoff on transient errors (like 503 UNAVAILABLE or 429).
+    """
+    delay = initial_delay
+    for attempt in range(max_retries):
+        try:
+            response = await asyncio.to_thread(
+                client.models.generate_content,
+                model=model,
+                contents=contents,
+                config=config
+            )
+            return response
+        except Exception as e:
+            err_str = str(e)
+            is_transient = (
+                "503" in err_str or 
+                "UNAVAILABLE" in err_str or 
+                "ResourceExhausted" in err_str or 
+                "429" in err_str or
+                getattr(e, "code", None) == 503 or
+                getattr(e, "status_code", None) == 503
+            )
+            if is_transient and attempt < max_retries - 1:
+                logger.warning(
+                    f"Gemini API transient error (attempt {attempt + 1}/{max_retries}): {e}. "
+                    f"Retrying in {delay:.2f}s..."
+                )
+                await asyncio.sleep(delay)
+                delay *= backoff_factor
+            else:
+                raise e
+
 async def analyze_food_input(
     text_description: Optional[str] = None,
     image_bytes: Optional[bytes] = None,
@@ -51,7 +97,6 @@ async def analyze_food_input(
     
     contents = []
     if image_bytes:
-        # Multimodal part
         image_part = types.Part.from_bytes(
             data=image_bytes,
             mime_type="image/jpeg"
@@ -64,8 +109,7 @@ async def analyze_food_input(
     contents.append(prompt)
     
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
+        response = await call_gemini_with_retry(
             contents=contents,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -73,7 +117,6 @@ async def analyze_food_input(
                 temperature=0.2
             )
         )
-        # Parse output into Pydantic model
         print(f"AI raw response: {response.text}")
         raw_json = extract_json(response.text)
         data = json.loads(raw_json)
@@ -101,8 +144,7 @@ async def adjust_food_analysis(
     )
     
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
+        response = await call_gemini_with_retry(
             contents=[prompt],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -128,7 +170,6 @@ async def generate_report(
     """
     Generates a personalized text report using Gemma.
     """
-    # Build text representation of profile
     goal_mapping = {
         "lose_weight": "Lose Weight",
         "maintain": "Maintain Weight",
@@ -156,7 +197,6 @@ async def generate_report(
         f"Protein: {profile.get('target_protein')}g, Fat: {profile.get('target_fat')}g, Carb: {profile.get('target_carb')}g\n"
     )
 
-    # Build text representation of food logs
     food_text = ""
     for log in food_logs:
         logged_time = log.logged_at.strftime('%Y-%m-%d %H:%M')
@@ -166,7 +206,6 @@ async def generate_report(
     if not food_text:
         food_text = "No meals logged during this period.\n"
 
-    # Build text representation of weight logs
     weight_text = ""
     for log in weight_logs:
         logged_time = log.logged_at.strftime('%Y-%m-%d %H:%M')
@@ -196,8 +235,7 @@ async def generate_report(
     )
     
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
+        response = await call_gemini_with_retry(
             contents=[prompt],
             config=types.GenerateContentConfig(
                 temperature=0.3

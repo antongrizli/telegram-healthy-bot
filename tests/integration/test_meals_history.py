@@ -13,7 +13,8 @@ from src.handlers.food import (
     process_meal_edit_confirm,
     start_food_logging,
     process_meal_type_selection,
-    process_food_confirm
+    process_food_confirm,
+    process_food_input
 )
 from src.database import crud
 from tests.integration.test_handlers import make_mock_message, mock_state
@@ -332,3 +333,73 @@ async def test_start_meals_list_with_meal_types(db_session, mock_state, mock_db_
     output_text = message.answer.call_args[0][0]
     assert "🍳 *Breakfast*:" in output_text
     assert "🍲 *Lunch*:" in output_text
+
+async def test_process_food_input_photo_and_caption(mock_state, monkeypatch):
+    from aiogram.types import PhotoSize
+    
+    message = make_mock_message("")
+    message.photo = [
+        PhotoSize(file_id="photo1", file_unique_id="unique1", width=100, height=100),
+        PhotoSize(file_id="photo2", file_unique_id="unique2", width=200, height=200),
+    ]
+    message.caption = "This is a delicious breakfast of oatmeal and berries"
+    
+    mock_file = MagicMock()
+    mock_file.file_path = "photos/photo2.jpg"
+    message.bot.get_file = AsyncMock(return_value=mock_file)
+    
+    async def mock_download_file(file_path, destination):
+        destination.write(b"dummy_photo_bytes")
+    message.bot.download_file = AsyncMock(side_effect=mock_download_file)
+    
+    mock_item = MagicMock()
+    mock_item.name = "Oatmeal"
+    mock_item.portion = "1 bowl"
+    mock_item.calories = 150
+    mock_item.protein = 5.0
+    mock_item.fat = 2.0
+    mock_item.carb = 28.0
+    
+    mock_analysis = MagicMock()
+    mock_analysis.food_items = [mock_item]
+    mock_analysis.total_calories = 150
+    mock_analysis.total_protein = 5.0
+    mock_analysis.total_fat = 2.0
+    mock_analysis.total_carb = 28.0
+    mock_analysis.model_dump.return_value = {
+        "food_items": [{"name": "Oatmeal", "portion": "1 bowl", "calories": 150, "protein": 5.0, "fat": 2.0, "carb": 28.0}],
+        "total_calories": 150,
+        "total_protein": 5.0,
+        "total_fat": 2.0,
+        "total_carb": 28.0
+    }
+    
+    mock_analyze = AsyncMock(return_value=mock_analysis)
+    monkeypatch.setattr("src.services.gemini.analyze_food_input", mock_analyze)
+    
+    mock_state.get_data.return_value = {"meal_type": "breakfast"}
+    
+    await process_food_input(message, mock_state, "en")
+    
+    # Verify gemini analysis is called with photo bytes and caption text description
+    mock_analyze.assert_called_once_with(
+        text_description="This is a delicious breakfast of oatmeal and berries",
+        image_bytes=b"dummy_photo_bytes",
+        language="en"
+    )
+    
+    # State should be updated with the analysis results and the image/raw text info
+    mock_state.update_data.assert_called_once_with(
+        analysis=mock_analysis.model_dump(),
+        image_file_id="photo2",
+        raw_text="This is a delicious breakfast of oatmeal and berries"
+    )
+    
+    # State transitioned to waiting_for_confirm
+    mock_state.set_state.assert_called_once_with(FoodLoggingState.waiting_for_confirm)
+    
+    # User received message showing food details (call_count should be 2: one for wait message, one for final result)
+    assert message.answer.call_count == 2
+    answer_text = message.answer.call_args_list[1][0][0]
+    assert "Oatmeal" in answer_text
+    assert "150 kcal" in answer_text

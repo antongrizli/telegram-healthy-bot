@@ -113,6 +113,8 @@ async def process_food_input(message: Message, state: FSMContext, user_language:
         image_io = io.BytesIO()
         await message.bot.download_file(file_info.file_path, image_io)
         image_bytes = image_io.getvalue()
+        if message.caption:
+            text_desc = message.caption.strip()
     elif message.text:
         text_desc = message.text.strip()
     else:

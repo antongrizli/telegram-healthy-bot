@@ -33,6 +33,7 @@ class User(Base):
     food_logs = relationship("FoodLog", back_populates="user", cascade="all, delete-orphan")
     weight_logs = relationship("WeightLog", back_populates="user", cascade="all, delete-orphan")
     message_stats = relationship("MessageStat", back_populates="user", cascade="all, delete-orphan")
+    ai_queues = relationship("AiRequestQueue", back_populates="user", cascade="all, delete-orphan")
 
 class FoodLog(Base):
     __tablename__ = "food_logs"
@@ -70,3 +71,30 @@ class MessageStat(Base):
     sent_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
 
     user = relationship("User", back_populates="message_stats")
+
+class AiRequestLog(Base):
+    __tablename__ = "ai_request_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, nullable=True)
+    request_type = Column(String(50), nullable=True)
+    executed_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+
+class AiRequestQueue(Base):
+    __tablename__ = "ai_request_queue"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False)
+    chat_id = Column(BigInteger, nullable=False)
+    request_type = Column(String(50), nullable=False)  # 'analyze_food_input', 'adjust_food_analysis', 'adjust_meal_edit', 'generate_report'
+    payload = Column(JSON, nullable=False)
+    status = Column(String(20), nullable=False, default="pending")  # 'pending', 'processing', 'completed', 'failed', 'cancelled'
+    error_message = Column(String, nullable=True)
+    retry_count = Column(Integer, nullable=False, default=0)
+    next_retry_at = Column(DateTime, nullable=True)
+    last_error = Column(String, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+    processed_at = Column(DateTime, nullable=True)
+
+    user = relationship("User", back_populates="ai_queues")
+

@@ -42,77 +42,95 @@ def get_admin_menu(lang: str = "en") -> ReplyKeyboardMarkup:
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-def get_cancel_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
-    kb = [
-        [
-            KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")
-        ]
-    ]
+def get_cancel_keyboard(lang: str = "en", current_val: str = None) -> ReplyKeyboardMarkup:
+    kb = []
+    if current_val is not None:
+        kb.append([KeyboardButton(text=get_text("btn_keep_current", lang, value=current_val))])
+    kb.append([KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_setup_profile_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
     kb = [
         [KeyboardButton(text=get_text("btn_setup_profile", lang))],
+        [KeyboardButton(text=get_text("btn_delete_profile", lang))],
         [KeyboardButton(text="⬅️ Back to Main Menu" if lang == "en" else "⬅️ Главное меню")]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-def get_sex_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
+def get_delete_confirm_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
     kb = [
-        [
-            KeyboardButton(text=get_text("sex_male", lang)),
-            KeyboardButton(text=get_text("sex_female", lang))
-        ],
-        [KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")]
+        [KeyboardButton(text=get_text("btn_confirm_delete", lang))],
+        [KeyboardButton(text=get_text("btn_cancel", lang))]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-def get_activity_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
-    kb = [
+def get_sex_keyboard(lang: str = "en", current_val: str = None) -> ReplyKeyboardMarkup:
+    kb = []
+    if current_val is not None:
+        kb.append([KeyboardButton(text=get_text("btn_keep_current", lang, value=current_val))])
+    kb.append([
+        KeyboardButton(text=get_text("sex_male", lang)),
+        KeyboardButton(text=get_text("sex_female", lang))
+    ])
+    kb.append([KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")])
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_activity_keyboard(lang: str = "en", current_val: str = None) -> ReplyKeyboardMarkup:
+    kb = []
+    if current_val is not None:
+        kb.append([KeyboardButton(text=get_text("btn_keep_current", lang, value=current_val))])
+    kb.extend([
         [KeyboardButton(text=get_text("act_sedentary", lang))],
         [KeyboardButton(text=get_text("act_light", lang))],
         [KeyboardButton(text=get_text("act_moderate", lang))],
         [KeyboardButton(text=get_text("act_active", lang))],
         [KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")]
-    ]
+    ])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-def get_goal_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
-    kb = [
+def get_goal_keyboard(lang: str = "en", current_val: str = None) -> ReplyKeyboardMarkup:
+    kb = []
+    if current_val is not None:
+        kb.append([KeyboardButton(text=get_text("btn_keep_current", lang, value=current_val))])
+    kb.extend([
         [KeyboardButton(text=get_text("goal_lose", lang))],
         [KeyboardButton(text=get_text("goal_maintain", lang))],
         [KeyboardButton(text=get_text("goal_gain_w", lang))],
         [KeyboardButton(text=get_text("goal_gain_m", lang))],
         [KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")]
-    ]
+    ])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-def get_lang_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
-    kb = [
-        [
-            KeyboardButton(text="English 🇺🇸"),
-            KeyboardButton(text="Русский 🇷🇺")
-        ],
-        [KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")]
-    ]
+def get_lang_keyboard(lang: str = "en", current_val: str = None) -> ReplyKeyboardMarkup:
+    kb = []
+    if current_val is not None:
+        kb.append([KeyboardButton(text=get_text("btn_keep_current", lang, value=current_val))])
+    kb.append([
+        KeyboardButton(text="English 🇺🇸"),
+        KeyboardButton(text="Русский 🇷🇺")
+    ])
+    kb.append([KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-def get_notifications_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
-    kb = [
-        [
-            KeyboardButton(text=get_text("yes", lang)),
-            KeyboardButton(text=get_text("no", lang))
-        ],
-        [KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")]
-    ]
+def get_notifications_keyboard(lang: str = "en", current_val: str = None) -> ReplyKeyboardMarkup:
+    kb = []
+    if current_val is not None:
+        kb.append([KeyboardButton(text=get_text("btn_keep_current", lang, value=current_val))])
+    kb.append([
+        KeyboardButton(text=get_text("yes", lang)),
+        KeyboardButton(text=get_text("no", lang))
+    ])
+    kb.append([KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-def get_timezone_list_button_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
-    kb = [
-        [KeyboardButton(text=get_text("btn_timezone_list", lang))],
-        [KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")]
-    ]
+def get_timezone_list_button_keyboard(lang: str = "en", current_val: str = None) -> ReplyKeyboardMarkup:
+    kb = []
+    if current_val is not None:
+        kb.append([KeyboardButton(text=get_text("btn_keep_current", lang, value=current_val))])
+    kb.append([KeyboardButton(text=get_text("btn_timezone_list", lang))])
+    kb.append([KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
 
 def get_timezone_regions_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
     regions = ["Africa", "America", "Asia", "Atlantic", "Australia", "Europe", "Indian", "Pacific", "UTC"]

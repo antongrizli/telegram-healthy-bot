@@ -1,7 +1,7 @@
 from datetime import datetime, UTC, timedelta
 from sqlalchemy import select, update, func, desc, and_
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.database.models import User, FoodLog, WeightLog, MessageStat
+from src.database.models import User, FoodLog, WeightLog, MessageStat, AiRequestLog, AiRequestQueue
 from src.config import settings
 
 async def get_user(db: AsyncSession, telegram_id: int) -> User:
@@ -173,13 +173,42 @@ async def get_admin_stats(db: AsyncSession) -> dict:
     )
     messages_24h = msg_24h_res.scalar() or 0
 
+    # 5. AI API calls in last 1m / 24h
+    one_minute_ago = now - timedelta(minutes=1)
+    api_calls_1m_res = await db.execute(
+        select(func.count(AiRequestLog.id)).where(AiRequestLog.executed_at >= one_minute_ago)
+    )
+    api_calls_1m = api_calls_1m_res.scalar() or 0
+
+    api_calls_24h_res = await db.execute(
+        select(func.count(AiRequestLog.id)).where(AiRequestLog.executed_at >= one_day_ago)
+    )
+    api_calls_24h = api_calls_24h_res.scalar() or 0
+
+    # 6. Queued requests count
+    queued_res = await db.execute(
+        select(func.count(AiRequestQueue.id)).where(AiRequestQueue.status == "pending")
+    )
+    queued_requests = queued_res.scalar() or 0
+
     return {
         "total_users": total_users,
         "active_users_24h": active_24h,
         "active_users_7d": active_7d,
         "food_logs_24h": food_logs_24h,
-        "messages_24h": messages_24h
+        "messages_24h": messages_24h,
+        "api_calls_1m": api_calls_1m,
+        "api_calls_24h": api_calls_24h,
+        "queued_requests": queued_requests
     }
+
+async def delete_user(db: AsyncSession, telegram_id: int) -> bool:
+    user = await get_user(db, telegram_id)
+    if user:
+        await db.delete(user)
+        await db.commit()
+        return True
+    return False
 
 async def delete_food_log(db: AsyncSession, log_id: int, user_id: int) -> bool:
     result = await db.execute(

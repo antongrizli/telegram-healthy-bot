@@ -11,7 +11,7 @@ from src.database.connection import AsyncSessionLocal
 from src.database import crud
 from src.utils import i18n_locales
 from src.keyboards import reply
-from src.services import gemini
+from src.services import gemini, rate_limiter
 from src.config import settings
 
 router = Router()
@@ -119,18 +119,68 @@ async def process_food_input(message: Message, state: FSMContext, user_language:
         await message.answer(i18n_locales.get_text("food_prompt", user_language))
         return
 
+    async with AsyncSessionLocal() as db:
+        is_limited, _ = await rate_limiter.check_rate_limit(db)
+        if is_limited:
+            state_data = await state.get_data()
+            meal_type = state_data.get("meal_type", "food")
+            payload = {
+                "text_description": text_desc,
+                "image_file_id": image_file_id,
+                "language": user_language,
+                "meal_type": meal_type
+            }
+            queue_id = await rate_limiter.add_to_queue(
+                db,
+                user_id=message.from_user.id,
+                chat_id=message.chat.id,
+                request_type="analyze_food_input",
+                payload=payload
+            )
+            position = await rate_limiter.get_queue_position(db, queue_id)
+            await message.answer(
+                i18n_locales.get_text("rate_limit_queued", user_language, position=position)
+            )
+            return
+
     wait_msg = await message.answer(i18n_locales.get_text("food_analyzing", user_language))
-    analysis = await gemini.analyze_food_input(
-        text_description=text_desc,
-        image_bytes=image_bytes,
-        language=user_language
-    )
+    try:
+        analysis = await gemini.analyze_food_input(
+            text_description=text_desc,
+            image_bytes=image_bytes,
+            language=user_language
+        )
+    except Exception as e:
+        await wait_msg.delete()
+        state_data = await state.get_data()
+        meal_type = state_data.get("meal_type", "food")
+        payload = {
+            "text_description": text_desc,
+            "image_file_id": image_file_id,
+            "language": user_language,
+            "meal_type": meal_type
+        }
+        async with AsyncSessionLocal() as db:
+            queue_id = await rate_limiter.add_to_queue(
+                db,
+                user_id=message.from_user.id,
+                chat_id=message.chat.id,
+                request_type="analyze_food_input",
+                payload=payload
+            )
+        await message.answer(
+            i18n_locales.get_text("ai_service_unavailable", user_language)
+        )
+        return
     
     await wait_msg.delete()
     
     if not analysis:
         await message.answer("⚠️ Analysis failed. Try describing the food again or checking your internet connection.")
         return
+
+    async with AsyncSessionLocal() as db:
+        await rate_limiter.log_ai_request(db, user_id=message.from_user.id, request_type="analyze_food_input")
         
     analysis_dict = analysis.model_dump()
     await state.update_data(
@@ -220,18 +270,62 @@ async def process_food_correction(message: Message, state: FSMContext, user_lang
     original_analysis = state_data["analysis"]
     correction_text = message.text.strip()
     
+    async with AsyncSessionLocal() as db:
+        is_limited, _ = await rate_limiter.check_rate_limit(db)
+        if is_limited:
+            payload = {
+                "original_data": original_analysis,
+                "correction_text": correction_text,
+                "language": user_language
+            }
+            queue_id = await rate_limiter.add_to_queue(
+                db,
+                user_id=message.from_user.id,
+                chat_id=message.chat.id,
+                request_type="adjust_food_analysis",
+                payload=payload
+            )
+            position = await rate_limiter.get_queue_position(db, queue_id)
+            await message.answer(
+                i18n_locales.get_text("rate_limit_queued", user_language, position=position)
+            )
+            return
+
     wait_msg = await message.answer(i18n_locales.get_text("food_analyzing", user_language))
-    adjusted_analysis = await gemini.adjust_food_analysis(
-        original_data=original_analysis,
-        correction_text=correction_text,
-        language=user_language
-    )
+    try:
+        adjusted_analysis = await gemini.adjust_food_analysis(
+            original_data=original_analysis,
+            correction_text=correction_text,
+            language=user_language
+        )
+    except Exception as e:
+        await wait_msg.delete()
+        payload = {
+            "original_data": original_analysis,
+            "correction_text": correction_text,
+            "language": user_language
+        }
+        async with AsyncSessionLocal() as db:
+            queue_id = await rate_limiter.add_to_queue(
+                db,
+                user_id=message.from_user.id,
+                chat_id=message.chat.id,
+                request_type="adjust_food_analysis",
+                payload=payload
+            )
+        await message.answer(
+            i18n_locales.get_text("ai_service_unavailable", user_language)
+        )
+        return
     
     await wait_msg.delete()
     
     if not adjusted_analysis:
         await message.answer("⚠️ Correction failed. Try describing the correction again.")
         return
+
+    async with AsyncSessionLocal() as db:
+        await rate_limiter.log_ai_request(db, user_id=message.from_user.id, request_type="adjust_food_analysis")
         
     analysis_dict = adjusted_analysis.model_dump()
     await state.update_data(analysis=analysis_dict)
@@ -484,18 +578,66 @@ async def process_meal_edit_text(message: Message, state: FSMContext, user_langu
     original_data = state_data["original_data"]
     correction_text = message.text.strip()
     
+    async with AsyncSessionLocal() as db:
+        is_limited, _ = await rate_limiter.check_rate_limit(db)
+        if is_limited:
+            payload = {
+                "original_data": original_data,
+                "correction_text": correction_text,
+                "language": user_language,
+                "edit_meal_id": state_data.get("edit_meal_id"),
+                "edit_date_str": state_data.get("edit_date_str")
+            }
+            queue_id = await rate_limiter.add_to_queue(
+                db,
+                user_id=message.from_user.id,
+                chat_id=message.chat.id,
+                request_type="adjust_meal_edit",
+                payload=payload
+            )
+            position = await rate_limiter.get_queue_position(db, queue_id)
+            await message.answer(
+                i18n_locales.get_text("rate_limit_queued", user_language, position=position)
+            )
+            return
+
     wait_msg = await message.answer(i18n_locales.get_text("food_analyzing", user_language))
-    adjusted_analysis = await gemini.adjust_food_analysis(
-        original_data=original_data,
-        correction_text=correction_text,
-        language=user_language
-    )
+    try:
+        adjusted_analysis = await gemini.adjust_food_analysis(
+            original_data=original_data,
+            correction_text=correction_text,
+            language=user_language
+        )
+    except Exception as e:
+        await wait_msg.delete()
+        payload = {
+            "original_data": original_data,
+            "correction_text": correction_text,
+            "language": user_language,
+            "edit_meal_id": state_data.get("edit_meal_id"),
+            "edit_date_str": state_data.get("edit_date_str")
+        }
+        async with AsyncSessionLocal() as db:
+            queue_id = await rate_limiter.add_to_queue(
+                db,
+                user_id=message.from_user.id,
+                chat_id=message.chat.id,
+                request_type="adjust_meal_edit",
+                payload=payload
+            )
+        await message.answer(
+            i18n_locales.get_text("ai_service_unavailable", user_language)
+        )
+        return
     
     await wait_msg.delete()
     
     if not adjusted_analysis:
         await message.answer("⚠️ Correction failed. Try describing the correction again.")
         return
+
+    async with AsyncSessionLocal() as db:
+        await rate_limiter.log_ai_request(db, user_id=message.from_user.id, request_type="adjust_meal_edit")
         
     adjusted_dict = adjusted_analysis.model_dump()
     await state.update_data(adjusted_analysis=adjusted_dict)

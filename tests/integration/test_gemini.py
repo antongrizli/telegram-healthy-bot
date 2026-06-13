@@ -26,9 +26,8 @@ async def test_analyze_food_input_failure(mock_gemini_client):
     # Setup mock exception (non-transient generic error)
     mock_gemini_client.models.generate_content.side_effect = Exception("API Error")
 
-    res = await gemini.analyze_food_input(text_description="2 boiled eggs")
-    
-    assert res is None
+    with pytest.raises(Exception):
+        await gemini.analyze_food_input(text_description="2 boiled eggs")
 
 async def test_analyze_food_input_transient_retry(mock_gemini_client):
     # Setup mock response
@@ -76,8 +75,8 @@ async def test_adjust_food_analysis_success(mock_gemini_client):
 
 async def test_adjust_food_analysis_failure(mock_gemini_client):
     mock_gemini_client.models.generate_content.side_effect = Exception("API Error")
-    res = await gemini.adjust_food_analysis({}, "correction")
-    assert res is None
+    with pytest.raises(Exception):
+        await gemini.adjust_food_analysis({}, "correction")
 
 async def test_generate_report_success(mock_gemini_client):
     # Setup mock response containing raw markdown to clean
@@ -95,8 +94,5 @@ async def test_generate_report_failure(mock_gemini_client):
     mock_gemini_client.models.generate_content.side_effect = Exception("API Error")
     profile = {"name": "Anton", "sex": "male", "age": 36, "height_cm": 188.0, "weight_kg": 88.0, "activity_level": "light", "goal": "lose_weight"}
     
-    report_en = await gemini.generate_report(profile, [], [], "daily", "en")
-    assert "Failed to generate report" in report_en
-    
-    report_ru = await gemini.generate_report(profile, [], [], "daily", "ru")
-    assert "Не удалось сгенерировать отчет" in report_ru
+    with pytest.raises(Exception):
+        await gemini.generate_report(profile, [], [], "daily", "en")

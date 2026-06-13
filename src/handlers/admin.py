@@ -42,19 +42,37 @@ async def cmd_admin_stats(message: Message, user_language: str):
     async with AsyncSessionLocal() as db:
         stats = await crud.get_admin_stats(db)
         
-    stats_text = (
-        "📊 **Bot Statistics**:\n\n"
-        f"👤 **Total Registered Users**: {stats['total_users']}\n"
-        f"🔥 **Active Users (24h)**: {stats['active_users_24h']}\n"
-        f"🗓️ **Active Users (7d)**: {stats['active_users_7d']}\n"
-        f"✉️ **Messages Processed (24h)**: {stats['messages_24h']}\n"
-        f"🍽️ **Food Logs Recorded (24h)**: {stats['food_logs_24h']}\n"
-    )
+    if user_language == "ru":
+        stats_text = (
+            "📊 **Статистика бота**:\n\n"
+            f"👤 **Всего зарегистрированных пользователей**: {stats['total_users']}\n"
+            f"🔥 **Активные пользователи (24ч)**: {stats['active_users_24h']}\n"
+            f"🗓️ **Активные пользователи (7д)**: {stats['active_users_7d']}\n"
+            f"✉️ **Сообщений обработано (24ч)**: {stats['messages_24h']}\n"
+            f"🍽️ **Записей еды (24ч)**: {stats['food_logs_24h']}\n"
+            f"🤖 **Частота запросов к ИИ (1м)**: {stats['api_calls_1m']}\n"
+            f"🤖 **Частота запросов к ИИ (24ч)**: {stats['api_calls_24h']}\n"
+            f"⏳ **Запросов ИИ в очереди**: {stats['queued_requests']}\n"
+        )
+    else:
+        stats_text = (
+            "📊 **Bot Statistics**:\n\n"
+            f"👤 **Total Registered Users**: {stats['total_users']}\n"
+            f"🔥 **Active Users (24h)**: {stats['active_users_24h']}\n"
+            f"🗓️ **Active Users (7d)**: {stats['active_users_7d']}\n"
+            f"✉️ **Messages Processed (24h)**: {stats['messages_24h']}\n"
+            f"🍽️ **Food Logs Recorded (24h)**: {stats['food_logs_24h']}\n"
+            f"🤖 **AI API Call Rate (1m)**: {stats['api_calls_1m']}\n"
+            f"🤖 **AI API Call Rate (24h)**: {stats['api_calls_24h']}\n"
+            f"⏳ **AI Requests in Queue**: {stats['queued_requests']}\n"
+        )
+        
     await message.answer(
         stats_text,
         reply_markup=reply.get_admin_menu(user_language),
         parse_mode="Markdown"
     )
+
 
 @router.message(F.text.in_(["📢 Broadcast", "📢 Рассылка"]))
 async def cmd_admin_broadcast(message: Message, state: FSMContext, user_language: str):

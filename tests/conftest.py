@@ -69,7 +69,8 @@ def patch_async_session_local(monkeypatch, db_session):
         "src.handlers.food",
         "src.handlers.common",
         "src.handlers.admin",
-        "src.services.scheduler"
+        "src.services.scheduler",
+        "src.services.rate_limiter"
     ]
     
     for mod in modules:

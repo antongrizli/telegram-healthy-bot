@@ -22,3 +22,11 @@ async def init_db():
             await conn.execute(sa.text("ALTER TABLE food_logs ADD COLUMN IF NOT EXISTS meal_type VARCHAR(20) NOT NULL DEFAULT 'food'"))
         except Exception as e:
             logger.info(f"meal_type column check/migration skipped or handled: {e}")
+
+        # Add retry_count, next_retry_at, and last_error columns to existing PostgreSQL ai_request_queue table if they do not exist
+        try:
+            await conn.execute(sa.text("ALTER TABLE ai_request_queue ADD COLUMN IF NOT EXISTS retry_count INTEGER NOT NULL DEFAULT 0"))
+            await conn.execute(sa.text("ALTER TABLE ai_request_queue ADD COLUMN IF NOT EXISTS next_retry_at TIMESTAMP WITHOUT TIME ZONE"))
+            await conn.execute(sa.text("ALTER TABLE ai_request_queue ADD COLUMN IF NOT EXISTS last_error TEXT"))
+        except Exception as e:
+            logger.info(f"ai_request_queue retry columns check/migration skipped or handled: {e}")

@@ -68,8 +68,10 @@ async def call_gemini_with_retry(
                 "UNAVAILABLE" in err_str or 
                 "ResourceExhausted" in err_str or 
                 "429" in err_str or
-                getattr(e, "code", None) == 503 or
-                getattr(e, "status_code", None) == 503
+                "500" in err_str or
+                "INTERNAL" in err_str or
+                getattr(e, "code", None) in (500, 503) or
+                getattr(e, "status_code", None) in (500, 503)
             )
             if is_transient and attempt < max_retries - 1:
                 logger.warning(
@@ -110,22 +112,18 @@ async def analyze_food_input(
         
     contents.append(prompt)
     
-    try:
-        response = await call_gemini_with_retry(
-            contents=contents,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=FoodAnalysisResponse,
-                temperature=0.2
-            )
+    response = await call_gemini_with_retry(
+        contents=contents,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=FoodAnalysisResponse,
+            temperature=0.2
         )
-        print(f"AI raw response: {response.text}")
-        raw_json = extract_json(response.text)
-        data = json.loads(raw_json)
-        return FoodAnalysisResponse(**data)
-    except Exception as e:
-        print(f"Error calling AI: {e}")
-        return None
+    )
+    print(f"AI raw response: {response.text}")
+    raw_json = extract_json(response.text)
+    data = json.loads(raw_json)
+    return FoodAnalysisResponse(**data)
 
 async def adjust_food_analysis(
     original_data: dict,
@@ -145,22 +143,18 @@ async def adjust_food_analysis(
         f"Provide the output in the language: {lang_name}."
     )
     
-    try:
-        response = await call_gemini_with_retry(
-            contents=[prompt],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=FoodAnalysisResponse,
-                temperature=0.2
-            )
+    response = await call_gemini_with_retry(
+        contents=[prompt],
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=FoodAnalysisResponse,
+            temperature=0.2
         )
-        print(f"AI raw response (correction): {response.text}")
-        raw_json = extract_json(response.text)
-        data = json.loads(raw_json)
-        return FoodAnalysisResponse(**data)
-    except Exception as e:
-        print(f"Error calling AI for correction adjustment: {e}")
-        return None
+    )
+    print(f"AI raw response (correction): {response.text}")
+    raw_json = extract_json(response.text)
+    data = json.loads(raw_json)
+    return FoodAnalysisResponse(**data)
 
 async def generate_report(
     profile: dict,
@@ -264,20 +258,14 @@ async def generate_report(
             f"4. Keep the tone encouraging, professional, and clear. Keep the text concise and under 2500 characters. Avoid writing long introductions. Start directly with the report."
         )
     
-    try:
-        response = await call_gemini_with_retry(
-            contents=[prompt],
-            config=types.GenerateContentConfig(
-                temperature=0.3
-            )
+    response = await call_gemini_with_retry(
+        contents=[prompt],
+        config=types.GenerateContentConfig(
+            temperature=0.3
         )
-        report_text = response.text
-        if report_text:
-            from src.utils.escape import clean_telegram_markdown
-            report_text = clean_telegram_markdown(report_text)
-        return report_text
-    except Exception as e:
-        print(f"Error calling AI for report: {e}")
-        if language == "ru":
-            return "⚠️ Не удалось сгенерировать отчет с помощью ИИ. Пожалуйста, попробуйте позже."
-        return "⚠️ Failed to generate report using AI. Please try again later."
+    )
+    report_text = response.text
+    if report_text:
+        from src.utils.escape import clean_telegram_markdown
+        report_text = clean_telegram_markdown(report_text)
+    return report_text

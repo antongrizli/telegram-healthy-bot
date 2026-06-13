@@ -44,12 +44,16 @@ async def main():
     logger.info("Starting APScheduler background tasks...")
     await scheduler.init_scheduler(bot)
 
+    from src.services.rate_limiter import start_queue_worker, stop_queue_worker
+    queue_worker_task = asyncio.create_task(start_queue_worker(bot, dp.storage))
+
     logger.info("Bot is starting polling...")
     try:
         await dp.start_polling(bot)
     finally:
         await bot.session.close()
         scheduler.scheduler.shutdown()
+        await stop_queue_worker()
 
 if __name__ == "__main__":
     asyncio.run(main())

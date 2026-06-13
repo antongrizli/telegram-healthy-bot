@@ -34,6 +34,8 @@ LOCALES = {
         
         "food_prompt": "Send me a photo of your meal 📸 or describe what you ate in a text message ✍️:",
         "food_analyzing": "🔄 Analyzing your food with Gemini AI... Please wait.",
+        "rate_limit_queued": "⚠️ AI service is currently busy. Your request has been queued at position {position} and will be processed automatically.",
+        "ai_service_unavailable": "⚠️ AI service is currently unavailable. Your request has been queued and will be retried automatically.",
         "food_analysis_result": "🍽️ *Food Analysis*:\n\n{items}\n\n🔥 *Estimated Totals*:\n• *Calories*: {calories} kcal\n• *Protein*: {protein}g | *Fat*: {fat}g | *Carbs*: {carb}g\n\nDo you accept these estimates or need to correct them?",
         
         "btn_accept": "✅ Accept",
@@ -104,7 +106,13 @@ LOCALES = {
         "meal_type_lunch": "🍲 Lunch",
         "meal_type_dinner": "🍝 Dinner",
         "meal_type_snack": "🍎 Snack",
-        "meal_type_food": "🍽️ Food (Other)"
+        "meal_type_food": "🍽️ Food (Other)",
+        
+        "btn_delete_profile": "🗑️ Delete Profile",
+        "btn_confirm_delete": "⚠️ Yes, Delete Everything",
+        "delete_profile_prompt": "⚠️ Are you sure you want to delete your profile and all your logged data? This action is permanent and cannot be undone.",
+        "profile_deleted": "🗑️ All your data has been successfully deleted. Farewell!",
+        "btn_keep_current": "Keep: {value}"
     },
     "ru": {
         "welcome": "Добро пожаловать в *Healthy Tracker Bot*! 🍏\n\nЯ помогу вам записывать еду (по фото или тексту), отслеживать вес и получать ежедневные/еженедельные/ежемесячные отчеты с персональными рекомендациями с помощью ИИ.\n\nДавайте сначала настроим ваш профиль. Нажмите *Настроить профиль*, чтобы начать!",
@@ -141,6 +149,8 @@ LOCALES = {
         
         "food_prompt": "Отправьте мне фотографию блюда 📸 или опишите его текстом ✍️:",
         "food_analyzing": "🔄 Анализирую еду с помощью Gemini AI... Пожалуйста, подождите.",
+        "rate_limit_queued": "⚠️ Сервис ИИ сейчас перегружен. Ваш запрос добавлен в очередь на позицию {position} и будет обработан автоматически.",
+        "ai_service_unavailable": "⚠️ Сервис ИИ сейчас недоступен. Ваш запрос добавлен в очередь и будет повторен автоматически.",
         "food_analysis_result": "🍽️ *Анализ еды*:\n\n{items}\n\n🔥 *Итоговые оценки*:\n• *Калории*: {calories} ккал\n• *Белки*: {protein} г | *Жиры*: {fat} г | *Углеводы*: {carb} г\n\nВы принимаете эти оценки или хотите исправить их?",
         
         "btn_accept": "✅ Принять",
@@ -211,7 +221,13 @@ LOCALES = {
         "meal_type_lunch": "🍲 Обед",
         "meal_type_dinner": "🍝 Ужин",
         "meal_type_snack": "🍎 Перекус",
-        "meal_type_food": "🍽️ Другое"
+        "meal_type_food": "🍽️ Другое",
+        
+        "btn_delete_profile": "🗑️ Удалить профиль",
+        "btn_confirm_delete": "⚠️ Да, удалить всё",
+        "delete_profile_prompt": "⚠️ Вы уверены, что хотите удалить свой профиль и все записанные данные? Это действие необратимо и его нельзя отменить.",
+        "profile_deleted": "🗑️ Все ваши данные были успешно удалены. Прощайте!",
+        "btn_keep_current": "Оставить: {value}"
     }
 }
 

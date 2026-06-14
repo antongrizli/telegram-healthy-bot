@@ -25,6 +25,8 @@ async def main():
     dp = Dispatcher(storage=MemoryStorage())
 
     # Register Global Telemetry and Localization Middlewares
+    from src.middlewares.media_group import MediaGroupMiddleware
+    dp.message.outer_middleware(MediaGroupMiddleware())
     dp.message.outer_middleware(LanguageMiddleware())
     dp.callback_query.outer_middleware(LanguageMiddleware())
     dp.message.outer_middleware(InteractionLoggingMiddleware())

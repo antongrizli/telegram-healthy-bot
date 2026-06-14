@@ -333,6 +333,7 @@ async def test_execute_queued_analyze_food_input_with_photo_and_caption(db_sessi
     mock_analyze.assert_called_once_with(
         text_description="A fresh Greek salad with olive oil",
         image_bytes=b"queued_photo_bytes",
+        images_bytes=None,
         language="en"
     )
 
@@ -345,5 +346,73 @@ async def test_execute_queued_analyze_food_input_with_photo_and_caption(db_sessi
     called_text = mock_bot.send_message.call_args[0][1]
     assert "Salad" in called_text
     assert "120 kcal" in called_text
+
+
+async def test_execute_queued_analyze_food_input_multiple_images(db_session: AsyncSession, setup_test_user, mock_bot, monkeypatch):
+    storage = MemoryStorage()
+    key = StorageKey(bot_id=mock_bot.id, chat_id=55555, user_id=55555)
+    fsm_ctx = FSMContext(storage=storage, key=key)
+    await fsm_ctx.set_state(FoodLoggingState.waiting_for_input)
+    await fsm_ctx.update_data(meal_type="breakfast")
+
+    # Mock bot.get_file and bot.download_file
+    mock_file = MagicMock()
+    mock_file.file_path = "photos/queued_photo.jpg"
+    mock_bot.get_file = AsyncMock(return_value=mock_file)
+    
+    async def mock_download_file(file_path, destination):
+        destination.write(b"queued_photo_bytes")
+    mock_bot.download_file = AsyncMock(side_effect=mock_download_file)
+
+    # Mock gemini call
+    mock_analysis = MagicMock()
+    mock_analysis.food_items = [
+        MagicMock(name="Salad", portion="200g", calories=120, protein=3.0, fat=8.0, carb=10.0)
+    ]
+    mock_analysis.total_calories = 120
+    mock_analysis.total_protein = 3.0
+    mock_analysis.total_fat = 8.0
+    mock_analysis.total_carb = 10.0
+    mock_analysis.model_dump.return_value = {
+        "food_items": [{"name": "Salad", "portion": "200g", "calories": 120, "protein": 3.0, "fat": 8.0, "carb": 10.0}],
+        "total_calories": 120,
+        "total_protein": 3.0,
+        "total_fat": 8.0,
+        "total_carb": 10.0
+    }
+
+    mock_analyze = AsyncMock(return_value=mock_analysis)
+    monkeypatch.setattr("src.services.gemini.analyze_food_input", mock_analyze)
+
+    # Queue an item with image_file_ids list
+    qid = await rate_limiter.add_to_queue(
+        db_session,
+        user_id=55555,
+        chat_id=55555,
+        request_type="analyze_food_input",
+        payload={
+            "text_description": "A fresh Greek salad with olive oil",
+            "image_file_ids": ["photo_id1", "photo_id2"],
+            "meal_type": "breakfast"
+        }
+    )
+    
+    import sqlalchemy as sa
+    res = await db_session.execute(sa.select(AiRequestQueue).where(AiRequestQueue.id == qid))
+    item = res.scalar()
+
+    success = await rate_limiter.execute_queued_item(mock_bot, storage, db_session, item)
+    assert success
+
+    # Verify gemini analysis is called with multiple photos
+    mock_analyze.assert_called_once_with(
+        text_description="A fresh Greek salad with olive oil",
+        image_bytes=None,
+        images_bytes=[b"queued_photo_bytes", b"queued_photo_bytes"],
+        language="en"
+    )
+
+    state = await fsm_ctx.get_state()
+    assert state == FoodLoggingState.waiting_for_confirm
 
 

@@ -133,10 +133,23 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
 
         text_desc = payload.get("text_description")
         image_file_id = payload.get("image_file_id")
+        image_file_ids = payload.get("image_file_ids")
         meal_type = payload.get("meal_type", "food")
 
         image_bytes = None
-        if image_file_id:
+        images_bytes = None
+        if image_file_ids:
+            images_bytes = []
+            for file_id in image_file_ids:
+                try:
+                    file_info = await bot.get_file(file_id)
+                    image_io = io.BytesIO()
+                    await bot.download_file(file_info.file_path, image_io)
+                    images_bytes.append(image_io.getvalue())
+                except Exception as e:
+                    logger.error(f"Failed to download image {file_id} for queued analysis: {e}")
+                    return False
+        elif image_file_id:
             try:
                 file_info = await bot.get_file(image_file_id)
                 image_io = io.BytesIO()
@@ -151,6 +164,7 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
             analysis = await gemini.analyze_food_input(
                 text_description=text_desc,
                 image_bytes=image_bytes,
+                images_bytes=images_bytes,
                 language=user_language
             )
         finally:
@@ -185,6 +199,7 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
             await fsm_context.update_data(
                 analysis=analysis_dict,
                 image_file_id=image_file_id,
+                image_file_ids=image_file_ids,
                 raw_text=text_desc,
                 meal_type=meal_type
             )

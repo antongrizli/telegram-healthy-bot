@@ -86,6 +86,7 @@ async def call_gemini_with_retry(
 async def analyze_food_input(
     text_description: Optional[str] = None,
     image_bytes: Optional[bytes] = None,
+    images_bytes: Optional[List[bytes]] = None,
     language: str = "en"
 ) -> Optional[FoodAnalysisResponse]:
     """
@@ -100,7 +101,14 @@ async def analyze_food_input(
     )
     
     contents = []
-    if image_bytes:
+    if images_bytes:
+        for img_bytes in images_bytes:
+            image_part = types.Part.from_bytes(
+                data=img_bytes,
+                mime_type="image/jpeg"
+            )
+            contents.append(image_part)
+    elif image_bytes:
         image_part = types.Part.from_bytes(
             data=image_bytes,
             mime_type="image/jpeg"

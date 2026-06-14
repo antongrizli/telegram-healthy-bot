@@ -1,5 +1,6 @@
 import io
 import re
+from typing import List, Optional
 from datetime import datetime, UTC, timedelta
 from zoneinfo import ZoneInfo
 from aiogram import Router, F
@@ -102,24 +103,54 @@ async def process_meal_type_selection(message: Message, state: FSMContext, user_
     )
 
 @router.message(FoodLoggingState.waiting_for_input)
-async def process_food_input(message: Message, state: FSMContext, user_language: str):
+async def process_food_input(
+    message: Message,
+    state: FSMContext,
+    user_language: str,
+    album: Optional[List[Message]] = None
+):
     image_bytes = None
+    images_bytes = None
     image_file_id = None
+    image_file_ids = None
     text_desc = None
     
-    if message.photo:
-        image_file_id = message.photo[-1].file_id
-        file_info = await message.bot.get_file(image_file_id)
-        image_io = io.BytesIO()
-        await message.bot.download_file(file_info.file_path, image_io)
-        image_bytes = image_io.getvalue()
-        if message.caption:
-            text_desc = message.caption.strip()
-    elif message.text:
-        text_desc = message.text.strip()
+    if album:
+        images_bytes = []
+        image_file_ids = []
+        captions = []
+        for m in album:
+            if m.photo:
+                fid = m.photo[-1].file_id
+                image_file_ids.append(fid)
+                try:
+                    file_info = await message.bot.get_file(fid)
+                    image_io = io.BytesIO()
+                    await message.bot.download_file(file_info.file_path, image_io)
+                    images_bytes.append(image_io.getvalue())
+                except Exception as e:
+                    pass
+            if m.caption:
+                captions.append(m.caption.strip())
+        
+        if captions:
+            text_desc = "\n".join(captions)
+        if image_file_ids:
+            image_file_id = image_file_ids[0]
     else:
-        await message.answer(i18n_locales.get_text("food_prompt", user_language))
-        return
+        if message.photo:
+            image_file_id = message.photo[-1].file_id
+            file_info = await message.bot.get_file(image_file_id)
+            image_io = io.BytesIO()
+            await message.bot.download_file(file_info.file_path, image_io)
+            image_bytes = image_io.getvalue()
+            if message.caption:
+                text_desc = message.caption.strip()
+        elif message.text:
+            text_desc = message.text.strip()
+        else:
+            await message.answer(i18n_locales.get_text("food_prompt", user_language))
+            return
 
     async with AsyncSessionLocal() as db:
         is_limited, _ = await rate_limiter.check_rate_limit(db)
@@ -129,6 +160,7 @@ async def process_food_input(message: Message, state: FSMContext, user_language:
             payload = {
                 "text_description": text_desc,
                 "image_file_id": image_file_id,
+                "image_file_ids": image_file_ids,
                 "language": user_language,
                 "meal_type": meal_type
             }
@@ -150,6 +182,7 @@ async def process_food_input(message: Message, state: FSMContext, user_language:
         analysis = await gemini.analyze_food_input(
             text_description=text_desc,
             image_bytes=image_bytes,
+            images_bytes=images_bytes,
             language=user_language
         )
     except Exception as e:
@@ -159,6 +192,7 @@ async def process_food_input(message: Message, state: FSMContext, user_language:
         payload = {
             "text_description": text_desc,
             "image_file_id": image_file_id,
+            "image_file_ids": image_file_ids,
             "language": user_language,
             "meal_type": meal_type
         }

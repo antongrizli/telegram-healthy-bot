@@ -385,6 +385,7 @@ async def test_process_food_input_photo_and_caption(mock_state, monkeypatch):
     mock_analyze.assert_called_once_with(
         text_description="This is a delicious breakfast of oatmeal and berries",
         image_bytes=b"dummy_photo_bytes",
+        images_bytes=None,
         language="en"
     )
     

@@ -96,3 +96,27 @@ async def test_generate_report_failure(mock_gemini_client):
     
     with pytest.raises(Exception):
         await gemini.generate_report(profile, [], [], "daily", "en")
+
+
+async def test_analyze_food_input_multiple_images(mock_gemini_client):
+    mock_response = MagicMock()
+    mock_response.text = (
+        '{"food_items": [{"name": "Eggs", "portion": "2 eggs", "calories": 140, "protein": 12.0, "fat": 10.0, "carb": 1.0}],'
+        ' "total_calories": 140, "total_protein": 12.0, "total_fat": 10.0, "total_carb": 1.0}'
+    )
+    mock_gemini_client.models.generate_content.return_value = mock_response
+
+    res = await gemini.analyze_food_input(
+        text_description="multiple images",
+        images_bytes=[b"img1", b"img2"]
+    )
+    
+    assert res is not None
+    assert res.total_calories == 140
+    
+    # Verify generate_content was called with images
+    call_args = mock_gemini_client.models.generate_content.call_args
+    assert call_args is not None
+    contents = call_args[1]["contents"]
+    # We expect 2 image parts + 1 text description + 1 prompt = 4 items in contents
+    assert len(contents) == 4

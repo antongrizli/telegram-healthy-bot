@@ -26,6 +26,13 @@ def clean_telegram_markdown(text: str) -> str:
     if not text:
         return ""
 
+    # Replace LaTeX arrow formulas with Unicode equivalents
+    text = re.sub(r'\$\s*\\(rightarrow|to)\s*\$|\\(rightarrow|to)\b', '→', text)
+    text = re.sub(r'\$\s*\\Rightarrow\s*\$|\\Rightarrow\b', '⇒', text)
+    text = re.sub(r'\$\s*\\leftarrow\s*\$|\\leftarrow\b', '←', text)
+    text = re.sub(r'\$\s*\\Leftarrow\s*\$|\\Leftarrow\b', '⇐', text)
+    text = re.sub(r'\$\s*\\leftrightarrow\s*\$|\\leftrightarrow\b', '↔', text)
+
     # 1. Split by code blocks (```)
     code_block_parts = text.split("```")
     new_parts = []

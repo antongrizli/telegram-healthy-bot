@@ -74,3 +74,13 @@ def test_split_message():
     # 3. Text split force (single line exceeding max_length)
     assert split_message("abcdefgh", max_length=3) == ["abc", "def", "gh"]
 
+def test_clean_telegram_markdown_arrows():
+    # Verify LaTeX arrows are correctly converted to Unicode arrows
+    assert clean_telegram_markdown(r"Вместо картофеля фри $\rightarrow$ запеченный картофель") == "Вместо картофеля фри → запеченный картофель"
+    assert clean_telegram_markdown(r"Вместо соусов \rightarrow лимонный сок") == "Вместо соусов → лимонный сок"
+    assert clean_telegram_markdown(r"A $\to$ B") == "A → B"
+    assert clean_telegram_markdown(r"A \Rightarrow B") == "A ⇒ B"
+    assert clean_telegram_markdown(r"A $\Leftarrow$ B") == "A ⇐ B"
+    assert clean_telegram_markdown(r"A \leftrightarrow B") == "A ↔ B"
+
+

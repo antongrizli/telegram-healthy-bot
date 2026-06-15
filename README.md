@@ -1,5 +1,12 @@
 # Telegram Healthy Tracker Bot 🍏
 
+<p align="center">
+  <a href="https://telegram.me/your_healthy_body_bot">
+    <img src="assets/icon.jpg" alt="Telegram Healthy Tracker Bot Icon" width="50" height="50" style="border-radius: 50%; vertical-align: middle; margin-right: 10px;">
+    🤖 <b>Try the bot on Telegram: @your_healthy_body_bot</b>
+  </a>
+</p>
+
 A modern, asynchronous Telegram bot built in Python utilizing **aiogram v3**, **PostgreSQL**, **APScheduler**, and Google's **Gemini 2.5 Flash** API via the official unified `google-genai` SDK.
 
 The bot helps users track their nutrition logs (via photo or text), record periodic weights, calculate daily allowances, and receive automated, AI-driven daily, weekly, and monthly reports detailing progress and fitness goal alignment (warning the user if weight is moving in a different direction than their goal).

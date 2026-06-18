@@ -14,7 +14,8 @@ from src.handlers.food import (
     start_food_logging,
     process_meal_type_selection,
     process_food_confirm,
-    process_food_input
+    process_food_input,
+    process_food_correction
 )
 from src.database import crud
 from tests.integration.test_handlers import make_mock_message, mock_state
@@ -404,3 +405,48 @@ async def test_process_food_input_photo_and_caption(mock_state, monkeypatch):
     answer_text = message.answer.call_args_list[1][0][0]
     assert "Oatmeal" in answer_text
     assert "150 kcal" in answer_text
+
+async def test_process_meal_edit_text_no_text(mock_state):
+    message = make_mock_message("")
+    message.text = None
+    
+    await process_meal_edit_text(message, mock_state, "en")
+    
+    message.answer.assert_called_once()
+    assert "Please describe the correction" in message.answer.call_args[0][0]
+
+async def test_process_food_correction_no_text(mock_state):
+    message = make_mock_message("")
+    message.text = None
+    
+    await process_food_correction(message, mock_state, "en")
+    
+    message.answer.assert_called_once()
+    assert "Please describe what is incorrect" in message.answer.call_args[0][0]
+
+async def test_process_food_correction_success(mock_state, mock_gemini_client, monkeypatch):
+    mock_state.get_data.return_value = {
+        "analysis": {
+            "food_items": [{"name": "Egg", "portion": "1 egg", "calories": 70, "protein": 6, "fat": 5, "carb": 0.5}],
+            "total_calories": 70, "total_protein": 6, "total_fat": 5, "total_carb": 0.5
+        }
+    }
+    
+    mock_response = MagicMock()
+    mock_response.text = (
+        '{"food_items": [{"name": "Egg", "portion": "2 eggs", "calories": 140, "protein": 12, "fat": 10, "carb": 1.0}],'
+        ' "total_calories": 140, "total_protein": 12, "total_fat": 10, "total_carb": 1.0}'
+    )
+    mock_gemini_client.models.generate_content.return_value = mock_response
+    
+    mock_adjust = AsyncMock(return_value=mock_response)
+    monkeypatch.setattr("src.services.gemini.adjust_food_analysis", mock_adjust)
+    
+    message = make_mock_message("Actually 2 eggs")
+    
+    await process_food_correction(message, mock_state, "en")
+    
+    mock_state.update_data.assert_called_once()
+    mock_state.set_state.assert_called_once_with(FoodLoggingState.waiting_for_confirm)
+    message.answer.assert_called()
+    assert "Estimated Totals" in message.answer.call_args[0][0]

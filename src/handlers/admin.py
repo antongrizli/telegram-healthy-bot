@@ -228,7 +228,10 @@ async def cmd_admin_broadcast(message: Message, state: FSMContext, user_language
         reply_markup=reply.get_cancel_keyboard(user_language)
     )
 
-@router.message(AdminStatesGroup.waiting_for_broadcast)
+@router.message(
+    AdminStatesGroup.waiting_for_broadcast,
+    lambda msg: not (msg.text and (msg.text.startswith("/") or msg.text in ["⬅️ Back to Main Menu", "⬅️ Главное меню"]))
+)
 async def process_admin_broadcast(message: Message, state: FSMContext, user_language: str):
     broadcast_text = message.text
     await state.clear()
@@ -281,7 +284,10 @@ async def cmd_admin_active_users(message: Message, state: FSMContext, user_langu
         parse_mode="Markdown"
     )
 
-@router.message(AdminStatesGroup.viewing_active)
+@router.message(
+    AdminStatesGroup.viewing_active,
+    lambda msg: not (msg.text and (msg.text.startswith("/") or msg.text in ["⬅️ Back to Main Menu", "⬅️ Главное меню"]))
+)
 async def process_active_users_view(message: Message, state: FSMContext, user_language: str):
     text = message.text.strip()
     
@@ -364,7 +370,10 @@ async def cmd_admin_blocked_users(message: Message, state: FSMContext, user_lang
         parse_mode="Markdown"
     )
 
-@router.message(AdminStatesGroup.viewing_blocked)
+@router.message(
+    AdminStatesGroup.viewing_blocked,
+    lambda msg: not (msg.text and (msg.text.startswith("/") or msg.text in ["⬅️ Back to Main Menu", "⬅️ Главное меню"]))
+)
 async def process_blocked_users_view(message: Message, state: FSMContext, user_language: str):
     text = message.text.strip()
     

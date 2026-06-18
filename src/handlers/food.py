@@ -209,7 +209,7 @@ async def process_food_input(
     await wait_msg.delete()
     
     if not analysis:
-        await message.answer("⚠️ Analysis failed. Try describing the food again or checking your internet connection.")
+        await message.answer(i18n_locales.get_text("err_analysis_failed", user_language))
         return
 
     async with AsyncSessionLocal() as db:
@@ -293,12 +293,20 @@ async def process_food_confirm(message: Message, state: FSMContext, user_languag
         )
     else:
         await message.answer(
-            "Please confirm using the keyboard buttons.",
+            i18n_locales.get_text("confirm_keyboard_buttons", user_language),
             reply_markup=reply.get_food_confirm_keyboard(user_language)
         )
 
 @router.message(FoodLoggingState.waiting_for_correction)
 async def process_food_correction(message: Message, state: FSMContext, user_language: str):
+    if not message.text:
+        await message.answer(
+            i18n_locales.get_text("food_correction_prompt", user_language),
+            reply_markup=reply.get_cancel_keyboard(user_language),
+            parse_mode="Markdown"
+        )
+        return
+        
     state_data = await state.get_data()
     original_analysis = state_data["analysis"]
     correction_text = message.text.strip()
@@ -354,7 +362,7 @@ async def process_food_correction(message: Message, state: FSMContext, user_lang
     await wait_msg.delete()
     
     if not adjusted_analysis:
-        await message.answer("⚠️ Correction failed. Try describing the correction again.")
+        await message.answer(i18n_locales.get_text("err_correction_failed", user_language))
         return
 
     async with AsyncSessionLocal() as db:
@@ -463,14 +471,8 @@ async def send_or_edit_meals_message(event: Message | CallbackQuery, date_str: s
                 "🍝" if meal.meal_type == "dinner" else
                 "🍎" if meal.meal_type == "snack" else "🍽️"
             )
-            type_names = {
-                "breakfast": "Breakfast" if user_language == "en" else "Завтрак",
-                "lunch": "Lunch" if user_language == "en" else "Обед",
-                "dinner": "Dinner" if user_language == "en" else "Ужин",
-                "snack": "Snack" if user_language == "en" else "Перекус",
-                "food": "Food" if user_language == "en" else "Еда"
-            }
-            meal_type_label = type_names.get(meal.meal_type, "Food")
+            meal_type_key = f"meal_type_{meal.meal_type}_clean" if meal.meal_type in ["breakfast", "lunch", "dinner", "snack", "food"] else "meal_type_food_clean"
+            meal_type_label = i18n_locales.get_text(meal_type_key, user_language)
             
             body_items.append(
                 f"{num}. *{meal_local_time}* - {meal_type_emoji} *{meal_type_label}*: {items_desc}\n"
@@ -497,7 +499,7 @@ async def process_meals_viewing(message: Message, state: FSMContext, user_langua
     if text in ["⬅️ Back to Main Menu", "⬅️ Главное меню", "❌ Cancel", "❌ Отмена"]:
         await state.clear()
         await message.answer(
-            "Returned to main menu." if user_language == "en" else "Возврат в главное меню.",
+            i18n_locales.get_text("return_to_main_menu", user_language),
             reply_markup=reply.get_main_menu(user_language, is_admin=is_admin)
         )
         return
@@ -550,7 +552,7 @@ async def process_meals_viewing(message: Message, state: FSMContext, user_langua
             meals = await crud.get_food_logs(db, db_user.telegram_id, start_date_utc, end_date_utc)
             
         if not meals or num <= 0 or num > len(meals):
-            await message.answer("⚠️ Invalid meal selection.")
+            await message.answer(i18n_locales.get_text("err_invalid_meal_selection", user_language))
             return
             
         selected_meal = meals[num - 1]
@@ -561,7 +563,7 @@ async def process_meals_viewing(message: Message, state: FSMContext, user_langua
             if success:
                 await message.answer(i18n_locales.get_text("meal_deleted", user_language))
             else:
-                await message.answer("⚠️ Error: Meal not found.")
+                await message.answer(i18n_locales.get_text("err_meal_not_found", user_language))
             await send_or_edit_meals_message(message, date_str, user_language, db_user)
             
         elif edit_match:
@@ -597,13 +599,19 @@ async def process_meals_viewing(message: Message, state: FSMContext, user_langua
         return
         
     await message.answer(
-        "Please select an option from the menu keyboard below." if user_language == "en"
-        else "Пожалуйста, выберите действие на клавиатуре меню ниже."
+        i18n_locales.get_text("select_menu_option", user_language)
     )
     await send_or_edit_meals_message(message, date_str, user_language, db_user)
 
 @router.message(MealEditingState.waiting_for_edit_text)
 async def process_meal_edit_text(message: Message, state: FSMContext, user_language: str):
+    if not message.text:
+        await message.answer(
+            i18n_locales.get_text("prompt_edit_text_only", user_language),
+            reply_markup=reply.get_cancel_keyboard(user_language)
+        )
+        return
+        
     state_data = await state.get_data()
     original_data = state_data["original_data"]
     correction_text = message.text.strip()
@@ -663,7 +671,7 @@ async def process_meal_edit_text(message: Message, state: FSMContext, user_langu
     await wait_msg.delete()
     
     if not adjusted_analysis:
-        await message.answer("⚠️ Correction failed. Try describing the correction again.")
+        await message.answer(i18n_locales.get_text("err_correction_failed", user_language))
         return
 
     async with AsyncSessionLocal() as db:
@@ -740,6 +748,6 @@ async def process_meal_edit_confirm(message: Message, state: FSMContext, user_la
         )
     else:
         await message.answer(
-            "Please confirm using the keyboard buttons.",
+            i18n_locales.get_text("confirm_keyboard_buttons", user_language),
             reply_markup=reply.get_meal_edit_confirm_keyboard(user_language)
         )

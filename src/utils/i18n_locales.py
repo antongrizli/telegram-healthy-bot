@@ -139,7 +139,14 @@ LOCALES = {
         "lang_pl": "Polish",
         "lang_de": "German",
         "lang_tr": "Turkish",
-        "lang_es": "Spanish"
+        "lang_es": "Spanish",
+        "err_analysis_failed": "⚠️ Analysis failed. Try describing the food again or checking your internet connection.",
+        "confirm_keyboard_buttons": "Please confirm using the keyboard buttons.",
+        "err_correction_failed": "⚠️ Correction failed. Try describing the correction again.",
+        "err_invalid_meal_selection": "⚠️ Invalid meal selection.",
+        "err_meal_not_found": "⚠️ Error: Meal not found.",
+        "select_menu_option": "Please select an option from the menu keyboard below.",
+        "prompt_edit_text_only": "Please describe the correction or write the new meal description using text:"
     },
     "ru": {
         "welcome": "Добро пожаловать в *Healthy Tracker Bot*! 🍏\n\nЯ помогу вам записывать еду (по фото или тексту), отслеживать вес и получать ежедневные/еженедельные/ежемесячные отчеты с персональными рекомендациями с помощью ИИ.\n\nДавайте сначала настроим ваш профиль. Нажмите *Настроить профиль*, чтобы начать!",
@@ -281,7 +288,14 @@ LOCALES = {
         "lang_pl": "Польский",
         "lang_de": "Немецкий",
         "lang_tr": "Турецкий",
-        "lang_es": "Испанский"
+        "lang_es": "Испанский",
+        "err_analysis_failed": "⚠️ Анализ не удался. Попробуйте описать еду еще раз или проверьте интернет-соединение.",
+        "confirm_keyboard_buttons": "Пожалуйста, подтвердите выбор с помощью кнопок клавиатуры.",
+        "err_correction_failed": "⚠️ Исправление не удалось. Попробуйте описать исправление еще раз.",
+        "err_invalid_meal_selection": "⚠️ Неверный выбор приема пищи.",
+        "err_meal_not_found": "⚠️ Ошибка: Прием пищи не найден.",
+        "select_menu_option": "Пожалуйста, выберите действие на клавиатуре меню ниже.",
+        "prompt_edit_text_only": "Пожалуйста, опишите исправления или напишите новое описание текстом:"
     },
     "uk": {
         "welcome": "Ласкаво просимо до *Healthy Tracker Bot*! 🍏\n\nЯ допоможу вам записувати їжу (за фото або текстом), відстежувати вагу та отримувати щоденні/щотижневі/щомісячні звіти з персональними рекомендаціями за допомогою ШІ.\n\nДавайте спочатку налаштуємо ваш профіль. Натисніть *Налаштувати профіль*, щоб почати!",
@@ -417,7 +431,14 @@ LOCALES = {
         "lang_pl": "Польська",
         "lang_de": "Німецька",
         "lang_tr": "Турецька",
-        "lang_es": "Іспанська"
+        "lang_es": "Іспанська",
+        "err_analysis_failed": "⚠️ Аналіз не вдався. Спробуйте описати їжу ще раз або перевірте інтернет-з'єднання.",
+        "confirm_keyboard_buttons": "Будь ласка, підтвердіть вибір за допомогою кнопок клавіатури.",
+        "err_correction_failed": "⚠️ Виправлення не вдалося. Спробуйте описати виправлення ще раз.",
+        "err_invalid_meal_selection": "⚠️ Неправильний вибір прийому їжі.",
+        "err_meal_not_found": "⚠️ Помилка: Прийом їжі не знайдено.",
+        "select_menu_option": "Будь ласка, оберіть дію на клавіатурі меню нижче.",
+        "prompt_edit_text_only": "Будь ласка, опишіть виправлення або напишіть новий опис текстом:"
     },
     "pl": {
         "welcome": "Witaj w *Healthy Tracker Bot*! 🍏\n\nPomogę Ci zapisywać jedzenie (za pomocą zdjęcia lub tekstu), śledzić wagę i otrzymywać codzienne/tygodniowe/miesięczne raporty z personalizowanymi rekomendacjami przy użyciu AI.\n\nNajpierw skonfigurujmy Twój profil. Kliknij *Skonfiguruj profil*, aby rozpocząć!",
@@ -553,7 +574,14 @@ LOCALES = {
         "lang_pl": "Polski",
         "lang_de": "Niemiecki",
         "lang_tr": "Turecki",
-        "lang_es": "Hiszpański"
+        "lang_es": "Hiszpański",
+        "err_analysis_failed": "⚠️ Analiza nie powiodła się. Spróbuj opisać jedzenie ponownie lub sprawdź połączenie z internetem.",
+        "confirm_keyboard_buttons": "Potwierdź wybór za pomocą przycisków na klawiaturze.",
+        "err_correction_failed": "⚠️ Korekta nie powiodła się. Spróbuj opisać korektę ponownie.",
+        "err_invalid_meal_selection": "⚠️ Nieprawidłowy wybór posiłku.",
+        "err_meal_not_found": "⚠️ Błąd: Nie znaleziono posiłku.",
+        "select_menu_option": "Wybierz opcję z poniższego menu klawiatury.",
+        "prompt_edit_text_only": "Opisz zmianę lub wpisz nowy opis posiłku za pomocą tekstu:"
     },
     "de": {
         "welcome": "Willkommen beim *Healthy Tracker Bot*! 🍏\n\nIch helfe dir, deine Mahlzeiten zu protokollieren (per Foto oder Text), dein Gewicht zu verfolgen und tägliche/wöchentliche/monatliche Berichte mit personalisierten KI-Empfehlungen zu erhalten.\n\nRichten wir zuerst dein Profil ein. Klicke auf *Profil einrichten*, um zu starten!",
@@ -689,7 +717,14 @@ LOCALES = {
         "lang_pl": "Polnisch",
         "lang_de": "Deutsch",
         "lang_tr": "Türkisch",
-        "lang_es": "Spanisch"
+        "lang_es": "Spanisch",
+        "err_analysis_failed": "⚠️ Analyse fehlgeschlagen. Versuche, das Essen erneut zu beschreiben, oder überprüfe deine Internetverbindung.",
+        "confirm_keyboard_buttons": "Bitte bestätige die Auswahl mit den Tastaturtasten.",
+        "err_correction_failed": "⚠️ Korrektur fehlgeschlagen. Versuche, die Korrektur erneut zu beschreiben.",
+        "err_invalid_meal_selection": "⚠️ Ungültige Mahlzeitenauswahl.",
+        "err_meal_not_found": "⚠️ Fehler: Mahlzeit nicht gefunden.",
+        "select_menu_option": "Bitte wähle eine Option aus der Menütastatur unten.",
+        "prompt_edit_text_only": "Bitte beschreibe die Korrektur oder schreibe die neue Mahlzeitbeschreibung per Text:"
     },
     "tr": {
         "welcome": "*Healthy Tracker Bot*'a Hoş Geldiniz! 🍏\n\nYapay zeka yardımıyla yiyeceklerinizi kaydetmenize (fotoğraf veya metin ile), kilonuzu takip etmenize ve kişiselleştirilmiş öneriler içeren günlük/haftalık/aylık raporlar almanıza yardımcı olacağım.\n\nÖncelikle profilinizi yapılandıralım. Başlamak için *Profili Kur* seçeneğine tıklayın!",
@@ -825,7 +860,14 @@ LOCALES = {
         "lang_pl": "Polonyaca",
         "lang_de": "Almanca",
         "lang_tr": "Türkçe",
-        "lang_es": "İspanyolca"
+        "lang_es": "İspanyolca",
+        "err_analysis_failed": "⚠️ Analiz başarısız oldu. Yemeği tekrar tanımlamayı deneyin veya internet bağlantınızı kontrol edin.",
+        "confirm_keyboard_buttons": "Lütfen klavye tuşlarını kullanarak onaylayın.",
+        "err_correction_failed": "⚠️ Düzeltme başarısız oldu. Düzeltmeyi tekrar açıklamayı deneyin.",
+        "err_invalid_meal_selection": "⚠️ Geçersiz yemek seçimi.",
+        "err_meal_not_found": "⚠️ Hata: Yemek bulunamadı.",
+        "select_menu_option": "Lütfen aşağıdaki menü klavyesinden bir seçenek belirleyin.",
+        "prompt_edit_text_only": "Lütfen düzeltmeyi açıklayın veya yeni yemek açıklamasını metin olarak yazın:"
     },
     "es": {
         "welcome": "¡Bienvenido a *Healthy Tracker Bot*! 🍏\n\nTe ayudaré a registrar tu comida (mediante foto o texto), realizar un seguimiento de tu peso y enviarte informes diarios/semanales/mensuales con recomendaciones personalizadas utilizando IA.\n\nPrimero configuremos tu perfil. ¡Haz clic en *Configurar Perfil* para comenzar!",
@@ -961,7 +1003,14 @@ LOCALES = {
         "lang_pl": "Polaco",
         "lang_de": "Alemán",
         "lang_tr": "Turco",
-        "lang_es": "Español"
+        "lang_es": "Español",
+        "err_analysis_failed": "⚠️ El análisis falló. Intenta describir la comida de nuevo o comprueba tu conexión a internet.",
+        "confirm_keyboard_buttons": "Por favor, confirma usando los botones del teclado.",
+        "err_correction_failed": "⚠️ La corrección falló. Intenta describir la corrección de nuevo.",
+        "err_invalid_meal_selection": "⚠️ Selección de comida no válida.",
+        "err_meal_not_found": "⚠️ Error: Comida no encontrada.",
+        "select_menu_option": "Por favor, selecciona una opción del teclado de menú inferior.",
+        "prompt_edit_text_only": "Por favor, describe la corrección o escribe la nueva descripción de la comida usando texto:"
     }
 }
 

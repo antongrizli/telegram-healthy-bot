@@ -14,10 +14,7 @@ router = Router()
 class WeightState(StatesGroup):
     waiting_for_weight = State()
 
-@router.message(F.text.in_([
-    i18n_locales.LOCALES["en"]["btn_log_weight"],
-    i18n_locales.LOCALES["ru"]["btn_log_weight"]
-]))
+@router.message(F.text.in_(i18n_locales.get_all_translations("btn_log_weight")))
 async def start_weight_logging(message: Message, state: FSMContext, user_language: str):
     await state.set_state(WeightState.waiting_for_weight)
     await message.answer(

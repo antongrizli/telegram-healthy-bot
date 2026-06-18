@@ -28,10 +28,7 @@ class ProfileStatesGroup(StatesGroup):
     timezone = State()
     confirm_delete = State()
 
-@router.message(F.text.in_([
-    i18n_locales.LOCALES["en"]["btn_delete_profile"],
-    i18n_locales.LOCALES["ru"]["btn_delete_profile"]
-]))
+@router.message(F.text.in_(i18n_locales.get_all_translations("btn_delete_profile")))
 async def start_profile_deletion(message: Message, state: FSMContext, user_language: str):
     await state.set_state(ProfileStatesGroup.confirm_delete)
     await message.answer(
@@ -40,10 +37,7 @@ async def start_profile_deletion(message: Message, state: FSMContext, user_langu
         parse_mode="Markdown"
     )
 
-@router.message(ProfileStatesGroup.confirm_delete, F.text.in_([
-    i18n_locales.LOCALES["en"]["btn_confirm_delete"],
-    i18n_locales.LOCALES["ru"]["btn_confirm_delete"]
-]))
+@router.message(ProfileStatesGroup.confirm_delete, F.text.in_(i18n_locales.get_all_translations("btn_confirm_delete")))
 async def process_confirm_delete(message: Message, state: FSMContext, user_language: str):
     user_id = message.from_user.id
     
@@ -100,10 +94,7 @@ async def cancel_profile_setup(message: Message, state: FSMContext, user_languag
             parse_mode="Markdown"
         )
 
-@router.message(F.text.in_([
-    i18n_locales.LOCALES["en"]["btn_setup_profile"],
-    i18n_locales.LOCALES["ru"]["btn_setup_profile"]
-]))
+@router.message(F.text.in_(i18n_locales.get_all_translations("btn_setup_profile")))
 async def start_profile_setup(message: Message, state: FSMContext, user_language: str, db_user = None):
     current_profile = None
     if db_user:
@@ -163,9 +154,9 @@ async def process_sex(message: Message, state: FSMContext, user_language: str):
     
     if current_profile and text == i18n_locales.get_text("btn_keep_current", user_language, value=i18n_locales.get_text(f"sex_{current_profile['sex']}", user_language)):
         selected_sex = current_profile["sex"]
-    elif text in [i18n_locales.LOCALES["en"]["sex_male"], i18n_locales.LOCALES["ru"]["sex_male"]]:
+    elif text in i18n_locales.get_all_translations("sex_male"):
         selected_sex = "male"
-    elif text in [i18n_locales.LOCALES["en"]["sex_female"], i18n_locales.LOCALES["ru"]["sex_female"]]:
+    elif text in i18n_locales.get_all_translations("sex_female"):
         selected_sex = "female"
     else:
         current_val = i18n_locales.get_text(f"sex_{current_profile['sex']}", user_language) if current_profile else None
@@ -279,13 +270,13 @@ async def process_activity(message: Message, state: FSMContext, user_language: s
     
     if current_profile and text == i18n_locales.get_text("btn_keep_current", user_language, value=i18n_locales.get_text(f"act_{current_profile['activity']}", user_language)):
         activity = current_profile["activity"]
-    elif text in [i18n_locales.LOCALES["en"]["act_sedentary"], i18n_locales.LOCALES["ru"]["act_sedentary"]]:
+    elif text in i18n_locales.get_all_translations("act_sedentary"):
         activity = "sedentary"
-    elif text in [i18n_locales.LOCALES["en"]["act_light"], i18n_locales.LOCALES["ru"]["act_light"]]:
+    elif text in i18n_locales.get_all_translations("act_light"):
         activity = "light"
-    elif text in [i18n_locales.LOCALES["en"]["act_moderate"], i18n_locales.LOCALES["ru"]["act_moderate"]]:
+    elif text in i18n_locales.get_all_translations("act_moderate"):
         activity = "moderate"
-    elif text in [i18n_locales.LOCALES["en"]["act_active"], i18n_locales.LOCALES["ru"]["act_active"]]:
+    elif text in i18n_locales.get_all_translations("act_active"):
         activity = "active"
     else:
         current_val = i18n_locales.get_text(f"act_{current_profile['activity']}", user_language) if current_profile else None
@@ -331,13 +322,13 @@ async def process_goal(message: Message, state: FSMContext, user_language: str):
         
     if current_profile and text == i18n_locales.get_text("btn_keep_current", user_language, value=i18n_locales.get_text(goal_key, user_language)):
         goal = current_profile["goal"]
-    elif text in [i18n_locales.LOCALES["en"]["goal_lose"], i18n_locales.LOCALES["ru"]["goal_lose"]]:
+    elif text in i18n_locales.get_all_translations("goal_lose"):
         goal = "lose_weight"
-    elif text in [i18n_locales.LOCALES["en"]["goal_maintain"], i18n_locales.LOCALES["ru"]["goal_maintain"]]:
+    elif text in i18n_locales.get_all_translations("goal_maintain"):
         goal = "maintain"
-    elif text in [i18n_locales.LOCALES["en"]["goal_gain_w"], i18n_locales.LOCALES["ru"]["goal_gain_w"]]:
+    elif text in i18n_locales.get_all_translations("goal_gain_w"):
         goal = "gain_weight"
-    elif text in [i18n_locales.LOCALES["en"]["goal_gain_m"], i18n_locales.LOCALES["ru"]["goal_gain_m"]]:
+    elif text in i18n_locales.get_all_translations("goal_gain_m"):
         goal = "gain_muscle"
     else:
         current_val = i18n_locales.get_text(goal_key, user_language) if current_profile else None
@@ -374,6 +365,16 @@ async def process_language(message: Message, state: FSMContext, user_language: s
         selected_lang = "en"
     elif "Русский" in text or "ru" in text.lower():
         selected_lang = "ru"
+    elif "Українська" in text or "uk" in text.lower():
+        selected_lang = "uk"
+    elif "Polski" in text or "pl" in text.lower():
+        selected_lang = "pl"
+    elif "Deutsch" in text or "de" in text.lower():
+        selected_lang = "de"
+    elif "Türkçe" in text or "tr" in text.lower():
+        selected_lang = "tr"
+    elif "Español" in text or "es" in text.lower():
+        selected_lang = "es"
     else:
         current_val = i18n_locales.get_text(f"lang_{current_profile['language']}", user_language) if current_profile else None
         await message.answer(
@@ -405,9 +406,9 @@ async def process_notifications(message: Message, state: FSMContext, user_langua
     
     if current_profile and text == i18n_locales.get_text("btn_keep_current", lang, value=i18n_locales.get_text("yes" if current_profile["notifications_enabled"] else "no", lang)):
         notify_enabled = current_profile["notifications_enabled"]
-    elif text in [i18n_locales.LOCALES["en"]["yes"], i18n_locales.LOCALES["ru"]["yes"]]:
+    elif text in i18n_locales.get_all_translations("yes"):
         notify_enabled = True
-    elif text in [i18n_locales.LOCALES["en"]["no"], i18n_locales.LOCALES["ru"]["no"]]:
+    elif text in i18n_locales.get_all_translations("no"):
         notify_enabled = False
     else:
         current_val = i18n_locales.get_text("yes" if current_profile["notifications_enabled"] else "no", lang) if current_profile else None
@@ -488,7 +489,7 @@ async def process_timezone_message(message: Message, state: FSMContext, user_lan
         return
         
     # 1. Check if user clicked "🌐 Select timezone" / "🌐 Выбрать часовой пояс"
-    if text in [i18n_locales.LOCALES["en"]["btn_timezone_list"], i18n_locales.LOCALES["ru"]["btn_timezone_list"]]:
+    if text in i18n_locales.get_all_translations("btn_timezone_list"):
         msg_text = (
             "Select your geographical region:" if lang == "en"
             else "Выберите ваш географический регион:"

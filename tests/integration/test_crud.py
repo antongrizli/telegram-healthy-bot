@@ -252,3 +252,96 @@ async def test_delete_user(db_session):
     
     queue_res = await db_session.execute(select(AiRequestQueue).where(AiRequestQueue.user_id == 88888))
     assert len(queue_res.scalars().all()) == 0
+
+async def test_admin_stats_advanced_metrics(db_session):
+    from sqlalchemy import select
+    now = datetime.now(UTC).replace(tzinfo=None)
+    
+    # 1. Create users
+    await crud.create_or_update_user(
+        db_session,
+        telegram_id=99901,
+        name="User 1",
+        sex="male",
+        age=30,
+        height_cm=180.0,
+        weight_kg=80.0,
+        activity_level="moderate",
+        goal="lose_weight",
+        language="en",
+        notifications_enabled=True,
+        target_calories=2000, target_protein=150, target_fat=70, target_carb=200
+    )
+    
+    await crud.create_or_update_user(
+        db_session,
+        telegram_id=99902,
+        name="User 2",
+        sex="female",
+        age=25,
+        height_cm=165.0,
+        weight_kg=60.0,
+        activity_level="sedentary",
+        goal="maintain",
+        language="ru",
+        notifications_enabled=False,
+        target_calories=1600, target_protein=80, target_fat=50, target_carb=200
+    )
+
+    # 2. Food logs (modality)
+    # Log 1: with photo
+    await crud.add_food_log(
+        db_session, user_id=99901, items_json=[], calories=100, proteins=10.0, fats=5.0, carbs=15.0,
+        image_file_id="photo123"
+    )
+    # Log 2: text only
+    await crud.add_food_log(
+        db_session, user_id=99901, items_json=[], calories=150, proteins=15.0, fats=6.0, carbs=20.0,
+        raw_text="apple"
+    )
+
+    # 3. Weight log
+    await crud.add_weight_log(db_session, user_id=99901, weight=79.5)
+
+    # 4. AI logs (request types)
+    log1 = AiRequestLog(user_id=99901, request_type="analyze_food_input", executed_at=now)
+    log2 = AiRequestLog(user_id=99901, request_type="adjust_food_analysis", executed_at=now)
+    db_session.add_all([log1, log2])
+
+    # 5. Queue items
+    q1 = AiRequestQueue(
+        user_id=99901, chat_id=99901, request_type="generate_report", payload={},
+        status="completed", created_at=now - timedelta(seconds=120), processed_at=now - timedelta(seconds=20)
+    )
+    q2 = AiRequestQueue(
+        user_id=99901, chat_id=99901, request_type="generate_report", payload={},
+        status="failed", last_error="API Timeout"
+    )
+    db_session.add_all([q1, q2])
+    await db_session.commit()
+
+    # Get stats
+    stats = await crud.get_admin_stats(db_session)
+
+    # Assert demographics
+    assert stats["languages"]["en"] >= 1
+    assert stats["languages"]["ru"] >= 1
+    assert stats["goals"]["lose_weight"] >= 1
+    assert stats["goals"]["maintain"] >= 1
+    assert stats["genders"]["male"] >= 1
+    assert stats["genders"]["female"] >= 1
+    assert stats["notifications_disabled_count"] >= 1
+
+    # Assert modality / AI stats
+    assert stats["modality_photo_24h"] == 1
+    assert stats["modality_text_24h"] == 1
+    assert stats["correction_rate_24h"] == 100.0  # 1 adjust vs 1 analyze input
+    assert stats["ai_request_types_24h"]["analyze_food_input"] == 1
+    assert stats["ai_request_types_24h"]["adjust_food_analysis"] == 1
+
+    # Assert queue stats
+    assert stats["queue_status_counts"]["completed"] >= 1
+    assert stats["queue_status_counts"]["failed"] >= 1
+    assert stats["queue_avg_latency_seconds"] == 100.0  # 120s - 20s
+    assert stats["queue_errors"]["API Timeout"] >= 1
+

@@ -109,6 +109,17 @@ def get_lang_keyboard(lang: str = "en", current_val: str = None) -> ReplyKeyboar
         KeyboardButton(text="English 🇺🇸"),
         KeyboardButton(text="Русский 🇷🇺")
     ])
+    kb.append([
+        KeyboardButton(text="Українська 🇺🇦"),
+        KeyboardButton(text="Polski 🇵🇱")
+    ])
+    kb.append([
+        KeyboardButton(text="Deutsch 🇩🇪"),
+        KeyboardButton(text="Türkçe 🇹🇷")
+    ])
+    kb.append([
+        KeyboardButton(text="Español 🇪🇸")
+    ])
     kb.append([KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
@@ -270,3 +281,20 @@ def get_admin_cancel_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
 def get_admin_back_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
     kb = [[KeyboardButton(text="⬅️ Back to Menu" if lang == "en" else "⬅️ Назад в меню")]]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_admin_stats_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
+    kb = [
+        [
+            KeyboardButton(text=get_text("btn_stats_demographics", lang)),
+            KeyboardButton(text=get_text("btn_stats_engagement", lang))
+        ],
+        [
+            KeyboardButton(text=get_text("btn_stats_ai", lang)),
+            KeyboardButton(text=get_text("btn_stats_queue", lang))
+        ],
+        [
+            KeyboardButton(text=get_text("btn_stats_back_admin", lang))
+        ]
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+

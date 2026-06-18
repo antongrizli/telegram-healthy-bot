@@ -270,3 +270,73 @@ async def test_process_notifications_disabled_skips_report_time(mock_state):
     message.answer.assert_called_once()
     assert "timezone" in message.answer.call_args[0][0].lower()
 
+async def test_admin_navigation_flow(mock_state):
+    from src.handlers.admin import cmd_admin, cmd_admin_stats, cmd_admin_stats_back
+    from src.handlers.common import cmd_back_to_main_menu
+    from src.database.models import User as DbUser
+    
+    # Simulate /admin
+    msg_admin = make_mock_message("/admin")
+    await cmd_admin(msg_admin, mock_state, "en")
+    msg_admin.answer.assert_called_once()
+    admin_markup = msg_admin.answer.call_args[1]["reply_markup"]
+    assert admin_markup.keyboard[-1][0].text == "⬅️ Back to Main Menu"
+    
+    # Simulate Stats
+    msg_stats = make_mock_message("📊 Stats")
+    await cmd_admin_stats(msg_stats, "en")
+    msg_stats.answer.assert_called_once()
+    stats_markup = msg_stats.answer.call_args[1]["reply_markup"]
+    assert stats_markup.keyboard[-1][0].text == "⬅️ Back to Admin Menu"
+    
+    # Simulate Back to Admin Menu
+    msg_back_admin = make_mock_message("⬅️ Back to Admin Menu")
+    await cmd_admin_stats_back(msg_back_admin, "en")
+    msg_back_admin.answer.assert_called_once()
+    admin_markup2 = msg_back_admin.answer.call_args[1]["reply_markup"]
+    assert admin_markup2.keyboard[-1][0].text == "⬅️ Back to Main Menu"
+    
+    # Simulate Back to Main Menu
+    db_user = DbUser(telegram_id=12345, is_admin=True, is_blocked=False)
+    msg_back_main = make_mock_message("⬅️ Back to Main Menu")
+    await cmd_back_to_main_menu(msg_back_main, mock_state, "en", db_user)
+    msg_back_main.answer.assert_called_once()
+    main_markup = msg_back_main.answer.call_args[1]["reply_markup"]
+    assert "food" in main_markup.keyboard[0][0].text.lower()
+
+async def test_admin_navigation_flow_ru(mock_state):
+    from src.handlers.admin import cmd_admin, cmd_admin_stats, cmd_admin_stats_back
+    from src.handlers.common import cmd_back_to_main_menu
+    from src.database.models import User as DbUser
+    
+    # Simulate /admin
+    msg_admin = make_mock_message("👑 Админ-панель")
+    await cmd_admin(msg_admin, mock_state, "ru")
+    msg_admin.answer.assert_called_once()
+    admin_markup = msg_admin.answer.call_args[1]["reply_markup"]
+    assert admin_markup.keyboard[-1][0].text == "⬅️ Главное меню"
+    
+    # Simulate Stats
+    msg_stats = make_mock_message("📊 Статистика")
+    await cmd_admin_stats(msg_stats, "ru")
+    msg_stats.answer.assert_called_once()
+    stats_markup = msg_stats.answer.call_args[1]["reply_markup"]
+    assert stats_markup.keyboard[-1][0].text == "⬅️ Назад в меню"
+    
+    # Simulate Back to Admin Menu
+    msg_back_admin = make_mock_message("⬅️ Назад в меню")
+    await cmd_admin_stats_back(msg_back_admin, "ru")
+    msg_back_admin.answer.assert_called_once()
+    admin_markup2 = msg_back_admin.answer.call_args[1]["reply_markup"]
+    assert admin_markup2.keyboard[-1][0].text == "⬅️ Главное меню"
+    
+    # Simulate Back to Main Menu
+    db_user = DbUser(telegram_id=12345, is_admin=True, is_blocked=False)
+    msg_back_main = make_mock_message("⬅️ Главное меню")
+    await cmd_back_to_main_menu(msg_back_main, mock_state, "ru", db_user)
+    msg_back_main.answer.assert_called_once()
+    main_markup = msg_back_main.answer.call_args[1]["reply_markup"]
+    assert "еду" in main_markup.keyboard[0][0].text.lower() or "food" in main_markup.keyboard[0][0].text.lower()
+
+
+

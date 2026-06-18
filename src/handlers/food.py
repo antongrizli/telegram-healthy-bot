@@ -38,10 +38,7 @@ class MealViewingState(StatesGroup):
     viewing = State()
 
 
-@router.message(F.text.in_([
-    i18n_locales.LOCALES["en"]["btn_log_food"],
-    i18n_locales.LOCALES["ru"]["btn_log_food"]
-]))
+@router.message(F.text.in_(i18n_locales.get_all_translations("btn_log_food")))
 async def start_food_logging(message: Message, state: FSMContext, user_language: str):
     await state.set_state(FoodLoggingState.waiting_for_meal_type)
     await message.answer(
@@ -76,15 +73,15 @@ async def process_meal_type_selection(message: Message, state: FSMContext, user_
     
     # Map text
     meal_type = None
-    if text in [i18n_locales.LOCALES["en"]["meal_type_breakfast"], i18n_locales.LOCALES["ru"]["meal_type_breakfast"]]:
+    if text in i18n_locales.get_all_translations("meal_type_breakfast"):
         meal_type = "breakfast"
-    elif text in [i18n_locales.LOCALES["en"]["meal_type_lunch"], i18n_locales.LOCALES["ru"]["meal_type_lunch"]]:
+    elif text in i18n_locales.get_all_translations("meal_type_lunch"):
         meal_type = "lunch"
-    elif text in [i18n_locales.LOCALES["en"]["meal_type_dinner"], i18n_locales.LOCALES["ru"]["meal_type_dinner"]]:
+    elif text in i18n_locales.get_all_translations("meal_type_dinner"):
         meal_type = "dinner"
-    elif text in [i18n_locales.LOCALES["en"]["meal_type_snack"], i18n_locales.LOCALES["ru"]["meal_type_snack"]]:
+    elif text in i18n_locales.get_all_translations("meal_type_snack"):
         meal_type = "snack"
-    elif text in [i18n_locales.LOCALES["en"]["meal_type_food"], i18n_locales.LOCALES["ru"]["meal_type_food"]]:
+    elif text in i18n_locales.get_all_translations("meal_type_food"):
         meal_type = "food"
         
     if not meal_type:
@@ -253,7 +250,7 @@ async def process_food_confirm(message: Message, state: FSMContext, user_languag
     text = message.text.strip()
     is_admin = db_user.telegram_id in settings.ADMIN_USER_IDS or db_user.is_admin if db_user else False
     
-    if text in [i18n_locales.LOCALES["en"]["btn_accept"], i18n_locales.LOCALES["ru"]["btn_accept"]]:
+    if text in i18n_locales.get_all_translations("btn_accept"):
         state_data = await state.get_data()
         analysis = state_data["analysis"]
         image_file_id = state_data["image_file_id"]
@@ -280,14 +277,14 @@ async def process_food_confirm(message: Message, state: FSMContext, user_languag
         )
         await state.clear()
         
-    elif text in [i18n_locales.LOCALES["en"]["btn_cancel"], i18n_locales.LOCALES["ru"]["btn_cancel"]]:
+    elif text in i18n_locales.get_all_translations("btn_cancel"):
         await message.answer(
             i18n_locales.get_text("food_cancelled", user_language),
             reply_markup=reply.get_main_menu(user_language, is_admin=is_admin)
         )
         await state.clear()
         
-    elif text in [i18n_locales.LOCALES["en"]["btn_correct"], i18n_locales.LOCALES["ru"]["btn_correct"]]:
+    elif text in i18n_locales.get_all_translations("btn_correct"):
         await state.set_state(FoodLoggingState.waiting_for_correction)
         await message.answer(
             i18n_locales.get_text("food_correction_prompt", user_language),
@@ -391,10 +388,7 @@ async def process_food_correction(message: Message, state: FSMContext, user_lang
 
 # --- Daily/Historical Meals Management ---
 
-@router.message(F.text.in_([
-    i18n_locales.LOCALES["en"]["btn_my_meals"],
-    i18n_locales.LOCALES["ru"]["btn_my_meals"]
-]))
+@router.message(F.text.in_(i18n_locales.get_all_translations("btn_my_meals")))
 @router.message(F.text == "/meals")
 async def start_meals_list(message: Message, state: FSMContext, user_language: str, db_user):
     if not db_user:
@@ -525,14 +519,14 @@ async def process_meals_viewing(message: Message, state: FSMContext, user_langua
         
     current_date = datetime.strptime(date_str, "%Y-%m-%d").date()
     
-    if text in [i18n_locales.LOCALES["en"]["btn_prev_day"], i18n_locales.LOCALES["ru"]["btn_prev_day"]]:
+    if text in i18n_locales.get_all_translations("btn_prev_day"):
         new_date = current_date - timedelta(days=1)
         new_date_str = new_date.strftime("%Y-%m-%d")
         await state.update_data(view_date=new_date_str)
         await send_or_edit_meals_message(message, new_date_str, user_language, db_user)
         return
         
-    if text in [i18n_locales.LOCALES["en"]["btn_next_day"], i18n_locales.LOCALES["ru"]["btn_next_day"]]:
+    if text in i18n_locales.get_all_translations("btn_next_day"):
         local_today = datetime.now(user_tz).date()
         if current_date < local_today:
             new_date = current_date + timedelta(days=1)
@@ -708,7 +702,7 @@ async def process_meal_edit_confirm(message: Message, state: FSMContext, user_la
     meal_id = state_data["edit_meal_id"]
     date_str = state_data["edit_date_str"]
     
-    if text in [i18n_locales.LOCALES["en"]["btn_accept"], i18n_locales.LOCALES["ru"]["btn_accept"]]:
+    if text in i18n_locales.get_all_translations("btn_accept"):
         adjusted = state_data["adjusted_analysis"]
         async with AsyncSessionLocal() as db:
             await crud.update_food_log(
@@ -729,7 +723,7 @@ async def process_meal_edit_confirm(message: Message, state: FSMContext, user_la
         
         await send_or_edit_meals_message(message, date_str, user_language, db_user)
         
-    elif text in [i18n_locales.LOCALES["en"]["btn_cancel"], i18n_locales.LOCALES["ru"]["btn_cancel"]]:
+    elif text in i18n_locales.get_all_translations("btn_cancel"):
         await message.answer(i18n_locales.get_text("food_cancelled", user_language))
         await state.set_state(MealViewingState.viewing)
         await state.update_data(view_date=date_str)
@@ -737,7 +731,7 @@ async def process_meal_edit_confirm(message: Message, state: FSMContext, user_la
         
         await send_or_edit_meals_message(message, date_str, user_language, db_user)
         
-    elif text in [i18n_locales.LOCALES["en"]["btn_correct"], i18n_locales.LOCALES["ru"]["btn_correct"]]:
+    elif text in i18n_locales.get_all_translations("btn_correct"):
         await state.set_state(MealEditingState.waiting_for_edit_text)
         await message.answer(
             i18n_locales.get_text("food_correction_prompt", user_language),

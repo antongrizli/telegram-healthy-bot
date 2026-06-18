@@ -1,5 +1,6 @@
 from aiogram import Router, F
-from aiogram.filters import CommandStart, Command
+from aiogram.filters import CommandStart, Command, StateFilter
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from src.utils import i18n_locales
 from src.utils.escape import escape_markdown
@@ -38,10 +39,7 @@ async def cmd_help(message: Message, user_language: str):
         parse_mode="Markdown"
     )
 
-@router.message(F.text.in_([
-    i18n_locales.LOCALES["en"]["btn_my_profile"],
-    i18n_locales.LOCALES["ru"]["btn_my_profile"]
-]))
+@router.message(F.text.in_(i18n_locales.get_all_translations("btn_my_profile")))
 async def view_profile(message: Message, user_language: str, db_user):
     if not db_user:
         await cmd_start(message, user_language, db_user)
@@ -82,28 +80,23 @@ async def view_profile(message: Message, user_language: str, db_user):
     markup = reply.get_setup_profile_keyboard(user_language)
     await message.answer(profile_text, reply_markup=markup, parse_mode="Markdown")
 
-@router.message(F.text.in_([
-    i18n_locales.LOCALES["en"]["btn_daily_report"],
-    i18n_locales.LOCALES["ru"]["btn_daily_report"]
-]))
+@router.message(F.text.in_(i18n_locales.get_all_translations("btn_daily_report")))
 async def trigger_daily_report(message: Message, user_language: str, db_user):
     if not db_user:
         await cmd_start(message, user_language, db_user)
         return
     await send_daily_report(message.bot, message.from_user.id)
 
-@router.message(F.text.in_([
-    i18n_locales.LOCALES["en"]["btn_weekly_report"],
-    i18n_locales.LOCALES["ru"]["btn_weekly_report"]
-]))
+@router.message(F.text.in_(i18n_locales.get_all_translations("btn_weekly_report")))
 async def trigger_weekly_report(message: Message, user_language: str, db_user):
     if not db_user:
         await cmd_start(message, user_language, db_user)
         return
     await send_weekly_report(message.bot, message.from_user.id)
 
-@router.message(F.text.in_(["⬅️ Back to Main Menu", "⬅️ Главное меню"]))
-async def cmd_back_to_main_menu(message: Message, user_language: str, db_user):
+@router.message(StateFilter("*"), F.text.in_(["⬅️ Back to Main Menu", "⬅️ Главное меню"]))
+async def cmd_back_to_main_menu(message: Message, state: FSMContext, user_language: str, db_user):
+    await state.clear()
     is_admin = db_user.telegram_id in settings.ADMIN_USER_IDS or db_user.is_admin if db_user else False
     await message.answer(
         "Returning to main menu..." if user_language == "en" else "Возвращаюсь в главное меню...",

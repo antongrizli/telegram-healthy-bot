@@ -141,6 +141,7 @@ async def get_admin_stats(db: AsyncSession) -> dict:
     now = datetime.now(UTC).replace(tzinfo=None)
     one_day_ago = now - timedelta(days=1)
     seven_days_ago = now - timedelta(days=7)
+    thirty_days_ago = now - timedelta(days=30)
     
     # 1. Total users
     total_users_res = await db.execute(select(func.count(User.telegram_id)))
@@ -191,6 +192,117 @@ async def get_admin_stats(db: AsyncSession) -> dict:
     )
     queued_requests = queued_res.scalar() or 0
 
+    # --- Demographics ---
+    # Languages
+    lang_res = await db.execute(select(User.language, func.count(User.telegram_id)).group_by(User.language))
+    languages = dict(lang_res.all())
+
+    # Goals
+    goal_res = await db.execute(select(User.goal, func.count(User.telegram_id)).group_by(User.goal))
+    goals = dict(goal_res.all())
+
+    # Genders
+    sex_res = await db.execute(select(User.sex, func.count(User.telegram_id)).group_by(User.sex))
+    genders = dict(sex_res.all())
+
+    # Notifications disabled
+    notif_res = await db.execute(select(func.count(User.telegram_id)).where(User.notifications_enabled == False))
+    notif_disabled = notif_res.scalar() or 0
+
+    # --- Engagement ---
+    # Active 30d
+    active_30d_res = await db.execute(
+        select(func.count(func.distinct(MessageStat.user_id)))
+        .where(MessageStat.sent_at >= thirty_days_ago)
+    )
+    active_30d = active_30d_res.scalar() or 0
+
+    # New users
+    new_24h_res = await db.execute(select(func.count(User.telegram_id)).where(User.created_at >= one_day_ago))
+    new_users_24h = new_24h_res.scalar() or 0
+
+    new_7d_res = await db.execute(select(func.count(User.telegram_id)).where(User.created_at >= seven_days_ago))
+    new_users_7d = new_7d_res.scalar() or 0
+
+    new_30d_res = await db.execute(select(func.count(User.telegram_id)).where(User.created_at >= thirty_days_ago))
+    new_users_30d = new_30d_res.scalar() or 0
+
+    # Weight logs 7d
+    weight_7d_res = await db.execute(select(func.count(WeightLog.id)).where(WeightLog.logged_at >= seven_days_ago))
+    weight_logs_7d = weight_7d_res.scalar() or 0
+
+    # --- AI stats ---
+    # API calls type 24h
+    ai_type_res = await db.execute(
+        select(AiRequestLog.request_type, func.count(AiRequestLog.id))
+        .where(AiRequestLog.executed_at >= one_day_ago)
+        .group_by(AiRequestLog.request_type)
+    )
+    ai_request_types = dict(ai_type_res.all())
+
+    # Modality 24h
+    photo_res = await db.execute(
+        select(func.count(FoodLog.id))
+        .where(
+            and_(
+                FoodLog.logged_at >= one_day_ago,
+                FoodLog.image_file_id != None,
+                FoodLog.image_file_id != ""
+            )
+        )
+    )
+    modality_photo_24h = photo_res.scalar() or 0
+
+    text_res = await db.execute(
+        select(func.count(FoodLog.id))
+        .where(
+            and_(
+                FoodLog.logged_at >= one_day_ago,
+                (FoodLog.image_file_id == None) | (FoodLog.image_file_id == ""),
+                FoodLog.raw_text != None,
+                FoodLog.raw_text != ""
+            )
+        )
+    )
+    modality_text_24h = text_res.scalar() or 0
+
+    # Correction rate 24h
+    input_count = ai_request_types.get("analyze_food_input", 0)
+    adjust_count = ai_request_types.get("adjust_food_analysis", 0) + ai_request_types.get("adjust_meal_edit", 0)
+    correction_rate = (adjust_count / input_count * 100.0) if input_count > 0 else 0.0
+
+    # --- Queue Health ---
+    q_status_res = await db.execute(
+        select(AiRequestQueue.status, func.count(AiRequestQueue.id))
+        .group_by(AiRequestQueue.status)
+    )
+    queue_status_counts = dict(q_status_res.all())
+
+    latency_res = await db.execute(
+        select(AiRequestQueue.created_at, AiRequestQueue.processed_at)
+        .where(
+            and_(
+                AiRequestQueue.status == "completed",
+                AiRequestQueue.processed_at >= one_day_ago
+            )
+        )
+    )
+    completed_items = latency_res.all()
+    if completed_items:
+        total_lat = sum((item.processed_at - item.created_at).total_seconds() for item in completed_items)
+        queue_avg_latency = total_lat / len(completed_items)
+    else:
+        queue_avg_latency = 0.0
+
+    error_res = await db.execute(
+        select(AiRequestQueue.last_error, func.count(AiRequestQueue.id))
+        .where(AiRequestQueue.last_error != None)
+        .group_by(AiRequestQueue.last_error)
+        .order_by(desc(func.count(AiRequestQueue.id)))
+        .limit(5)
+    )
+    queue_errors = dict(error_res.all())
+
     return {
         "total_users": total_users,
         "active_users_24h": active_24h,
@@ -199,7 +311,23 @@ async def get_admin_stats(db: AsyncSession) -> dict:
         "messages_24h": messages_24h,
         "api_calls_1m": api_calls_1m,
         "api_calls_24h": api_calls_24h,
-        "queued_requests": queued_requests
+        "queued_requests": queued_requests,
+        "languages": languages,
+        "goals": goals,
+        "genders": genders,
+        "notifications_disabled_count": notif_disabled,
+        "active_users_30d": active_30d,
+        "new_users_24h": new_users_24h,
+        "new_users_7d": new_users_7d,
+        "new_users_30d": new_users_30d,
+        "weight_logs_7d": weight_logs_7d,
+        "ai_request_types_24h": ai_request_types,
+        "modality_photo_24h": modality_photo_24h,
+        "modality_text_24h": modality_text_24h,
+        "correction_rate_24h": correction_rate,
+        "queue_status_counts": queue_status_counts,
+        "queue_avg_latency_seconds": queue_avg_latency,
+        "queue_errors": queue_errors
     }
 
 async def delete_user(db: AsyncSession, telegram_id: int) -> bool:

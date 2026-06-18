@@ -92,7 +92,16 @@ async def analyze_food_input(
     """
     Sends text or image food input to Gemini 2.5 Flash and returns structured nutritional facts.
     """
-    lang_name = "Russian" if language == "ru" else "English"
+    lang_names = {
+        "en": "English",
+        "ru": "Russian",
+        "uk": "Ukrainian",
+        "pl": "Polish",
+        "de": "German",
+        "tr": "Turkish",
+        "es": "Spanish"
+    }
+    lang_name = lang_names.get(language, "English")
     prompt = (
         f"You are a professional nutrition expert. Analyze the food described in the text or image. "
         f"Estimate the name, portion size, calories, protein, fat, and carbs. "
@@ -141,7 +150,16 @@ async def adjust_food_analysis(
     """
     Re-evaluates a food analysis based on the user's text corrections.
     """
-    lang_name = "Russian" if language == "ru" else "English"
+    lang_names = {
+        "en": "English",
+        "ru": "Russian",
+        "uk": "Ukrainian",
+        "pl": "Polish",
+        "de": "German",
+        "tr": "Turkish",
+        "es": "Spanish"
+    }
+    lang_name = lang_names.get(language, "English")
     prompt = (
         f"You are a professional nutrition expert. The user previously logged food, and it was analyzed as follows:\n"
         f"{json.dumps(original_data, indent=2)}\n\n"
@@ -218,7 +236,16 @@ async def generate_report(
     if not weight_text:
         weight_text = f"No weights logged during this period. Profile weight is {profile.get('weight_kg')} kg.\n"
 
-    lang_name = "Russian" if language == "ru" else "English"
+    lang_names = {
+        "en": "English",
+        "ru": "Russian",
+        "uk": "Ukrainian",
+        "pl": "Polish",
+        "de": "German",
+        "tr": "Turkish",
+        "es": "Spanish"
+    }
+    lang_name = lang_names.get(language, "English")
     
     if report_type == "daily":
         prompt = (

@@ -2,8 +2,8 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system dependencies (required for Postgres compatibility or compiling)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install system dependencies (required for Postgres compatibility or compiling) and apply security updates
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*

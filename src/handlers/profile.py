@@ -15,6 +15,7 @@ from src.config import settings
 router = Router()
 
 class ProfileStatesGroup(StatesGroup):
+    language = State()
     name = State()
     sex = State()
     age = State()
@@ -22,7 +23,6 @@ class ProfileStatesGroup(StatesGroup):
     weight = State()
     activity = State()
     goal = State()
-    language = State()
     notifications = State()
     report_time = State()
     timezone = State()
@@ -59,7 +59,7 @@ async def process_confirm_delete(message: Message, state: FSMContext, user_langu
         parse_mode="Markdown"
     )
 
-@router.message(ProfileStatesGroup.confirm_delete, F.text.in_(["❌ Cancel", "❌ Отмена"]))
+@router.message(ProfileStatesGroup.confirm_delete, F.text.in_(i18n_locales.get_all_translations("btn_cancel")))
 async def cancel_profile_deletion(message: Message, state: FSMContext, user_language: str, db_user):
     await state.clear()
     is_admin = db_user.telegram_id in settings.ADMIN_USER_IDS or db_user.is_admin if db_user else False
@@ -77,7 +77,7 @@ async def process_invalid_delete_confirm(message: Message, user_language: str):
         parse_mode="Markdown"
     )
 
-@router.message(StateFilter(ProfileStatesGroup), F.text.in_(["❌ Cancel", "❌ Отмена"]))
+@router.message(StateFilter(ProfileStatesGroup), F.text.in_(i18n_locales.get_all_translations("btn_cancel")))
 async def cancel_profile_setup(message: Message, state: FSMContext, user_language: str, db_user):
     await state.clear()
     if db_user and not db_user.is_blocked:
@@ -113,21 +113,30 @@ async def start_profile_setup(message: Message, state: FSMContext, user_language
         }
     await state.update_data(current_profile=current_profile)
     
-    current_val = current_profile["name"] if current_profile else None
-    await state.set_state(ProfileStatesGroup.name)
+    await state.set_state(ProfileStatesGroup.language)
+    current_val = i18n_locales.get_text(f"lang_{current_profile['language']}", user_language) if current_profile else None
+    
+    if not db_user:
+        welcome_text = i18n_locales.get_text("welcome", user_language)
+        lang_prompt = i18n_locales.get_text("profile_prompt_language", user_language)
+        prompt_text = f"{welcome_text}\n\n{lang_prompt}"
+    else:
+        prompt_text = i18n_locales.get_text("profile_prompt_language", user_language)
+        
     await message.answer(
-        i18n_locales.get_text("profile_prompt_name", user_language),
-        reply_markup=reply.get_cancel_keyboard(user_language, current_val=current_val),
+        prompt_text,
+        reply_markup=reply.get_lang_keyboard(user_language, current_val=current_val),
         parse_mode="Markdown"
     )
 
 @router.message(ProfileStatesGroup.name)
 async def process_name(message: Message, state: FSMContext, user_language: str):
     state_data = await state.get_data()
+    lang = state_data.get("language", user_language)
     current_profile = state_data.get("current_profile")
     
     text = message.text.strip()
-    if current_profile and text == i18n_locales.get_text("btn_keep_current", user_language, value=current_profile["name"]):
+    if current_profile and text == i18n_locales.get_text("btn_keep_current", lang, value=current_profile["name"]):
         name = current_profile["name"]
     else:
         name = text
@@ -137,32 +146,33 @@ async def process_name(message: Message, state: FSMContext, user_language: str):
     
     current_val = None
     if current_profile:
-        current_val = i18n_locales.get_text(f"sex_{current_profile['sex']}", user_language)
+        current_val = i18n_locales.get_text(f"sex_{current_profile['sex']}", lang)
         
     await message.answer(
-        i18n_locales.get_text("profile_prompt_sex", user_language),
-        reply_markup=reply.get_sex_keyboard(user_language, current_val=current_val),
+        i18n_locales.get_text("profile_prompt_sex", lang),
+        reply_markup=reply.get_sex_keyboard(lang, current_val=current_val),
         parse_mode="Markdown"
     )
 
 @router.message(ProfileStatesGroup.sex)
 async def process_sex(message: Message, state: FSMContext, user_language: str):
     state_data = await state.get_data()
+    lang = state_data.get("language", user_language)
     current_profile = state_data.get("current_profile")
     
     text = message.text.strip()
     
-    if current_profile and text == i18n_locales.get_text("btn_keep_current", user_language, value=i18n_locales.get_text(f"sex_{current_profile['sex']}", user_language)):
+    if current_profile and text == i18n_locales.get_text("btn_keep_current", lang, value=i18n_locales.get_text(f"sex_{current_profile['sex']}", lang)):
         selected_sex = current_profile["sex"]
     elif text in i18n_locales.get_all_translations("sex_male"):
         selected_sex = "male"
     elif text in i18n_locales.get_all_translations("sex_female"):
         selected_sex = "female"
     else:
-        current_val = i18n_locales.get_text(f"sex_{current_profile['sex']}", user_language) if current_profile else None
+        current_val = i18n_locales.get_text(f"sex_{current_profile['sex']}", lang) if current_profile else None
         await message.answer(
-            i18n_locales.get_text("profile_prompt_sex", user_language),
-            reply_markup=reply.get_sex_keyboard(user_language, current_val=current_val),
+            i18n_locales.get_text("profile_prompt_sex", lang),
+            reply_markup=reply.get_sex_keyboard(lang, current_val=current_val),
             parse_mode="Markdown"
         )
         return
@@ -172,18 +182,19 @@ async def process_sex(message: Message, state: FSMContext, user_language: str):
     
     current_val = str(current_profile["age"]) if current_profile else None
     await message.answer(
-        i18n_locales.get_text("profile_prompt_age", user_language),
-        reply_markup=reply.get_cancel_keyboard(user_language, current_val=current_val),
+        i18n_locales.get_text("profile_prompt_age", lang),
+        reply_markup=reply.get_cancel_keyboard(lang, current_val=current_val),
         parse_mode="Markdown"
     )
 
 @router.message(ProfileStatesGroup.age)
 async def process_age(message: Message, state: FSMContext, user_language: str):
     state_data = await state.get_data()
+    lang = state_data.get("language", user_language)
     current_profile = state_data.get("current_profile")
     
     text = message.text.strip()
-    if current_profile and text == i18n_locales.get_text("btn_keep_current", user_language, value=str(current_profile["age"])):
+    if current_profile and text == i18n_locales.get_text("btn_keep_current", lang, value=str(current_profile["age"])):
         age = current_profile["age"]
     else:
         try:
@@ -191,7 +202,7 @@ async def process_age(message: Message, state: FSMContext, user_language: str):
             if age <= 0 or age > 120:
                 raise ValueError()
         except ValueError:
-            await message.answer(i18n_locales.get_text("invalid_age", user_language))
+            await message.answer(i18n_locales.get_text("invalid_age", lang))
             return
         
     await state.update_data(age=age)
@@ -199,18 +210,19 @@ async def process_age(message: Message, state: FSMContext, user_language: str):
     
     current_val = str(current_profile["height"]) if current_profile else None
     await message.answer(
-        i18n_locales.get_text("profile_prompt_height", user_language),
-        reply_markup=reply.get_cancel_keyboard(user_language, current_val=current_val),
+        i18n_locales.get_text("profile_prompt_height", lang),
+        reply_markup=reply.get_cancel_keyboard(lang, current_val=current_val),
         parse_mode="Markdown"
     )
 
 @router.message(ProfileStatesGroup.height)
 async def process_height(message: Message, state: FSMContext, user_language: str):
     state_data = await state.get_data()
+    lang = state_data.get("language", user_language)
     current_profile = state_data.get("current_profile")
     
     text = message.text.strip()
-    if current_profile and text == i18n_locales.get_text("btn_keep_current", user_language, value=str(current_profile["height"])):
+    if current_profile and text == i18n_locales.get_text("btn_keep_current", lang, value=str(current_profile["height"])):
         height = current_profile["height"]
     else:
         try:
@@ -218,7 +230,7 @@ async def process_height(message: Message, state: FSMContext, user_language: str
             if height <= 50 or height > 270:
                 raise ValueError()
         except ValueError:
-            await message.answer(i18n_locales.get_text("invalid_height", user_language))
+            await message.answer(i18n_locales.get_text("invalid_height", lang))
             return
         
     await state.update_data(height=height)
@@ -226,18 +238,19 @@ async def process_height(message: Message, state: FSMContext, user_language: str
     
     current_val = str(current_profile["weight"]) if current_profile else None
     await message.answer(
-        i18n_locales.get_text("profile_prompt_weight", user_language),
-        reply_markup=reply.get_cancel_keyboard(user_language, current_val=current_val),
+        i18n_locales.get_text("profile_prompt_weight", lang),
+        reply_markup=reply.get_cancel_keyboard(lang, current_val=current_val),
         parse_mode="Markdown"
     )
 
 @router.message(ProfileStatesGroup.weight)
 async def process_weight(message: Message, state: FSMContext, user_language: str):
     state_data = await state.get_data()
+    lang = state_data.get("language", user_language)
     current_profile = state_data.get("current_profile")
     
     text = message.text.strip()
-    if current_profile and text == i18n_locales.get_text("btn_keep_current", user_language, value=str(current_profile["weight"])):
+    if current_profile and text == i18n_locales.get_text("btn_keep_current", lang, value=str(current_profile["weight"])):
         weight = current_profile["weight"]
     else:
         try:
@@ -245,7 +258,7 @@ async def process_weight(message: Message, state: FSMContext, user_language: str
             if weight <= 20 or weight > 500:
                 raise ValueError()
         except ValueError:
-            await message.answer(i18n_locales.get_text("invalid_weight", user_language))
+            await message.answer(i18n_locales.get_text("invalid_weight", lang))
             return
         
     await state.update_data(weight=weight)
@@ -253,22 +266,23 @@ async def process_weight(message: Message, state: FSMContext, user_language: str
     
     current_val = None
     if current_profile:
-        current_val = i18n_locales.get_text(f"act_{current_profile['activity']}", user_language)
+        current_val = i18n_locales.get_text(f"act_{current_profile['activity']}", lang)
         
     await message.answer(
-        i18n_locales.get_text("profile_prompt_activity", user_language),
-        reply_markup=reply.get_activity_keyboard(user_language, current_val=current_val),
+        i18n_locales.get_text("profile_prompt_activity", lang),
+        reply_markup=reply.get_activity_keyboard(lang, current_val=current_val),
         parse_mode="Markdown"
     )
 
 @router.message(ProfileStatesGroup.activity)
 async def process_activity(message: Message, state: FSMContext, user_language: str):
     state_data = await state.get_data()
+    lang = state_data.get("language", user_language)
     current_profile = state_data.get("current_profile")
     
     text = message.text.strip()
     
-    if current_profile and text == i18n_locales.get_text("btn_keep_current", user_language, value=i18n_locales.get_text(f"act_{current_profile['activity']}", user_language)):
+    if current_profile and text == i18n_locales.get_text("btn_keep_current", lang, value=i18n_locales.get_text(f"act_{current_profile['activity']}", lang)):
         activity = current_profile["activity"]
     elif text in i18n_locales.get_all_translations("act_sedentary"):
         activity = "sedentary"
@@ -279,10 +293,10 @@ async def process_activity(message: Message, state: FSMContext, user_language: s
     elif text in i18n_locales.get_all_translations("act_active"):
         activity = "active"
     else:
-        current_val = i18n_locales.get_text(f"act_{current_profile['activity']}", user_language) if current_profile else None
+        current_val = i18n_locales.get_text(f"act_{current_profile['activity']}", lang) if current_profile else None
         await message.answer(
-            i18n_locales.get_text("profile_prompt_activity", user_language),
-            reply_markup=reply.get_activity_keyboard(user_language, current_val=current_val),
+            i18n_locales.get_text("profile_prompt_activity", lang),
+            reply_markup=reply.get_activity_keyboard(lang, current_val=current_val),
             parse_mode="Markdown"
         )
         return
@@ -297,17 +311,18 @@ async def process_activity(message: Message, state: FSMContext, user_language: s
             "goal_maintain" if current_profile["goal"] == "maintain" else
             "goal_gain_w" if current_profile["goal"] == "gain_weight" else "goal_gain_m"
         )
-        current_val = i18n_locales.get_text(goal_key, user_language)
+        current_val = i18n_locales.get_text(goal_key, lang)
         
     await message.answer(
-        i18n_locales.get_text("profile_prompt_goal", user_language),
-        reply_markup=reply.get_goal_keyboard(user_language, current_val=current_val),
+        i18n_locales.get_text("profile_prompt_goal", lang),
+        reply_markup=reply.get_goal_keyboard(lang, current_val=current_val),
         parse_mode="Markdown"
     )
 
 @router.message(ProfileStatesGroup.goal)
 async def process_goal(message: Message, state: FSMContext, user_language: str):
     state_data = await state.get_data()
+    lang = state_data.get("language", user_language)
     current_profile = state_data.get("current_profile")
     
     text = message.text.strip()
@@ -320,7 +335,7 @@ async def process_goal(message: Message, state: FSMContext, user_language: str):
             "goal_gain_w" if current_profile["goal"] == "gain_weight" else "goal_gain_m"
         )
         
-    if current_profile and text == i18n_locales.get_text("btn_keep_current", user_language, value=i18n_locales.get_text(goal_key, user_language)):
+    if current_profile and text == i18n_locales.get_text("btn_keep_current", lang, value=i18n_locales.get_text(goal_key, lang)):
         goal = current_profile["goal"]
     elif text in i18n_locales.get_all_translations("goal_lose"):
         goal = "lose_weight"
@@ -331,24 +346,24 @@ async def process_goal(message: Message, state: FSMContext, user_language: str):
     elif text in i18n_locales.get_all_translations("goal_gain_m"):
         goal = "gain_muscle"
     else:
-        current_val = i18n_locales.get_text(goal_key, user_language) if current_profile else None
+        current_val = i18n_locales.get_text(goal_key, lang) if current_profile else None
         await message.answer(
-            i18n_locales.get_text("profile_prompt_goal", user_language),
-            reply_markup=reply.get_goal_keyboard(user_language, current_val=current_val),
+            i18n_locales.get_text("profile_prompt_goal", lang),
+            reply_markup=reply.get_goal_keyboard(lang, current_val=current_val),
             parse_mode="Markdown"
         )
         return
 
     await state.update_data(goal=goal)
-    await state.set_state(ProfileStatesGroup.language)
+    await state.set_state(ProfileStatesGroup.notifications)
     
     current_val = None
     if current_profile:
-        current_val = i18n_locales.get_text(f"lang_{current_profile['language']}", user_language)
+        current_val = i18n_locales.get_text("yes" if current_profile["notifications_enabled"] else "no", lang)
         
     await message.answer(
-        i18n_locales.get_text("profile_prompt_language", user_language),
-        reply_markup=reply.get_lang_keyboard(user_language, current_val=current_val),
+        i18n_locales.get_text("profile_prompt_reminders", lang),
+        reply_markup=reply.get_notifications_keyboard(lang, current_val=current_val),
         parse_mode="Markdown"
     )
 
@@ -385,15 +400,17 @@ async def process_language(message: Message, state: FSMContext, user_language: s
         return
 
     await state.update_data(language=selected_lang)
-    await state.set_state(ProfileStatesGroup.notifications)
+    await state.set_state(ProfileStatesGroup.name)
     
-    current_val = None
-    if current_profile:
-        current_val = i18n_locales.get_text("yes" if current_profile["notifications_enabled"] else "no", selected_lang)
-        
     await message.answer(
-        i18n_locales.get_text("profile_prompt_reminders", selected_lang),
-        reply_markup=reply.get_notifications_keyboard(selected_lang, current_val=current_val),
+        i18n_locales.get_text("profile_setup_start", selected_lang),
+        parse_mode="Markdown"
+    )
+    
+    current_val = current_profile["name"] if current_profile else None
+    await message.answer(
+        i18n_locales.get_text("profile_prompt_name", selected_lang),
+        reply_markup=reply.get_cancel_keyboard(selected_lang, current_val=current_val),
         parse_mode="Markdown"
     )
 

@@ -1,6 +1,6 @@
 LOCALES = {
     "en": {
-        "welcome": "Welcome to *Healthy Tracker Bot*! 🍏\n\nI will help you log your food (via photo or text), track your weight, and send you daily/weekly/monthly reports with personalized recommendations using AI.\n\nLet's configure your profile first. Click *Set Up Profile* to start!",
+        "welcome": "Welcome to *Healthy Tracker Bot*! 🍏\n\nI will help you log your food (via photo or text), track your weight, and send you daily/weekly/monthly reports with personalized recommendations using AI.",
         "btn_setup_profile": "⚙️ Set Up Profile",
         "btn_log_food": "📝 Log Food",
         "btn_log_weight": "⚖️ Log Weight",
@@ -9,6 +9,7 @@ LOCALES = {
         "btn_weekly_report": "🗓️ Weekly Report",
         "btn_help": "ℹ️ Help",
         
+        "profile_setup_start": "Let's now configure your profile! ⚙️",
         "profile_prompt_name": "Please enter your first name:",
         "profile_prompt_sex": "Select your biological sex:",
         "profile_prompt_age": "Please enter your age (in years, e.g., 28):",
@@ -149,7 +150,7 @@ LOCALES = {
         "prompt_edit_text_only": "Please describe the correction or write the new meal description using text:"
     },
     "ru": {
-        "welcome": "Добро пожаловать в *Healthy Tracker Bot*! 🍏\n\nЯ помогу вам записывать еду (по фото или тексту), отслеживать вес и получать ежедневные/еженедельные/ежемесячные отчеты с персональными рекомендациями с помощью ИИ.\n\nДавайте сначала настроим ваш профиль. Нажмите *Настроить профиль*, чтобы начать!",
+        "welcome": "Добро пожаловать в *Healthy Tracker Bot*! 🍏\n\nЯ помогу вам записывать еду (по фото или тексту), отслеживать вес и получать ежедневные/еженедельные/ежемесячные отчеты с персональными рекомендациями с помощью ИИ.",
         "btn_setup_profile": "⚙️ Настроить профиль",
         "btn_log_food": "📝 Записать еду",
         "btn_log_weight": "⚖️ Записать вес",
@@ -158,6 +159,7 @@ LOCALES = {
         "btn_weekly_report": "🗓️ Недельный отчет",
         "btn_help": "ℹ️ Помощь",
         
+        "profile_setup_start": "Давайте теперь настроим ваш профиль! ⚙️",
         "profile_prompt_name": "Пожалуйста, введите ваше имя:",
         "profile_prompt_sex": "Выберите ваш биологический пол:",
         "profile_prompt_age": "Пожалуйста, введите ваш возраст (в годах, например, 28):",
@@ -298,7 +300,7 @@ LOCALES = {
         "prompt_edit_text_only": "Пожалуйста, опишите исправления или напишите новое описание текстом:"
     },
     "uk": {
-        "welcome": "Ласкаво просимо до *Healthy Tracker Bot*! 🍏\n\nЯ допоможу вам записувати їжу (за фото або текстом), відстежувати вагу та отримувати щоденні/щотижневі/щомісячні звіти з персональними рекомендаціями за допомогою ШІ.\n\nДавайте спочатку налаштуємо ваш профіль. Натисніть *Налаштувати профіль*, щоб почати!",
+        "welcome": "Ласкаво просимо до *Healthy Tracker Bot*! 🍏\n\nЯ допоможу вам записувати їжу (за фото або текстом), відстежувати вагу та отримувати щоденні/щотижневі/щомісячні звіти з персональними рекомендаціями за допомогою ШІ.",
         "btn_setup_profile": "⚙️ Налаштувати профіль",
         "btn_log_food": "📝 Записати їжу",
         "btn_log_weight": "⚖️ Записати вагу",
@@ -307,6 +309,7 @@ LOCALES = {
         "btn_weekly_report": "🗓️ Щотижневий звіт",
         "btn_help": "ℹ️ Допомога",
         
+        "profile_setup_start": "Давайте тепер налаштуємо ваш профіль! ⚙️",
         "profile_prompt_name": "Будь ласка, введіть ваше ім'я:",
         "profile_prompt_sex": "Оберіть вашу біологічну стать:",
         "profile_prompt_age": "Будь ласка, введіть ваш вік (у роках, наприклад, 28):",
@@ -441,7 +444,7 @@ LOCALES = {
         "prompt_edit_text_only": "Будь ласка, опишіть виправлення або напишіть новий опис текстом:"
     },
     "pl": {
-        "welcome": "Witaj w *Healthy Tracker Bot*! 🍏\n\nPomogę Ci zapisywać jedzenie (za pomocą zdjęcia lub tekstu), śledzić wagę i otrzymywać codzienne/tygodniowe/miesięczne raporty z personalizowanymi rekomendacjami przy użyciu AI.\n\nNajpierw skonfigurujmy Twój profil. Kliknij *Skonfiguruj profil*, aby rozpocząć!",
+        "welcome": "Witaj w *Healthy Tracker Bot*! 🍏\n\nPomogę Ci zapisywać jedzenie (za pomocą zdjęcia lub tekstu), śledzić wagę i otrzymywać codzienne/tygodniowe/miesięczne raporty z personalizowanymi rekomendacjami przy użyciu AI.",
         "btn_setup_profile": "⚙️ Skonfiguruj profil",
         "btn_log_food": "📝 Zapisz posiłek",
         "btn_log_weight": "⚖️ Zapisz wagę",
@@ -450,6 +453,7 @@ LOCALES = {
         "btn_weekly_report": "🗓️ Raport tygodniowy",
         "btn_help": "ℹ️ Pomoc",
         
+        "profile_setup_start": "Skonfigurujmy teraz Twój profil! ⚙️",
         "profile_prompt_name": "Wprowadź swoje imię:",
         "profile_prompt_sex": "Wybierz płeć biologiczną:",
         "profile_prompt_age": "Wprowadź swój wiek (w latach, np. 28):",
@@ -584,7 +588,7 @@ LOCALES = {
         "prompt_edit_text_only": "Opisz zmianę lub wpisz nowy opis posiłku za pomocą tekstu:"
     },
     "de": {
-        "welcome": "Willkommen beim *Healthy Tracker Bot*! 🍏\n\nIch helfe dir, deine Mahlzeiten zu protokollieren (per Foto oder Text), dein Gewicht zu verfolgen und tägliche/wöchentliche/monatliche Berichte mit personalisierten KI-Empfehlungen zu erhalten.\n\nRichten wir zuerst dein Profil ein. Klicke auf *Profil einrichten*, um zu starten!",
+        "welcome": "Willkommen beim *Healthy Tracker Bot*! 🍏\n\nIch helfe dir, deine Mahlzeiten zu protokollieren (per Foto oder Text), dein Gewicht zu verfolgen und tägliche/wöchentliche/monatliche Berichte mit personalisierten KI-Empfehlungen zu erhalten.",
         "btn_setup_profile": "⚙️ Profil einrichten",
         "btn_log_food": "📝 Essen eintragen",
         "btn_log_weight": "⚖️ Gewicht eintragen",
@@ -593,6 +597,7 @@ LOCALES = {
         "btn_weekly_report": "🗓️ Wöchentlicher Bericht",
         "btn_help": "ℹ️ Hilfe",
         
+        "profile_setup_start": "Lass uns jetzt dein Profil einrichten! ⚙️",
         "profile_prompt_name": "Bitte gib deinen Vornamen ein:",
         "profile_prompt_sex": "Wähle dein biologisches Geschlecht:",
         "profile_prompt_age": "Bitte gib dein Alter ein (in Jahren, z. B. 28):",
@@ -727,7 +732,7 @@ LOCALES = {
         "prompt_edit_text_only": "Bitte beschreibe die Korrektur oder schreibe die neue Mahlzeitbeschreibung per Text:"
     },
     "tr": {
-        "welcome": "*Healthy Tracker Bot*'a Hoş Geldiniz! 🍏\n\nYapay zeka yardımıyla yiyeceklerinizi kaydetmenize (fotoğraf veya metin ile), kilonuzu takip etmenize ve kişiselleştirilmiş öneriler içeren günlük/haftalık/aylık raporlar almanıza yardımcı olacağım.\n\nÖncelikle profilinizi yapılandıralım. Başlamak için *Profili Kur* seçeneğine tıklayın!",
+        "welcome": "*Healthy Tracker Bot*'a Hoş Geldiniz! 🍏\n\nYapay zeka yardımıyla yiyeceklerinizi kaydetmenize (fotoğraf veya metin ile), kilonuzu takip etmenize ve kişiselleştirilmiş öneriler içeren günlük/haftalık/aylık raporlar almanıza yardımcı olacağım.",
         "btn_setup_profile": "⚙️ Profili Kur",
         "btn_log_food": "📝 Yemek Kaydet",
         "btn_log_weight": "⚖️ Kilo Kaydet",
@@ -736,6 +741,7 @@ LOCALES = {
         "btn_weekly_report": "🗓️ Haftalık Rapor",
         "btn_help": "ℹ️ Yardım",
         
+        "profile_setup_start": "Şimdi profilinizi yapılandıralım! ⚙️",
         "profile_prompt_name": "Lütfen adınızı girin:",
         "profile_prompt_sex": "Biyolojik cinsiyetinizi seçin:",
         "profile_prompt_age": "Lütfen yaşınızı girin (yıl olarak, örn. 28):",
@@ -870,7 +876,7 @@ LOCALES = {
         "prompt_edit_text_only": "Lütfen düzeltmeyi açıklayın veya yeni yemek açıklamasını metin olarak yazın:"
     },
     "es": {
-        "welcome": "¡Bienvenido a *Healthy Tracker Bot*! 🍏\n\nTe ayudaré a registrar tu comida (mediante foto o texto), realizar un seguimiento de tu peso y enviarte informes diarios/semanales/mensuales con recomendaciones personalizadas utilizando IA.\n\nPrimero configuremos tu perfil. ¡Haz clic en *Configurar Perfil* para comenzar!",
+        "welcome": "¡Bienvenido a *Healthy Tracker Bot*! 🍏\n\nTe ayudaré a registrar tu comida (mediante foto o texto), realizar un seguimiento de tu peso y enviarte informes diarios/semanales/mensuales con recomendaciones personalizadas utilizando IA.",
         "btn_setup_profile": "⚙️ Configurar Perfil",
         "btn_log_food": "📝 Registrar Comida",
         "btn_log_weight": "⚖️ Registrar Peso",
@@ -879,6 +885,7 @@ LOCALES = {
         "btn_weekly_report": "🗓️ Informe Semanal",
         "btn_help": "ℹ️ Ayuda",
         
+        "profile_setup_start": "¡Ahora configuremos tu perfil! ⚙️",
         "profile_prompt_name": "Por favor, introduce tu nombre:",
         "profile_prompt_sex": "Selecciona tu sexo biológico:",
         "profile_prompt_age": "Por favor, introduce tu edad (en años, ej. 28):",

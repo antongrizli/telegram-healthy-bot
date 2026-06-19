@@ -11,7 +11,7 @@ from src.services.scheduler import send_daily_report, send_weekly_report
 router = Router()
 
 @router.message(CommandStart())
-async def cmd_start(message: Message, user_language: str, db_user):
+async def cmd_start(message: Message, state: FSMContext, user_language: str, db_user):
     if db_user and not db_user.is_blocked:
         is_admin = db_user.telegram_id in settings.ADMIN_USER_IDS or db_user.is_admin
         await message.answer(
@@ -20,13 +20,9 @@ async def cmd_start(message: Message, user_language: str, db_user):
             parse_mode="Markdown"
         )
     else:
-        # Unregistered or blocked user starts fresh setup
-        markup = reply.get_setup_profile_keyboard(user_language)
-        await message.answer(
-            i18n_locales.get_text("welcome", user_language),
-            reply_markup=markup,
-            parse_mode="Markdown"
-        )
+        # Unregistered or blocked user starts fresh setup directly
+        from src.handlers.profile import start_profile_setup
+        await start_profile_setup(message, state, user_language, db_user=None)
 
 @router.message(Command("help"))
 @router.message(F.text.in_([
@@ -40,9 +36,9 @@ async def cmd_help(message: Message, user_language: str):
     )
 
 @router.message(F.text.in_(i18n_locales.get_all_translations("btn_my_profile")))
-async def view_profile(message: Message, user_language: str, db_user):
+async def view_profile(message: Message, state: FSMContext, user_language: str, db_user):
     if not db_user:
-        await cmd_start(message, user_language, db_user)
+        await cmd_start(message, state, user_language, db_user)
         return
         
     notifications_str = i18n_locales.get_text("enabled" if db_user.notifications_enabled else "disabled", user_language)
@@ -81,16 +77,16 @@ async def view_profile(message: Message, user_language: str, db_user):
     await message.answer(profile_text, reply_markup=markup, parse_mode="Markdown")
 
 @router.message(F.text.in_(i18n_locales.get_all_translations("btn_daily_report")))
-async def trigger_daily_report(message: Message, user_language: str, db_user):
+async def trigger_daily_report(message: Message, state: FSMContext, user_language: str, db_user):
     if not db_user:
-        await cmd_start(message, user_language, db_user)
+        await cmd_start(message, state, user_language, db_user)
         return
     await send_daily_report(message.bot, message.from_user.id)
 
 @router.message(F.text.in_(i18n_locales.get_all_translations("btn_weekly_report")))
-async def trigger_weekly_report(message: Message, user_language: str, db_user):
+async def trigger_weekly_report(message: Message, state: FSMContext, user_language: str, db_user):
     if not db_user:
-        await cmd_start(message, user_language, db_user)
+        await cmd_start(message, state, user_language, db_user)
         return
     await send_weekly_report(message.bot, message.from_user.id)
 

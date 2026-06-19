@@ -84,9 +84,9 @@ async def test_start_profile_setup(mock_state):
     message = make_mock_message("⚙️ Set Up Profile")
     await start_profile_setup(message, mock_state, "en")
     
-    mock_state.set_state.assert_called_once_with(ProfileStatesGroup.name)
+    mock_state.set_state.assert_called_once_with(ProfileStatesGroup.language)
     message.answer.assert_called_once()
-    assert "name" in message.answer.call_args[0][0].lower()
+    assert "language" in message.answer.call_args[0][0].lower()
 
 async def test_process_name(mock_state):
     message = make_mock_message("John Doe")
@@ -184,7 +184,8 @@ async def test_start_profile_setup_with_existing_db_user(db_session, mock_state)
         target_calories=2080,
         target_protein=156,
         target_fat=69,
-        target_carb=208
+        target_carb=208,
+        language="en"
     )
     
     message = make_mock_message("⚙️ Set Up Profile")
@@ -197,10 +198,10 @@ async def test_start_profile_setup_with_existing_db_user(db_session, mock_state)
     assert current_profile["name"] == "John"
     assert current_profile["age"] == 30
     
-    mock_state.set_state.assert_called_once_with(ProfileStatesGroup.name)
+    mock_state.set_state.assert_called_once_with(ProfileStatesGroup.language)
     message.answer.assert_called_once()
     markup = message.answer.call_args[1]["reply_markup"]
-    assert markup.keyboard[0][0].text == "Keep: John"
+    assert markup.keyboard[0][0].text == "Keep: English"
 
 async def test_process_name_keep_current(mock_state):
     current_profile = {
@@ -337,6 +338,50 @@ async def test_admin_navigation_flow_ru(mock_state):
     msg_back_main.answer.assert_called_once()
     main_markup = msg_back_main.answer.call_args[1]["reply_markup"]
     assert "еду" in main_markup.keyboard[0][0].text.lower() or "food" in main_markup.keyboard[0][0].text.lower()
+
+
+async def test_cmd_start_unregistered(mock_state):
+    from src.handlers.common import cmd_start
+    message = make_mock_message("/start")
+    
+    await cmd_start(message, mock_state, "en", db_user=None)
+    
+    mock_state.set_state.assert_called_once_with(ProfileStatesGroup.language)
+    message.answer.assert_called_once()
+    response_text = message.answer.call_args[0][0].lower()
+    assert "welcome" in response_text
+    assert "language" in response_text or "choose" in response_text
+
+
+async def test_cmd_start_registered(mock_state):
+    from src.handlers.common import cmd_start
+    from src.database.models import User as DbUser
+    
+    db_user = DbUser(telegram_id=12345, is_admin=False, is_blocked=False, language="en")
+    message = make_mock_message("/start", user_id=12345)
+    
+    await cmd_start(message, mock_state, "en", db_user)
+    
+    mock_state.set_state.assert_not_called()
+    message.answer.assert_called_once()
+    assert "welcome" in message.answer.call_args[0][0].lower()
+    markup = message.answer.call_args[1]["reply_markup"]
+    assert "food" in markup.keyboard[0][0].text.lower()
+
+
+async def test_process_language(mock_state):
+    from src.handlers.profile import process_language
+    message = make_mock_message("English 🇺🇸")
+    await process_language(message, mock_state, "en")
+    
+    mock_state.update_data.assert_called_once_with(language="en")
+    mock_state.set_state.assert_called_once_with(ProfileStatesGroup.name)
+    assert message.answer.call_count == 2
+    calls = message.answer.call_args_list
+    assert "configure" in calls[0][0][0].lower()
+    assert "name" in calls[1][0][0].lower()
+
+
 
 
 

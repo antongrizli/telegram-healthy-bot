@@ -26,9 +26,12 @@ async def main():
 
     # Register Global Telemetry and Localization Middlewares
     from src.middlewares.media_group import MediaGroupMiddleware
+    from src.middlewares.registration_check import RegistrationCheckMiddleware
     dp.message.outer_middleware(MediaGroupMiddleware())
     dp.message.outer_middleware(LanguageMiddleware())
     dp.callback_query.outer_middleware(LanguageMiddleware())
+    dp.message.outer_middleware(RegistrationCheckMiddleware())
+    dp.callback_query.outer_middleware(RegistrationCheckMiddleware())
     dp.message.outer_middleware(InteractionLoggingMiddleware())
     dp.callback_query.outer_middleware(InteractionLoggingMiddleware())
 

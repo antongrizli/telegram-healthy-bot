@@ -6,7 +6,7 @@ WORKDIR /app
 COPY requirements.txt .
 
 # Install runtime dependencies, temporary build tools, compile packages, and clean up in one layer
-RUN apk update && apk add --no-cache \
+RUN apk update && apk upgrade && apk add --no-cache \
     postgresql-libs \
     libpng \
     freetype \

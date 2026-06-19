@@ -119,7 +119,8 @@ telegram-healthy-bot/
 │   │   └── crud.py                # CRUD queries
 │   ├── services/
 │   │   ├── gemini.py              # Gemini client (google-genai SDK)
-│   │   └── scheduler.py           # APScheduler cron daemon
+│   │   ├── scheduler.py           # APScheduler cron daemon
+│   │   └── charts.py              # Matplotlib weekly progress charts
 │   ├── handlers/
 │   │   ├── common.py              # Command handlers (/start, /help, profile view)
 │   │   ├── profile.py             # Setup FSM wizard

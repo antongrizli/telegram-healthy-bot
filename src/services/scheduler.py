@@ -83,6 +83,11 @@ async def generate_and_send_report_direct(bot: Bot, db: AsyncSession, user, repo
         food_logs = await crud.get_food_logs(db, user_id, start_date, end_date)
         weight_logs = await crud.get_weight_logs(db, user_id, start_date, end_date)
         
+        # Fetch 30 days of weight logs specifically for the weight chart
+        start_30d_local = now_local - timedelta(days=30)
+        start_30d_date = start_30d_local.astimezone(UTC).replace(tzinfo=None)
+        chart_weight_logs = await crud.get_weight_logs(db, user_id, start_30d_date, end_date)
+        
     else:  # monthly
         start_of_month_local = now_local - timedelta(days=30)
         start_date = start_of_month_local.astimezone(UTC).replace(tzinfo=None)
@@ -127,6 +132,43 @@ async def generate_and_send_report_direct(bot: Bot, db: AsyncSession, user, repo
         header = f"{i18n_locales.get_text('monthly_report_header', user.language)}\n\n"
         
     await send_multipart_message(bot, user_id, header + report, parse_mode="Markdown")
+
+    if report_type == "weekly":
+        try:
+            import asyncio
+            from src.services import charts
+            from aiogram.types import BufferedInputFile, InputMediaPhoto
+            
+            nutrition_buf = await asyncio.to_thread(
+                charts.generate_nutrition_chart,
+                food_logs,
+                user.target_calories,
+                user.target_protein,
+                user.target_fat,
+                user.target_carb,
+                user.language,
+                user.timezone or "UTC"
+            )
+            
+            weight_buf = await asyncio.to_thread(
+                charts.generate_weight_chart,
+                chart_weight_logs,
+                user.language,
+                user.timezone or "UTC"
+            )
+            
+            nutrition_file = BufferedInputFile(nutrition_buf.read(), filename="weekly_nutrition.png")
+            weight_file = BufferedInputFile(weight_buf.read(), filename="weekly_weight.png")
+            
+            media = [
+                InputMediaPhoto(media=nutrition_file),
+                InputMediaPhoto(media=weight_file)
+            ]
+            
+            await bot.send_media_group(chat_id=user_id, media=media)
+        except Exception as e:
+            print(f"Failed to generate or send weekly charts to {user_id}: {e}")
+
 
 async def send_daily_report(bot: Bot, user_id: int):
     async with AsyncSessionLocal() as db:

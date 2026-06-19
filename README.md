@@ -20,7 +20,7 @@ The bot helps users track their nutrition logs (via photo or text), record perio
    * Gemini analyzes the image/description and returns structured nutritional facts (calories, protein, fat, carbohydrates).
    * Interactive **Accept / Correct / Cancel** flow. Users can edit/correct the estimates before logging.
 2. **Profile & Goals Wizard (Mifflin-St Jeor)**:
-   * First-time setup guides users through name, biological sex, age, height, weight, activity levels, language (English/Russian), and fitness goals (*Lose Weight*, *Maintain Weight*, *Gain Weight*, *Gain Muscle*).
+   * First-time setup directly guides users through language selection, name, biological sex, age, height, weight, physical activity level, fitness goals, reminder settings, daily report time, and timezone.
    * Automatically calculates daily targets based on modern BMR formulas.
 3. **Weight Tracking & Goal Mismatch Warning**:
    * Logs current weight and displays differences since the user's initial baseline.
@@ -29,7 +29,9 @@ The bot helps users track their nutrition logs (via photo or text), record perio
 4. **Automated AI Reports**:
    * **Daily Report**: Combines today's food/weight logs and provides custom advice.
    * **Weekly/Monthly Report**: Long-term trends, averages, and detailed habit coaching.
-5. **Admin Panel**:
+5. **Multilingual Interface**:
+   * Complete localized translation interface supporting **7 languages**: English, Russian, Ukrainian, Polish, German, Turkish, and Spanish.
+6. **Admin Panel**:
    * Access statistics (registered users, activity counts, message counts, food entries logged).
    * Broadcast announcements to all active users.
    * Block/unblock users by Telegram ID.
@@ -89,6 +91,17 @@ If you want to run the project locally without Docker:
 
 ---
 
+## Developer Guidelines
+
+Developers and AI agents working on this repository must review and adhere to the [Developer Skill Guide](.agents/skills/developer-skill.md) located at `.agents/skills/developer-skill.md`.
+
+Crucial rules in the guide include:
+- Enforcing database operations via local session blocks encapsulated within `src/database/crud.py`.
+- Preserving formatting and sanitizing Telegram Markdown output.
+- Maintaining test coverage and keeping the guide and [SECURITY.md](SECURITY.md) updated dynamically as new bot capabilities or middleware layers are introduced.
+
+---
+
 ## Directory Structure
 
 ```
@@ -119,8 +132,9 @@ telegram-healthy-bot/
 │   ├── middlewares/
 │   │   ├── i18n.py                # Localization injection
 │   │   ├── logging.py             # Message logs tracker
-│   │   └── admin_check.py         # Security gatekeeper
+│   │   ├── admin_check.py         # Security gatekeeper
+│   │   └── registration_check.py  # Profile creation enforcer middleware
 │   └── utils/
 │       ├── formulas.py            # Mifflin-St Jeor math
-│       └── i18n_locales.py        # English/Russian dictionaries
+│       └── i18n_locales.py        # Multilingual dictionaries (EN, RU, UK, PL, DE, TR, ES)
 ```

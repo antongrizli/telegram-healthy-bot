@@ -2,7 +2,10 @@ FROM python:3.12-alpine
 
 WORKDIR /app
 
-# Install runtime dependencies and compilation tools for native package build
+# Copy dependency definition
+COPY requirements.txt .
+
+# Install runtime dependencies, temporary build tools, compile packages, and clean up in one layer
 RUN apk update && apk add --no-cache \
     postgresql-libs \
     libpng \
@@ -13,17 +16,11 @@ RUN apk update && apk add --no-cache \
     postgresql-dev \
     freetype-dev \
     libpng-dev \
-    python3-dev
-
-# Copy dependency definition
-COPY requirements.txt .
-
-# Install dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
-
-# Clean up build dependencies
-RUN apk del .build-deps
+    python3-dev \
+    && pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt \
+    && apk del .build-deps \
+    && rm -rf /var/cache/apk/*
 
 # Copy application source code
 COPY src/ /app/src

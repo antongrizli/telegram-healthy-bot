@@ -382,6 +382,111 @@ async def test_process_language(mock_state):
     assert "name" in calls[1][0][0].lower()
 
 
+async def test_weight_feedback_lose_weight_success(db_session, mock_state):
+    await crud.create_or_update_user(
+        db_session,
+        telegram_id=12345,
+        name="John",
+        sex="male",
+        age=30,
+        height_cm=180.0,
+        weight_kg=80.0,
+        activity_level="light",
+        goal="lose_weight",
+        target_calories=2000,
+        target_protein=150,
+        target_fat=60,
+        target_carb=200
+    )
+    await crud.add_weight_log(db_session, user_id=12345, weight=80.0)
+
+    message = make_mock_message("78.5", user_id=12345)
+    await process_weight_input(message, mock_state, "en")
+    
+    response_msg = message.answer.call_args[0][0]
+    assert "78.5 kg" in response_msg
+    assert "Keep up the great work!" in response_msg
+
+
+async def test_weight_feedback_lose_weight_warn(db_session, mock_state):
+    await crud.create_or_update_user(
+        db_session,
+        telegram_id=12345,
+        name="John",
+        sex="male",
+        age=30,
+        height_cm=180.0,
+        weight_kg=80.0,
+        activity_level="light",
+        goal="lose_weight",
+        target_calories=2000,
+        target_protein=150,
+        target_fat=60,
+        target_carb=200
+    )
+    await crud.add_weight_log(db_session, user_id=12345, weight=80.0)
+
+    message = make_mock_message("81.0", user_id=12345)
+    await process_weight_input(message, mock_state, "en")
+    
+    response_msg = message.answer.call_args[0][0]
+    assert "81.0 kg" in response_msg
+    assert "Please pay attention to your food intake or physical activity." in response_msg
+
+
+async def test_weight_feedback_gain_weight_success(db_session, mock_state):
+    await crud.create_or_update_user(
+        db_session,
+        telegram_id=12345,
+        name="John",
+        sex="male",
+        age=30,
+        height_cm=180.0,
+        weight_kg=80.0,
+        activity_level="light",
+        goal="gain_weight",
+        target_calories=2000,
+        target_protein=150,
+        target_fat=60,
+        target_carb=200
+    )
+    await crud.add_weight_log(db_session, user_id=12345, weight=80.0)
+
+    message = make_mock_message("81.0", user_id=12345)
+    await process_weight_input(message, mock_state, "en")
+    
+    response_msg = message.answer.call_args[0][0]
+    assert "81.0 kg" in response_msg
+    assert "Keep up the great work!" in response_msg
+
+
+async def test_weight_feedback_gain_weight_warn(db_session, mock_state):
+    await crud.create_or_update_user(
+        db_session,
+        telegram_id=12345,
+        name="John",
+        sex="male",
+        age=30,
+        height_cm=180.0,
+        weight_kg=80.0,
+        activity_level="light",
+        goal="gain_weight",
+        target_calories=2000,
+        target_protein=150,
+        target_fat=60,
+        target_carb=200
+    )
+    await crud.add_weight_log(db_session, user_id=12345, weight=80.0)
+
+    message = make_mock_message("78.5", user_id=12345)
+    await process_weight_input(message, mock_state, "en")
+    
+    response_msg = message.answer.call_args[0][0]
+    assert "78.5 kg" in response_msg
+    assert "Please pay attention to your food intake or physical activity." in response_msg
+
+
+
 
 
 

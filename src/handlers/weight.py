@@ -33,11 +33,13 @@ async def process_weight_input(message: Message, state: FSMContext, user_languag
         return
         
     user_id = message.from_user.id
+    user_goal = None
     
     async with AsyncSessionLocal() as db:
         # Update user's current weight and recalculate daily target macros
         user = await crud.get_user(db, user_id)
         if user:
+            user_goal = user.goal
             user.weight_kg = weight
             from src.utils import formulas
             targets = formulas.calculate_targets(
@@ -66,6 +68,7 @@ async def process_weight_input(message: Message, state: FSMContext, user_languag
         await crud.add_weight_log(db, user_id=user_id, weight=weight)
         
     # Calculate difference
+    feedback_key = "weight_feedback_positive"
     if baseline_log:
         baseline_weight = baseline_log.weight
         diff = weight - baseline_weight
@@ -89,14 +92,29 @@ async def process_weight_input(message: Message, state: FSMContext, user_languag
                 user_language,
                 baseline=baseline_weight
             )
+            
+        # Determine feedback key based on goal and dynamic
+        if user_goal == "lose_weight":
+            if diff < -0.05:
+                feedback_key = "weight_feedback_positive"
+            else:
+                feedback_key = "weight_feedback_warn"
+        elif user_goal in ("gain_weight", "gain_muscle"):
+            if diff > 0.05:
+                feedback_key = "weight_feedback_positive"
+            else:
+                feedback_key = "weight_feedback_warn"
     else:
         diff_str = ""
         
+    feedback_msg = i18n_locales.get_text(feedback_key, user_language)
+    
     response_msg = i18n_locales.get_text(
         "weight_logged",
         user_language,
         weight=weight,
-        weight_diff_str=diff_str
+        weight_diff_str=diff_str,
+        feedback_msg=feedback_msg
     )
     
     await state.clear()

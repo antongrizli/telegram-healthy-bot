@@ -1,7 +1,7 @@
 from datetime import datetime, UTC, timedelta
 from sqlalchemy import select, update, func, desc, and_
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.database.models import User, FoodLog, WeightLog, MessageStat, AiRequestLog, AiRequestQueue
+from src.database.models import User, FoodLog, WeightLog, MessageStat, AiRequestLog, AiRequestQueue, Streak, Achievement, HealthCard
 from src.config import settings
 
 async def get_user(db: AsyncSession, telegram_id: int) -> User:
@@ -394,4 +394,69 @@ async def update_food_log(
         await db.refresh(food_log)
         return food_log
     return None
+
+async def get_or_create_streak(db: AsyncSession, user_id: int, streak_type: str) -> Streak:
+    result = await db.execute(
+        select(Streak).where(and_(Streak.user_id == user_id, Streak.streak_type == streak_type))
+    )
+    streak = result.scalars().first()
+    if not streak:
+        streak = Streak(user_id=user_id, streak_type=streak_type, current_count=0, longest_count=0)
+        db.add(streak)
+        await db.commit()
+        await db.refresh(streak)
+    return streak
+
+async def get_user_streaks(db: AsyncSession, user_id: int) -> list[Streak]:
+    result = await db.execute(select(Streak).where(Streak.user_id == user_id))
+    return list(result.scalars().all())
+
+async def unlock_achievement(db: AsyncSession, user_id: int, achievement_key: str) -> Achievement | None:
+    result = await db.execute(
+        select(Achievement).where(
+            and_(Achievement.user_id == user_id, Achievement.achievement_key == achievement_key)
+        )
+    )
+    existing = result.scalars().first()
+    if existing:
+        return None
+    ach = Achievement(user_id=user_id, achievement_key=achievement_key)
+    db.add(ach)
+    await db.commit()
+    await db.refresh(ach)
+    return ach
+
+async def get_user_achievements(db: AsyncSession, user_id: int) -> list[Achievement]:
+    result = await db.execute(
+        select(Achievement)
+        .where(Achievement.user_id == user_id)
+        .order_by(Achievement.unlocked_at.desc())
+    )
+    return list(result.scalars().all())
+
+async def save_health_card(db: AsyncSession, user_id: int, week_start: datetime, card_data: dict) -> HealthCard:
+    result = await db.execute(
+        select(HealthCard).where(
+            and_(HealthCard.user_id == user_id, HealthCard.week_start == week_start)
+        )
+    )
+    card = result.scalars().first()
+    if card:
+        card.card_data = card_data
+        card.generated_at = datetime.now(UTC).replace(tzinfo=None)
+    else:
+        card = HealthCard(user_id=user_id, week_start=week_start, card_data=card_data)
+        db.add(card)
+    await db.commit()
+    await db.refresh(card)
+    return card
+
+async def get_latest_health_card(db: AsyncSession, user_id: int) -> HealthCard | None:
+    result = await db.execute(
+        select(HealthCard)
+        .where(HealthCard.user_id == user_id)
+        .order_by(desc(HealthCard.week_start))
+        .limit(1)
+    )
+    return result.scalars().first()
 

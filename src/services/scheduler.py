@@ -134,40 +134,28 @@ async def generate_and_send_report_direct(bot: Bot, db: AsyncSession, user, repo
     await send_multipart_message(bot, user_id, header + report, parse_mode="Markdown")
 
     if report_type == "weekly":
-        try:
-            import asyncio
-            from src.services import charts
-            from aiogram.types import BufferedInputFile, InputMediaPhoto
-            
-            nutrition_buf = await asyncio.to_thread(
-                charts.generate_nutrition_chart,
-                food_logs,
-                user.target_calories,
-                user.target_protein,
-                user.target_fat,
-                user.target_carb,
-                user.language,
-                user.timezone or "UTC"
-            )
-            
-            weight_buf = await asyncio.to_thread(
-                charts.generate_weight_chart,
-                chart_weight_logs,
-                user.language,
-                user.timezone or "UTC"
-            )
-            
-            nutrition_file = BufferedInputFile(nutrition_buf.read(), filename="weekly_nutrition.png")
-            weight_file = BufferedInputFile(weight_buf.read(), filename="weekly_weight.png")
-            
-            media = [
-                InputMediaPhoto(media=nutrition_file),
-                InputMediaPhoto(media=weight_file)
+        from src.keyboards import inline
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+        
+        promo_text = (
+            "📊 *Interactive weekly charts* are ready to view in your dashboard! Click below to see trends:"
+            if user.language == "en" else
+            "📊 *Интерактивные недельные графики* готовы к просмотру в вашем дашборде! Нажмите кнопку ниже:"
+        )
+        
+        markup = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📈 View Trends" if user.language == "en" else "📈 Посмотреть графики",
+                    web_app=WebAppInfo(url=f"{settings.WEBAPP_URL}?tab=charts")
+                )
             ]
-            
-            await bot.send_media_group(chat_id=user_id, media=media)
+        ])
+        
+        try:
+            await bot.send_message(chat_id=user_id, text=promo_text, reply_markup=markup, parse_mode="Markdown")
         except Exception as e:
-            print(f"Failed to generate or send weekly charts to {user_id}: {e}")
+            print(f"Failed to send weekly charts webapp promo to {user_id}: {e}")
 
 
 async def send_daily_report(bot: Bot, user_id: int):
@@ -293,11 +281,89 @@ async def send_monthly_report(bot: Bot, user_id: int):
                 parse_mode="Markdown"
             )
 
+async def check_daily_streaks_and_targets(bot: Bot, user_id: int):
+    async with AsyncSessionLocal() as db:
+        user = await crud.get_user(db, user_id)
+        if not user or user.is_blocked:
+            return
+            
+        # Update daily target streaks
+        from src.services import gamification
+        cal_hit, prot_hit = await gamification.update_daily_targets_streak(db, user)
+        
+        # Check new achievements
+        new_ach_keys = await gamification.check_new_achievements(db, user_id)
+        
+        # Notify if any achievements unlocked
+        if new_ach_keys:
+            ach_notifs = []
+            for ach_key in new_ach_keys:
+                ach_def = gamification.ACHIEVEMENTS.get(ach_key)
+                if ach_def:
+                    icon = ach_def["icon"]
+                    name = i18n_locales.get_text(ach_def["name_key"], user.language)
+                    desc = i18n_locales.get_text(ach_def["desc_key"], user.language)
+                    ach_notifs.append(f"{icon} *{name}* — {desc}")
+            
+            msg = f"🏆 *{i18n_locales.get_text('achievements_unlocked_title', user.language)}*\n" + "\n".join(ach_notifs)
+            try:
+                await bot.send_message(user_id, msg, parse_mode="Markdown")
+            except Exception as e:
+                print(f"Failed to send daily streak achievement unlock message to {user_id}: {e}")
+
+async def send_morning_briefing_job(bot: Bot, user_id: int):
+    async with AsyncSessionLocal() as db:
+        user = await crud.get_user(db, user_id)
+        if not user or user.is_blocked or not user.notifications_enabled:
+            return
+            
+        from src.services import briefing
+        msg = await briefing.generate_morning_briefing(db, user_id)
+        
+        # Render dynamic inline keyboard for morning briefing
+        from src.keyboards import inline
+        markup = inline.get_morning_actions_inline(user.language)
+        
+        try:
+            await bot.send_message(user_id, msg, reply_markup=markup, parse_mode="Markdown")
+        except Exception as e:
+            print(f"Failed to send morning briefing to {user_id}: {e}")
+
+async def send_weekly_health_card_job(bot: Bot, user_id: int):
+    async with AsyncSessionLocal() as db:
+        user = await crud.get_user(db, user_id)
+        if not user or user.is_blocked or not user.notifications_enabled:
+            return
+            
+        from src.services import gamification
+        card = await gamification.generate_weekly_health_card(db, user_id)
+        
+        # Send a summary message and an inline keyboard to view full details
+        msg = (
+            f"🃏 *{i18n_locales.get_text('health_card_title', user.language)}*\n\n"
+            f"📊 *{i18n_locales.get_text('overall_score', user.language)}*: {card.card_data['overall_score']}/100\n\n"
+            f"💬 *Coach Notes*:\n{card.card_data['coach_message']}"
+        )
+        
+        # Keyboard linking to the Mini App
+        from src.keyboards import inline
+        markup = inline.get_health_card_inline(user.language)
+        
+        try:
+            await bot.send_message(user_id, msg, reply_markup=markup, parse_mode="Markdown")
+        except Exception as e:
+            print(f"Failed to send weekly health card to {user_id}: {e}")
+
+async def reset_weekly_freezes_global():
+    async with AsyncSessionLocal() as db:
+        from src.services import gamification
+        await gamification.reset_weekly_freezes(db)
+
 def reschedule_user_jobs(bot: Bot, user):
     user_id = user.telegram_id
     
     # Remove existing jobs for this user
-    for suffix in ["_reminder", "_daily", "_weekly", "_monthly"]:
+    for suffix in ["_reminder", "_daily", "_weekly", "_monthly", "_morning", "_daily_check", "_health_card"]:
         job_id = f"user_{user_id}{suffix}"
         if scheduler.get_job(job_id):
             scheduler.remove_job(job_id)
@@ -349,14 +415,48 @@ def reschedule_user_jobs(bot: Bot, user):
             args=[bot, user_id],
             replace_existing=True
         )
+        
+        # 5. Morning Briefing (Daily at 8:00 AM)
+        scheduler.add_job(
+            send_morning_briefing_job,
+            CronTrigger(hour=8, minute=0, timezone=user_tz),
+            id=f"user_{user_id}_morning",
+            args=[bot, user_id],
+            replace_existing=True
+        )
+        
+        # 6. Daily Targets & Streak Check (Daily at 23:55)
+        scheduler.add_job(
+            check_daily_streaks_and_targets,
+            CronTrigger(hour=23, minute=55, timezone=user_tz),
+            id=f"user_{user_id}_daily_check",
+            args=[bot, user_id],
+            replace_existing=True
+        )
+        
+        # 7. Weekly Health Card (Sunday at 10:00 AM)
+        scheduler.add_job(
+            send_weekly_health_card_job,
+            CronTrigger(day_of_week="sun", hour=10, minute=0, timezone=user_tz),
+            id=f"user_{user_id}_health_card",
+            args=[bot, user_id],
+            replace_existing=True
+        )
 
 def remove_user_jobs(user_id: int):
-    for suffix in ["_reminder", "_daily", "_weekly", "_monthly"]:
+    for suffix in ["_reminder", "_daily", "_weekly", "_monthly", "_morning", "_daily_check", "_health_card"]:
         job_id = f"user_{user_id}{suffix}"
         if scheduler.get_job(job_id):
             scheduler.remove_job(job_id)
 
 async def init_scheduler(bot: Bot):
+    # Register global freeze reset job
+    scheduler.add_job(
+        reset_weekly_freezes_global,
+        CronTrigger(day_of_week="sun", hour=23, minute=59, timezone="UTC"),
+        id="global_reset_freezes",
+        replace_existing=True
+    )
 
     async with AsyncSessionLocal() as db:
         users = await crud.get_all_users(db, include_blocked=False)

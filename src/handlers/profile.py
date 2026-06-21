@@ -669,6 +669,10 @@ async def complete_profile_setup(
         
     reschedule_user_jobs(message.bot, db_user)
     
+    # Update WebApp menu button to the newly selected language
+    from src.middlewares.i18n import update_user_menu_button
+    await update_user_menu_button(message.bot, user_id, lang)
+    
     await state.clear()
     
     complete_msg = i18n_locales.get_text(

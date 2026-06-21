@@ -1,4 +1,5 @@
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
+from src.config import settings
 from src.utils.i18n_locales import get_text
 
 def get_main_menu(lang: str = "en", is_admin: bool = False) -> ReplyKeyboardMarkup:

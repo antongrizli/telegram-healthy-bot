@@ -29,6 +29,8 @@ services:
         condition: service_healthy
     env_file:
       - .env
+    ports:
+      - "8080:8080"
     environment:
       - DATABASE_URL=postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-postgres_password}@db:5432/${DB_NAME:-healthy_bot}
       - PYTHONUNBUFFERED=1

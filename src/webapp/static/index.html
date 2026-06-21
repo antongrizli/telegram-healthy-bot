@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Healthy Tracker Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="user-badge">
+                <div class="user-avatar" id="avatar-placeholder"><i class="fa-solid fa-user"></i></div>
+                <div class="user-meta">
+                    <h1 id="user-name">Guest</h1>
+                    <p id="user-streak-status"><i class="fa-solid fa-fire text-orange"></i> No active streak</p>
+                </div>
+            </div>
+            <div class="header-widgets">
+                <div class="freeze-pill" title="Weekly streak freezes remaining">
+                    <i class="fa-solid fa-snowflake text-cyan"></i> <span id="freezes-left">0/1</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="app-main">
+            <!-- Loading Indicator -->
+            <div id="loading-overlay" class="overlay">
+                <div class="spinner-container">
+                    <div class="spinner"></div>
+                    <p data-i18n="webapp_loading">Syncing health data...</p>
+                </div>
+            </div>
+
+            <!-- Error Indicator -->
+            <div id="error-card" class="card hidden">
+                <div class="card-icon text-red"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                <h3 data-i18n="webapp_err_title">Failed to load data</h3>
+                <p id="error-message">Make sure you are opening this app from the Telegram Bot.</p>
+                <button class="btn btn-primary" onclick="window.location.reload()"><i class="fa-solid fa-arrows-rotate"></i> <span data-i18n="webapp_retry">Retry</span></button>
+            </div>
+
+            <!-- Tab Content Area -->
+            <div class="tab-content" id="dashboard-tab">
+                <!-- Today's Stats Cards Grid -->
+                <div class="grid-2">
+                    <div class="card glass">
+                        <div class="card-header">
+                            <span class="card-title"><i class="fa-solid fa-bolt text-green"></i> <span data-i18n="webapp_calories_today">Calories Today</span></span>
+                        </div>
+                        <div class="donut-container">
+                            <canvas id="calories-donut-chart"></canvas>
+                            <div class="donut-center-text">
+                                <span class="donut-val" id="cal-intake">0</span>
+                                <span class="donut-lbl" id="cal-target">/ 0 kcal</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card glass">
+                        <div class="card-header">
+                            <span class="card-title"><i class="fa-solid fa-heart-pulse text-red"></i> <span data-i18n="webapp_macronutrients">Macronutrients</span></span>
+                        </div>
+                        <div class="macro-list">
+                            <div class="macro-item">
+                                <div class="macro-lbl">
+                                    <span data-i18n="webapp_protein">Protein</span>
+                                    <span class="text-secondary" id="macro-prot-ratio">0g / 0g</span>
+                                </div>
+                                <div class="progress-bar-bg">
+                                    <div class="progress-bar-fill bg-yellow" id="bar-protein" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div class="macro-item">
+                                <div class="macro-lbl">
+                                    <span data-i18n="webapp_carbs">Carbs</span>
+                                    <span class="text-secondary" id="macro-carb-ratio">0g / 0g</span>
+                                </div>
+                                <div class="progress-bar-bg">
+                                    <div class="progress-bar-fill bg-blue" id="bar-carb" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div class="macro-item">
+                                <div class="macro-lbl">
+                                    <span data-i18n="webapp_fats">Fats</span>
+                                    <span class="text-secondary" id="macro-fat-ratio">0g / 0g</span>
+                                </div>
+                                <div class="progress-bar-bg">
+                                    <div class="progress-bar-fill bg-red" id="bar-fat" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Achievement Banner -->
+                <div class="card glass clickable-card" onclick="switchTab('achievements')">
+                    <div class="achievement-banner">
+                        <div class="banner-icon" id="recent-ach-icon">🏆</div>
+                        <div class="banner-text">
+                            <h4 data-i18n="webapp_recent_achievement">Recent Achievement</h4>
+                            <p id="recent-ach-title" data-i18n="webapp_next_badge_promo">Track 3 days to unlock your next badge!</p>
+                        </div>
+                        <div class="banner-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-content hidden" id="charts-tab">
+                <div class="tab-sub-header">
+                    <h2 data-i18n="webapp_trends_title">Progress Trends</h2>
+                    <div class="toggle-group" id="range-toggle">
+                        <button class="toggle-btn active" data-range="7d" data-i18n="webapp_days_7">7 Days</button>
+                        <button class="toggle-btn" data-range="30d" data-i18n="webapp_days_30">30 Days</button>
+                        <button class="toggle-btn" data-range="90d" data-i18n="webapp_days_90">90 Days</button>
+                    </div>
+                </div>
+
+                <!-- Calorie History Chart -->
+                <div class="card glass">
+                    <h3 data-i18n="webapp_calorie_trends">Calorie Trends</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="calories-history-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Macronutrient History Chart -->
+                <div class="card glass">
+                    <h3 data-i18n="webapp_macro_trends">Macronutrient Trends</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="macro-history-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Weight Progression Chart -->
+                <div class="card glass">
+                    <h3 data-i18n="webapp_weight_history">Weight History</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="weight-history-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-content hidden" id="achievements-tab">
+                <h2 data-i18n="webapp_badges_title">Badges & Milestones</h2>
+                <p class="section-desc" data-i18n="webapp_badges_desc">Unlock badges as you complete daily logs and build consistency.</p>
+                <div class="badges-grid" id="badges-grid">
+                    <!-- Dynamic Badges Inserted Here -->
+                </div>
+            </div>
+
+            <div class="tab-content hidden" id="health-card-tab">
+                <h2 data-i18n="webapp_health_card_title">Personalized Health Card</h2>
+                <p class="section-desc" data-i18n="webapp_health_card_desc">Your weekly performance analysis generated by Gemini AI.</p>
+                
+                <div id="no-card-placeholder" class="card glass text-center">
+                    <div class="card-icon text-muted"><i class="fa-solid fa-clipboard-question"></i></div>
+                    <h3 data-i18n="webapp_no_card_title">No Health Card Yet</h3>
+                    <p data-i18n="webapp_no_card_desc">Health Cards are generated every Sunday morning based on your logging consistency.</p>
+                </div>
+
+                <div id="health-card-container" class="hidden">
+                    <div class="card card-premium">
+                        <div class="premium-header">
+                            <span class="card-tag" data-i18n="webapp_weekly_score">WEEKLY SCORE</span>
+                            <div class="health-score-gauge">
+                                <span id="health-score-num">0</span><span class="score-denominator">/100</span>
+                            </div>
+                        </div>
+                        <div class="premium-divider"></div>
+                        <p class="coach-text" id="coach-message">...</p>
+                    </div>
+
+                    <!-- Category Scores -->
+                    <div class="grid-3" id="card-categories">
+                        <!-- Dynamic Categories -->
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Tab Bar Navigation -->
+        <nav class="app-nav">
+            <button class="nav-item active" onclick="switchTab('dashboard')">
+                <i class="fa-solid fa-chart-pie"></i>
+                <span data-i18n="webapp_tab_summary">Summary</span>
+            </button>
+            <button class="nav-item" onclick="switchTab('charts')">
+                <i class="fa-solid fa-chart-line"></i>
+                <span data-i18n="webapp_tab_trends">Trends</span>
+            </button>
+            <button class="nav-item" onclick="switchTab('achievements')">
+                <i class="fa-solid fa-trophy"></i>
+                <span data-i18n="webapp_tab_badges">Badges</span>
+            </button>
+            <button class="nav-item" onclick="switchTab('health-card')">
+                <i class="fa-solid fa-id-card"></i>
+                <span data-i18n="webapp_tab_card">Health Card</span>
+            </button>
+        </nav>
+    </div>
+
+    <!-- Script Files -->
+    <script src="locales.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

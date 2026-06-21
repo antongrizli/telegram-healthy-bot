@@ -10,6 +10,9 @@ docker build -t "${IMAGE_NAME}:${TAG}" .
 echo "Running test suite inside the built image..."
 docker run --rm -v "$(pwd)":/app -w /app -e PYTHONPATH=. "${IMAGE_NAME}:${TAG}" pytest -v
 
+echo "Analyzing vulnerabilities with Docker Scout..."
+docker scout cves "${IMAGE_NAME}:${TAG}"
+
 echo "Starting database and bot container using docker-compose..."
 docker-compose up --build -d
 

@@ -30,10 +30,18 @@ class User(Base):
     is_admin = Column(Boolean, default=False)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
 
+    # Gamification
+    current_streak = Column(Integer, default=0, nullable=False)
+    streak_freezes_left = Column(Integer, default=1, nullable=False)
+    last_freeze_used_at = Column(DateTime, nullable=True)
+
     food_logs = relationship("FoodLog", back_populates="user", cascade="all, delete-orphan")
     weight_logs = relationship("WeightLog", back_populates="user", cascade="all, delete-orphan")
     message_stats = relationship("MessageStat", back_populates="user", cascade="all, delete-orphan")
     ai_queues = relationship("AiRequestQueue", back_populates="user", cascade="all, delete-orphan")
+    streaks = relationship("Streak", back_populates="user", cascade="all, delete-orphan")
+    achievements = relationship("Achievement", back_populates="user", cascade="all, delete-orphan")
+    health_cards = relationship("HealthCard", back_populates="user", cascade="all, delete-orphan")
 
 class FoodLog(Base):
     __tablename__ = "food_logs"
@@ -97,4 +105,39 @@ class AiRequestQueue(Base):
     processed_at = Column(DateTime, nullable=True)
 
     user = relationship("User", back_populates="ai_queues")
+
+class Streak(Base):
+    __tablename__ = "streaks"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False)
+    streak_type = Column(String(50), nullable=False) # e.g., 'food_logging', 'weight_logging', 'calorie_target_hit'
+    current_count = Column(Integer, default=0, nullable=False)
+    longest_count = Column(Integer, default=0, nullable=False)
+    last_logged_date = Column(DateTime, nullable=True)
+    started_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+    updated_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+
+    user = relationship("User", back_populates="streaks")
+
+class Achievement(Base):
+    __tablename__ = "achievements"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False)
+    achievement_key = Column(String(100), nullable=False)
+    unlocked_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+
+    user = relationship("User", back_populates="achievements")
+
+class HealthCard(Base):
+    __tablename__ = "health_cards"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False)
+    week_start = Column(DateTime, nullable=False)
+    card_data = Column(JSON, nullable=False) # stores overall_score, categories, achievements_this_week, coach_message
+    generated_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+
+    user = relationship("User", back_populates="health_cards")
 

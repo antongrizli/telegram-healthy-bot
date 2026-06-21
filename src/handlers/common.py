@@ -7,6 +7,8 @@ from src.utils.escape import escape_markdown
 from src.config import settings
 from src.keyboards import reply
 from src.services.scheduler import send_daily_report, send_weekly_report
+from src.database.connection import AsyncSessionLocal
+from src.database import crud
 
 router = Router()
 
@@ -89,6 +91,56 @@ async def trigger_weekly_report(message: Message, state: FSMContext, user_langua
         await cmd_start(message, state, user_language, db_user)
         return
     await send_weekly_report(message.bot, message.from_user.id)
+
+@router.message(F.text.in_(i18n_locales.get_all_translations("btn_my_progress")))
+@router.message(Command("streaks"))
+@router.message(Command("achievements"))
+async def view_progress(message: Message, state: FSMContext, user_language: str, db_user):
+    if not db_user:
+        await cmd_start(message, state, user_language, db_user)
+        return
+        
+    async with AsyncSessionLocal() as db:
+        from src.services import gamification
+        streaks = await crud.get_user_streaks(db, db_user.telegram_id)
+        achievements = await crud.get_user_achievements(db, db_user.telegram_id)
+        
+    streak_text = ""
+    if not streaks:
+        streak_text = "No active streaks yet! Keep tracking to build a streak." if user_language == "en" else "Нет активных стриков! Начните записывать еду/вес, чтобы запустить стрик."
+    else:
+        for s in streaks:
+            type_name = (
+                "Food logging 🍽️" if s.streak_type == "food_logging" else
+                "Weight logging ⚖️" if s.streak_type == "weight_logging" else
+                "Calorie goal hit 🎯" if s.streak_type == "calorie_target_hit" else "Protein goal hit 🥩"
+            )
+            streak_text += f"• *{type_name}*: {s.current_count} days (Longest: {s.longest_count} days)\n"
+            
+    ach_text = ""
+    if not achievements:
+        ach_text = "No achievements unlocked yet." if user_language == "en" else "Достижений пока нет."
+    else:
+        total_ach = len(gamification.ACHIEVEMENTS)
+        ach_text = f"Unlocked {len(achievements)}/{total_ach} achievements:\n" if user_language == "en" else f"Открыто {len(achievements)}/{total_ach} достижений:\n"
+        for a in achievements[:5]:
+            ach_def = gamification.ACHIEVEMENTS.get(a.achievement_key)
+            if ach_def:
+                name = i18n_locales.get_text(ach_def["name_key"], user_language)
+                ach_text += f"- {ach_def['icon']} *{name}*\n"
+        if len(achievements) > 5:
+            ach_text += "...and more in the achievements tab!" if user_language == "en" else "...и другие во вкладке достижений!"
+            
+    msg = (
+        f"📈 *{i18n_locales.get_text('btn_my_progress', user_language)}*:\n\n"
+        f"🔥 *Streaks*:\n{streak_text}\n"
+        f"❄️ *Streak Freezes left*: {db_user.streak_freezes_left}/1\n\n"
+        f"🏆 *Achievements*:\n{ach_text}"
+    )
+    
+    from src.keyboards import inline
+    markup = inline.get_streak_inline(user_language)
+    await message.answer(msg, reply_markup=markup, parse_mode="Markdown")
 
 @router.message(StateFilter("*"), F.text.in_(["⬅️ Back to Main Menu", "⬅️ Главное меню"]))
 async def cmd_back_to_main_menu(message: Message, state: FSMContext, user_language: str, db_user):

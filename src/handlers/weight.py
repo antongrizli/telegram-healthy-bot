@@ -8,6 +8,7 @@ from src.database.connection import AsyncSessionLocal
 from src.database import crud
 from src.database.models import WeightLog
 from src.utils import i18n_locales
+from src.services import gamification
 
 router = Router()
 
@@ -67,6 +68,20 @@ async def process_weight_input(message: Message, state: FSMContext, user_languag
         # Save the new weight log
         await crud.add_weight_log(db, user_id=user_id, weight=weight)
         
+        # Process gamification
+        ach_notifs = []
+        if user:
+            await gamification.process_weight_log_streak(db, user)
+            new_ach_keys = await gamification.check_new_achievements(db, user_id)
+            
+            for ach_key in new_ach_keys:
+                ach_def = gamification.ACHIEVEMENTS.get(ach_key)
+                if ach_def:
+                    icon = ach_def["icon"]
+                    name = i18n_locales.get_text(ach_def["name_key"], user_language)
+                    desc = i18n_locales.get_text(ach_def["desc_key"], user_language)
+                    ach_notifs.append(f"{icon} *{name}* — {desc}")
+        
     # Calculate difference
     feedback_key = "weight_feedback_positive"
     if baseline_log:
@@ -116,6 +131,9 @@ async def process_weight_input(message: Message, state: FSMContext, user_languag
         weight_diff_str=diff_str,
         feedback_msg=feedback_msg
     )
+    
+    if ach_notifs:
+        response_msg += f"\n\n🏆 *{i18n_locales.get_text('achievements_unlocked_title', user_language)}*\n" + "\n".join(ach_notifs)
     
     await state.clear()
     await message.answer(response_msg, parse_mode="Markdown")

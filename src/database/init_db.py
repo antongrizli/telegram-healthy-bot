@@ -30,3 +30,11 @@ async def init_db():
             await conn.execute(sa.text("ALTER TABLE ai_request_queue ADD COLUMN IF NOT EXISTS last_error TEXT"))
         except Exception as e:
             logger.info(f"ai_request_queue retry columns check/migration skipped or handled: {e}")
+
+        # Add gamification columns to existing PostgreSQL users table if they don't exist
+        try:
+            await conn.execute(sa.text("ALTER TABLE users ADD COLUMN IF NOT EXISTS current_streak INTEGER NOT NULL DEFAULT 0"))
+            await conn.execute(sa.text("ALTER TABLE users ADD COLUMN IF NOT EXISTS streak_freezes_left INTEGER NOT NULL DEFAULT 1"))
+            await conn.execute(sa.text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_freeze_used_at TIMESTAMP WITHOUT TIME ZONE"))
+        except Exception as e:
+            logger.info(f"Users gamification columns check/migration skipped or handled: {e}")

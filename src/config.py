@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemma-4-31b-it"
     ADMIN_USER_IDS: List[int] = Field(default_factory=list)
     DATABASE_URL: str
+    WEBAPP_URL: str
 
     @field_validator("ADMIN_USER_IDS", mode="before")
     @classmethod

@@ -14,6 +14,7 @@ from src.utils import i18n_locales
 from src.keyboards import reply
 from src.services import gemini, rate_limiter
 from src.config import settings
+from src.services import gamification
 
 router = Router()
 
@@ -271,9 +272,37 @@ async def process_food_confirm(message: Message, state: FSMContext, user_languag
                 meal_type=meal_type
             )
             
+            # Update streaks & check achievements
+            db_user_obj = await crud.get_user(db, message.from_user.id)
+            streak_val, freeze_used, freezes_left = 0, False, 1
+            new_ach_keys = []
+            if db_user_obj:
+                streak_val, freeze_used, freezes_left = await gamification.process_food_log_streak(db, db_user_obj)
+                new_ach_keys = await gamification.check_new_achievements(db, message.from_user.id)
+            
+            ach_notifs = []
+            for ach_key in new_ach_keys:
+                ach_def = gamification.ACHIEVEMENTS.get(ach_key)
+                if ach_def:
+                    icon = ach_def["icon"]
+                    name = i18n_locales.get_text(ach_def["name_key"], user_language)
+                    desc = i18n_locales.get_text(ach_def["desc_key"], user_language)
+                    ach_notifs.append(f"{icon} *{name}* — {desc}")
+            
+        msg_parts = [i18n_locales.get_text("food_logged", user_language)]
+        msg_parts.append(f"\n🔥 *{i18n_locales.get_text('streak_count', user_language, count=streak_val)}*")
+        
+        if freeze_used:
+            msg_parts.append(i18n_locales.get_text("streak_freeze_used", user_language, count=freezes_left))
+            
+        if ach_notifs:
+            msg_parts.append(f"\n🏆 *{i18n_locales.get_text('achievements_unlocked_title', user_language)}*")
+            msg_parts.extend(ach_notifs)
+            
         await message.answer(
-            i18n_locales.get_text("food_logged", user_language),
-            reply_markup=reply.get_main_menu(user_language, is_admin=is_admin)
+            "\n".join(msg_parts),
+            reply_markup=reply.get_main_menu(user_language, is_admin=is_admin),
+            parse_mode="Markdown"
         )
         await state.clear()
         

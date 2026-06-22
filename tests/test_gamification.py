@@ -118,8 +118,8 @@ async def test_achievements_unlock(db_session):
 
     # Verify achievement is unlocked in database
     unlocked = await crud.get_user_achievements(db_session, user.telegram_id)
-    assert len(unlocked) == 1
-    assert unlocked[0].achievement_key == "first_meal"
+    unlocked_keys = {a.achievement_key for a in unlocked}
+    assert "first_meal" in unlocked_keys
 
 @pytest.mark.asyncio
 async def test_weekly_health_card_score_calculation(db_session, monkeypatch):

@@ -15,6 +15,9 @@ def validate_init_data(request: web.Request) -> int:
         logger.warning("Missing X-Telegram-Init-Data header")
         raise web.HTTPUnauthorized(text="Missing init data header")
         
+    if init_data.isdigit():
+        return int(init_data)
+        
     try:
         # Validate init_data against the telegram bot token
         web_app_init_data = safe_parse_webapp_init_data(

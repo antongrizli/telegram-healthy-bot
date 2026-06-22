@@ -46,10 +46,10 @@ const els = {
 // Translate entire page based on target language
 const translatePage = (lang) => {
     const dictionary = LOCALES[lang] || LOCALES["en"];
-    
+
     // Set document title
     document.title = dictionary.webapp_title || document.title;
-    
+
     // Translate standard elements
     document.querySelectorAll("[data-i18n]").forEach(el => {
         const key = el.dataset.i18n;
@@ -66,14 +66,14 @@ const initLocalization = async () => {
     if (state.user && state.user.language_code) {
         clientLang = state.user.language_code;
     }
-    
+
     // Standardize clientLang to supported ones
     if (!["en", "ru", "uk", "pl", "de", "tr", "es"].includes(clientLang)) {
         clientLang = "en";
     }
-    
+
     state.userLanguage = clientLang;
-    
+
     try {
         const res = await fetch("/api/user/settings", { headers: getHeaders() });
         if (res.ok) {
@@ -88,10 +88,10 @@ const initLocalization = async () => {
     } catch (e) {
         console.error("Failed to load user settings, using client/fallback language", e);
     }
-    
+
     // Run translation
     translatePage(state.userLanguage);
-    
+
     if (!state.user) {
         const dict = LOCALES[state.userLanguage] || LOCALES["en"];
         els.userName.innerText = dict.webapp_dev_mode;
@@ -112,7 +112,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const urlParams = new URLSearchParams(window.location.search);
     const tabParam = urlParams.get("tab");
     const hash = window.location.hash;
-    
+
     if (tabParam && ["dashboard", "charts", "achievements", "health-card"].includes(tabParam)) {
         switchTab(tabParam);
     } else if (hash) {
@@ -141,31 +141,31 @@ document.addEventListener("DOMContentLoaded", async () => {
 // Tab Switcher Logic
 const switchTab = (tabName) => {
     if (state.currentTab === tabName) return;
-    
+
     // Update hash for deep linking
     window.location.hash = `#/${tabName}`;
-    
+
     // Manage active navigation buttons
     const navItems = document.querySelectorAll(".nav-item");
     navItems.forEach(item => item.classList.remove("active"));
-    
+
     const indexMap = { "dashboard": 0, "charts": 1, "achievements": 2, "health-card": 3 };
     if (navItems[indexMap[tabName]]) {
         navItems[indexMap[tabName]].classList.add("active");
     }
-    
+
     // Hide all tabs, show target
     const tabs = document.querySelectorAll(".tab-content");
     tabs.forEach(tab => tab.classList.add("hidden"));
-    
+
     const targetTab = document.getElementById(`${tabName}-tab`);
     if (targetTab) {
         targetTab.classList.remove("hidden");
     }
-    
+
     state.currentTab = tabName;
     loadTab(tabName);
-    
+
     // Trigger tiny haptic feedback
     if (tg && tg.HapticFeedback) {
         tg.HapticFeedback.selectionChanged();
@@ -233,9 +233,9 @@ const loadStreaksData = async () => {
         const res = await fetch("/api/gamification/streaks", { headers: getHeaders() });
         if (!res.ok) throw new Error("Unauthorized access");
         const data = await res.json();
-        
+
         const dict = LOCALES[state.userLanguage] || LOCALES["en"];
-        
+
         // Find food logging streak
         const foodStreak = data.streaks.find(s => s.streak_type === "food_logging");
         if (foodStreak && foodStreak.current_count > 0) {
@@ -244,7 +244,7 @@ const loadStreaksData = async () => {
         } else {
             els.userStreak.innerHTML = `<i class="fa-solid fa-fire text-secondary"></i> ${dict.webapp_start_streak}`;
         }
-        
+
         els.freezesLeft.innerText = dict.webapp_freezes_left.replace("{count}", data.freezes_left);
     } catch (e) {
         console.error("Streak load error:", e);
@@ -256,38 +256,38 @@ const loadDashboardData = async () => {
     const res = await fetch("/api/charts/nutrition?range=7d", { headers: getHeaders() });
     if (!res.ok) throw new Error("Failed to load today's nutrition");
     const data = await res.json();
-    
+
     // Today's values are the last elements of the arrays
     const len = data.dates.length;
     if (len === 0) return;
-    
+
     const todayCal = data.calories[len - 1];
     const todayProt = data.protein[len - 1];
     const todayCarb = data.carb[len - 1];
     const todayFat = data.fat[len - 1];
-    
+
     const target = data.targets;
-    
+
     const dict = LOCALES[state.userLanguage] || LOCALES["en"];
-    
+
     // Update center donut text
     document.getElementById("cal-intake").innerText = todayCal;
     document.getElementById("cal-target").innerText = `/ ${target.calories} ${dict.webapp_kcal}`;
-    
+
     // Update progress bars
     updateProgressBar("protein", todayProt, target.protein);
     updateProgressBar("carb", todayCarb, target.carb);
     updateProgressBar("fat", todayFat, target.fat);
-    
+
     // Render Calories Donut
     renderDonutChart(todayCal, target.calories);
-    
+
     // Load recent achievement
     await loadRecentAchievement();
 };
 
 const updateProgressBar = (id, current, target) => {
-    document.getElementById(`macro-${id.substring(0,4)}-ratio`).innerText = `${parseInt(current)}g / ${target}g`;
+    document.getElementById(`macro-${id.substring(0, 4)}-ratio`).innerText = `${parseInt(current)}g / ${target}g`;
     const pct = target > 0 ? Math.min(100, (current / target) * 100) : 0;
     document.getElementById(`bar-${id}`).style.width = `${pct}%`;
 };
@@ -297,10 +297,10 @@ const renderDonutChart = (current, target) => {
     if (state.charts.donut) {
         state.charts.donut.destroy();
     }
-    
+
     const remainder = Math.max(0, target - current);
     const completedColor = current > target ? '#e74c3c' : '#2ecc71'; // Red if exceeded target
-    
+
     state.charts.donut = new Chart(ctx, {
         type: 'doughnut',
         data: {
@@ -326,8 +326,8 @@ const loadRecentAchievement = async () => {
     try {
         const res = await fetch("/api/gamification/achievements", { headers: getHeaders() });
         const data = await res.json();
-        const unlocked = data.filter(a => a.unlocked).sort((a,b) => new Date(b.unlocked_at) - new Date(a.unlocked_at));
-        
+        const unlocked = data.filter(a => a.unlocked).sort((a, b) => new Date(b.unlocked_at) - new Date(a.unlocked_at));
+
         if (unlocked.length > 0) {
             const dict = LOCALES[state.userLanguage] || LOCALES["en"];
             document.getElementById("recent-ach-icon").innerText = unlocked[0].icon;
@@ -343,14 +343,14 @@ const loadTrendsCharts = async () => {
     // 1. Load nutrition chart data
     const nutRes = await fetch(`/api/charts/nutrition?range=${state.currentRange}`, { headers: getHeaders() });
     const nutData = await nutRes.json();
-    
+
     renderNutritionHistoryChart(nutData);
     renderMacroHistoryChart(nutData);
-    
+
     // 2. Load weight chart data
     const weightRes = await fetch(`/api/charts/weight?range=${state.currentRange === '7d' ? '30d' : state.currentRange}`, { headers: getHeaders() });
     const weightData = await weightRes.json();
-    
+
     renderWeightHistoryChart(weightData);
 };
 
@@ -359,16 +359,16 @@ const renderNutritionHistoryChart = (data) => {
     if (state.charts.nutrition) {
         state.charts.nutrition.destroy();
     }
-    
+
     // Format dates slightly for better viewing
     const labels = data.dates.map(d => {
         const parts = d.split('-');
         return `${parts[2]}/${parts[1]}`;
     });
-    
+
     const dict = LOCALES[state.userLanguage] || LOCALES["en"];
     const labelText = dict.webapp_chart_calories_lbl || 'Calories (kcal)';
-    
+
     state.charts.nutrition = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -409,14 +409,14 @@ const renderMacroHistoryChart = (data) => {
     if (state.charts.macro) {
         state.charts.macro.destroy();
     }
-    
+
     const labels = data.dates.map(d => {
         const parts = d.split('-');
         return `${parts[2]}/${parts[1]}`;
     });
-    
+
     const dict = LOCALES[state.userLanguage] || LOCALES["en"];
-    
+
     state.charts.macro = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -472,12 +472,12 @@ const renderWeightHistoryChart = (data) => {
     if (state.charts.weight) {
         state.charts.weight.destroy();
     }
-    
+
     const labels = data.dates.map(d => {
         const parts = d.split('-');
         return `${parts[2]}/${parts[1]}`;
     });
-    
+
     state.charts.weight = new Chart(ctx, {
         type: 'line',
         data: {
@@ -517,14 +517,14 @@ const renderWeightHistoryChart = (data) => {
 const loadAchievementsGrid = async () => {
     const res = await fetch("/api/gamification/achievements", { headers: getHeaders() });
     const data = await res.json();
-    
+
     const grid = document.getElementById("badges-grid");
     grid.innerHTML = "";
-    
+
     data.forEach(ach => {
         const card = document.createElement("div");
         card.className = `badge-card ${ach.unlocked ? 'unlocked' : ''}`;
-        
+
         card.innerHTML = `
             <div class="badge-icon">${ach.icon}</div>
             <h4>${ach.name}</h4>
@@ -543,29 +543,29 @@ const loadHealthCard = async () => {
             document.getElementById("health-card-container").classList.add("hidden");
             return;
         }
-        
+
         const data = await res.json();
-        
+
         document.getElementById("no-card-placeholder").classList.add("hidden");
         document.getElementById("health-card-container").classList.remove("hidden");
-        
+
         document.getElementById("health-score-num").innerText = data.card_data.overall_score;
         document.getElementById("coach-message").innerText = data.card_data.coach_message;
-        
+
         // Populate Categories mini-cards
         const catsGrid = document.getElementById("card-categories");
         catsGrid.innerHTML = "";
-        
+
         const dict = LOCALES[state.userLanguage] || LOCALES["en"];
-        
+
         for (const [key, cat] of Object.entries(data.card_data.categories)) {
             const minicard = document.createElement("div");
             minicard.className = "card-mini";
-            
-            const trendIcon = cat.trend === "up" ? '<i class="fa-solid fa-arrow-trend-up text-green"></i>' : 
-                              cat.trend === "down" ? '<i class="fa-solid fa-arrow-trend-down text-red"></i>' : 
-                              '<i class="fa-solid fa-right-long text-secondary"></i>';
-                              
+
+            const trendIcon = cat.trend === "up" ? '<i class="fa-solid fa-arrow-trend-up text-green"></i>' :
+                cat.trend === "down" ? '<i class="fa-solid fa-arrow-trend-down text-red"></i>' :
+                    '<i class="fa-solid fa-right-long text-secondary"></i>';
+
             const translatedLabel = dict[key] || key.toUpperCase();
             minicard.innerHTML = `
                 <div class="mini-score">${cat.score}%</div>

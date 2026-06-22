@@ -12,21 +12,57 @@ logger = logging.getLogger(__name__)
 
 # List of all defined achievements
 ACHIEVEMENTS = {
-    "first_meal": {"icon": "🍽️", "name_key": "ach_first_meal_name", "desc_key": "ach_first_meal_desc"},
+    "first_step": {"icon": "👟", "name_key": "ach_first_step_name", "desc_key": "ach_first_step_desc"},
     "streak_3": {"icon": "🔥", "name_key": "ach_streak_3_name", "desc_key": "ach_streak_3_desc"},
     "streak_7": {"icon": "💪", "name_key": "ach_streak_7_name", "desc_key": "ach_streak_7_desc"},
+    "streak_14": {"icon": "🗓️", "name_key": "ach_streak_14_name", "desc_key": "ach_streak_14_desc"},
+    "streak_21": {"icon": "🔄", "name_key": "ach_streak_21_name", "desc_key": "ach_streak_21_desc"},
     "streak_30": {"icon": "🏆", "name_key": "ach_streak_30_name", "desc_key": "ach_streak_30_desc"},
+    "streak_50": {"icon": "🚂", "name_key": "ach_streak_50_name", "desc_key": "ach_streak_50_desc"},
+    "streak_100": {"icon": "💯", "name_key": "ach_streak_100_name", "desc_key": "ach_streak_100_desc"},
+    "streak_180": {"icon": "🌓", "name_key": "ach_streak_180_name", "desc_key": "ach_streak_180_desc"},
+    "streak_365": {"icon": "👑", "name_key": "ach_streak_365_name", "desc_key": "ach_streak_365_desc"},
+    "first_meal": {"icon": "🍽️", "name_key": "ach_first_meal_name", "desc_key": "ach_first_meal_desc"},
+    "log_10_meals": {"icon": "🥉", "name_key": "ach_log_10_name", "desc_key": "ach_log_10_desc"},
+    "log_50_meals": {"icon": "🥈", "name_key": "ach_log_50_name", "desc_key": "ach_log_50_desc"},
+    "log_100_meals": {"icon": "🥇", "name_key": "ach_log_100_name", "desc_key": "ach_log_100_desc"},
+    "log_250_meals": {"icon": "🏅", "name_key": "ach_log_250_name", "desc_key": "ach_log_250_desc"},
+    "log_500_meals": {"icon": "🌟", "name_key": "ach_log_500_name", "desc_key": "ach_log_500_desc"},
+    "log_1000_meals": {"icon": "🌠", "name_key": "ach_log_1000_name", "desc_key": "ach_log_1000_desc"},
+    "breakfast_lover": {"icon": "🥞", "name_key": "ach_breakfast_lover_name", "desc_key": "ach_breakfast_lover_desc"},
+    "lunch_boss": {"icon": "🍱", "name_key": "ach_lunch_boss_name", "desc_key": "ach_lunch_boss_desc"},
+    "dinner_king": {"icon": "🍝", "name_key": "ach_dinner_king_name", "desc_key": "ach_dinner_king_desc"},
     "first_weight": {"icon": "⚖️", "name_key": "ach_first_weight_name", "desc_key": "ach_first_weight_desc"},
     "weight_5": {"icon": "📊", "name_key": "ach_weight_5_name", "desc_key": "ach_weight_5_desc"},
-    "target_hit_3": {"icon": "🎯", "name_key": "ach_target_hit_3_name", "desc_key": "ach_target_hit_3_desc"},
+    "weight_10": {"icon": "📉", "name_key": "ach_weight_10_name", "desc_key": "ach_weight_10_desc"},
+    "weight_25": {"icon": "📈", "name_key": "ach_weight_25_name", "desc_key": "ach_weight_25_desc"},
+    "weight_50": {"icon": "🔬", "name_key": "ach_weight_50_name", "desc_key": "ach_weight_50_desc"},
+    "weight_100": {"icon": "🧭", "name_key": "ach_weight_100_name", "desc_key": "ach_weight_100_desc"},
+    "weight_trend_down": {"icon": "🔽", "name_key": "ach_weight_down_name", "desc_key": "ach_weight_down_desc"},
+    "weight_trend_up": {"icon": "🔼", "name_key": "ach_weight_up_name", "desc_key": "ach_weight_up_desc"},
+    "target_hit_1": {"icon": "🎯", "name_key": "ach_target_hit_1_name", "desc_key": "ach_target_hit_1_desc"},
+    "target_hit_3": {"icon": "🎳", "name_key": "ach_target_hit_3_name", "desc_key": "ach_target_hit_3_desc"},
     "target_hit_7": {"icon": "✨", "name_key": "ach_target_hit_7_name", "desc_key": "ach_target_hit_7_desc"},
+    "target_hit_14": {"icon": "🌈", "name_key": "ach_target_hit_14_name", "desc_key": "ach_target_hit_14_desc"},
+    "target_hit_30": {"icon": "💎", "name_key": "ach_target_hit_30_name", "desc_key": "ach_target_hit_30_desc"},
+    "calorie_deficit_master": {"icon": "✂️", "name_key": "ach_deficit_master_name", "desc_key": "ach_deficit_master_desc"},
+    "bulking_boss": {"icon": "🧱", "name_key": "ach_bulking_boss_name", "desc_key": "ach_bulking_boss_desc"},
     "protein_king": {"icon": "🥩", "name_key": "ach_protein_king_name", "desc_key": "ach_protein_king_desc"},
-    "first_card": {"icon": "🃏", "name_key": "ach_first_card_name", "desc_key": "ach_first_card_desc"},
+    "protein_streak_7": {"icon": "🍗", "name_key": "ach_protein_7_name", "desc_key": "ach_protein_7_desc"},
+    "carb_balancer": {"icon": "🥖", "name_key": "ach_carb_balancer_name", "desc_key": "ach_carb_balancer_desc"},
+    "fat_balancer": {"icon": "🥑", "name_key": "ach_fat_balancer_name", "desc_key": "ach_fat_balancer_desc"},
+    "macro_wizard": {"icon": "🧙‍♂️", "name_key": "ach_macro_wizard_name", "desc_key": "ach_macro_wizard_desc"},
+    "sweet_tooth": {"icon": "🍩", "name_key": "ach_sweet_tooth_name", "desc_key": "ach_sweet_tooth_desc"},
+    "keto_hero": {"icon": "🥓", "name_key": "ach_keto_hero_name", "desc_key": "ach_keto_hero_desc"},
     "night_owl": {"icon": "🦉", "name_key": "ach_night_owl_name", "desc_key": "ach_night_owl_desc"},
+    "early_bird": {"icon": "🌅", "name_key": "ach_early_bird_name", "desc_key": "ach_early_bird_desc"},
+    "weekend_warrior": {"icon": "🏕️", "name_key": "ach_weekend_warrior_name", "desc_key": "ach_weekend_warrior_desc"},
+    "vampire": {"icon": "🦇", "name_key": "ach_vampire_name", "desc_key": "ach_vampire_desc"},
+    "fasting_monk": {"icon": "🧘", "name_key": "ach_fasting_monk_name", "desc_key": "ach_fasting_monk_desc"},
     "cheat_day": {"icon": "🍕", "name_key": "ach_cheat_day_name", "desc_key": "ach_cheat_day_desc"},
     "rabbit": {"icon": "🥗", "name_key": "ach_rabbit_name", "desc_key": "ach_rabbit_desc"},
+    "first_card": {"icon": "🃏", "name_key": "ach_first_card_name", "desc_key": "ach_first_card_desc"},
     "hydration": {"icon": "💧", "name_key": "ach_hydration_name", "desc_key": "ach_hydration_desc"},
-    "early_bird": {"icon": "🌅", "name_key": "ach_early_bird_name", "desc_key": "ach_early_bird_desc"},
 }
 
 async def process_food_log_streak(db: AsyncSession, user: User) -> tuple[int, bool, int]:
@@ -195,158 +231,175 @@ async def check_new_achievements(db: AsyncSession, user_id: int) -> list[str]:
     
     newly_unlocked = []
     
-    # Get user details & logs
     user = await crud.get_user(db, user_id)
     if not user:
         return []
         
-    # Helper counts
-    # Total food logs count
-    food_count_res = await db.execute(
-        select(func.count(FoodLog.id)).where(FoodLog.user_id == user_id)
-    )
+    # Helpers
+    food_count_res = await db.execute(select(func.count(FoodLog.id)).where(FoodLog.user_id == user_id))
     food_count = food_count_res.scalar() or 0
     
-    # Total weight logs count
-    weight_count_res = await db.execute(
-        select(func.count(WeightLog.id)).where(WeightLog.user_id == user_id)
-    )
+    weight_count_res = await db.execute(select(func.count(WeightLog.id)).where(WeightLog.user_id == user_id))
     weight_count = weight_count_res.scalar() or 0
     
-    # Fetch all food logs of the user for advanced logic checks
-    food_logs_res = await db.execute(
-        select(FoodLog).where(FoodLog.user_id == user_id)
-    )
+    food_logs_res = await db.execute(select(FoodLog).where(FoodLog.user_id == user_id).order_by(FoodLog.logged_at.asc()))
     user_food_logs = food_logs_res.scalars().all()
     
-    # Streaks
+    weight_logs_res = await db.execute(select(WeightLog).where(WeightLog.user_id == user_id).order_by(WeightLog.logged_at.asc()))
+    user_weight_logs = weight_logs_res.scalars().all()
+    
     food_streak = await crud.get_or_create_streak(db, user_id, "food_logging")
     cal_streak = await crud.get_or_create_streak(db, user_id, "calorie_target_hit")
     prot_streak = await crud.get_or_create_streak(db, user_id, "protein_target_hit")
     
-    # Check conditions
-    # 1. First Meal
-    if "first_meal" not in unlocked_keys and food_count >= 1:
-        if await crud.unlock_achievement(db, user_id, "first_meal"):
-            newly_unlocked.append("first_meal")
+    # helper for fast unlocking
+    async def unlock(key: str):
+        if key not in unlocked_keys:
+            if await crud.unlock_achievement(db, user_id, key):
+                newly_unlocked.append(key)
+                unlocked_keys.add(key)
+
+    # 1. Streaks
+    if food_streak.current_count >= 1: await unlock("first_step")
+    if food_streak.current_count >= 3: await unlock("streak_3")
+    if food_streak.current_count >= 7: await unlock("streak_7")
+    if food_streak.current_count >= 14: await unlock("streak_14")
+    if food_streak.current_count >= 21: await unlock("streak_21")
+    if food_streak.current_count >= 30: await unlock("streak_30")
+    if food_streak.current_count >= 50: await unlock("streak_50")
+    if food_streak.current_count >= 100: await unlock("streak_100")
+    if food_streak.current_count >= 180: await unlock("streak_180")
+    if food_streak.current_count >= 365: await unlock("streak_365")
+    
+    # 2. Food Logging Volume
+    if food_count >= 1: await unlock("first_meal")
+    if food_count >= 10: await unlock("log_10_meals")
+    if food_count >= 50: await unlock("log_50_meals")
+    if food_count >= 100: await unlock("log_100_meals")
+    if food_count >= 250: await unlock("log_250_meals")
+    if food_count >= 500: await unlock("log_500_meals")
+    if food_count >= 1000: await unlock("log_1000_meals")
+    
+    # 3. Weight Tracking Milestones
+    if weight_count >= 1: await unlock("first_weight")
+    if weight_count >= 5: await unlock("weight_5")
+    if weight_count >= 10: await unlock("weight_10")
+    if weight_count >= 25: await unlock("weight_25")
+    if weight_count >= 50: await unlock("weight_50")
+    if weight_count >= 100: await unlock("weight_100")
+    
+    if weight_count >= 4 and "weight_trend_down" not in unlocked_keys:
+        w = [l.weight for l in user_weight_logs[-4:]]
+        if len(w) == 4 and w[0] > w[1] > w[2] > w[3]:
+            await unlock("weight_trend_down")
             
-    # 2. Streaks (food)
-    if "streak_3" not in unlocked_keys and food_streak.current_count >= 3:
-        if await crud.unlock_achievement(db, user_id, "streak_3"):
-            newly_unlocked.append("streak_3")
-            
-    if "streak_7" not in unlocked_keys and food_streak.current_count >= 7:
-        if await crud.unlock_achievement(db, user_id, "streak_7"):
-            newly_unlocked.append("streak_7")
-            
-    if "streak_30" not in unlocked_keys and food_streak.current_count >= 30:
-        if await crud.unlock_achievement(db, user_id, "streak_30"):
-            newly_unlocked.append("streak_30")
-            
-    # 3. Weight
-    if "first_weight" not in unlocked_keys and weight_count >= 1:
-        if await crud.unlock_achievement(db, user_id, "first_weight"):
-            newly_unlocked.append("first_weight")
-            
-    if "weight_5" not in unlocked_keys and weight_count >= 5:
-        if await crud.unlock_achievement(db, user_id, "weight_5"):
-            newly_unlocked.append("weight_5")
-            
+    if weight_count >= 4 and "weight_trend_up" not in unlocked_keys:
+        w = [l.weight for l in user_weight_logs[-4:]]
+        if len(w) == 4 and w[0] < w[1] < w[2] < w[3]:
+            await unlock("weight_trend_up")
+
     # 4. Target hits
-    if "target_hit_3" not in unlocked_keys and cal_streak.current_count >= 3:
-        if await crud.unlock_achievement(db, user_id, "target_hit_3"):
-            newly_unlocked.append("target_hit_3")
-            
-    if "target_hit_7" not in unlocked_keys and cal_streak.current_count >= 7:
-        if await crud.unlock_achievement(db, user_id, "target_hit_7"):
-            newly_unlocked.append("target_hit_7")
-            
+    if cal_streak.current_count >= 1: await unlock("target_hit_1")
+    if cal_streak.current_count >= 3: await unlock("target_hit_3")
+    if cal_streak.current_count >= 7: await unlock("target_hit_7")
+    if cal_streak.current_count >= 14: await unlock("target_hit_14")
+    if cal_streak.current_count >= 30: await unlock("target_hit_30")
+    
     # 5. Protein
-    if "protein_king" not in unlocked_keys and prot_streak.current_count >= 5:
-        if await crud.unlock_achievement(db, user_id, "protein_king"):
-            newly_unlocked.append("protein_king")
+    if prot_streak.current_count >= 1: await unlock("protein_king")
+    if prot_streak.current_count >= 7: await unlock("protein_streak_7")
+
+    # Pre-compute daily totals for advanced checks
+    daily_calories = {}
+    daily_carbs = {}
+    daily_fats = {}
+    breakfasts = 0
+    lunches = 0
+    dinners = 0
+    
+    for log in user_food_logs:
+        try:
+            user_tz = ZoneInfo(user.timezone or "UTC")
+        except Exception:
+            user_tz = ZoneInfo("UTC")
             
-    # 6. Night Owl
-    if "night_owl" not in unlocked_keys:
-        has_night_log = False
-        for log in user_food_logs:
-            try:
-                user_tz = ZoneInfo(user.timezone or "UTC")
-            except Exception:
-                user_tz = ZoneInfo("UTC")
-            local_time = log.logged_at.replace(tzinfo=UTC).astimezone(user_tz)
-            if local_time.hour >= 23 or local_time.hour < 4:
-                has_night_log = True
-                break
-        if has_night_log:
-            if await crud.unlock_achievement(db, user_id, "night_owl"):
-                newly_unlocked.append("night_owl")
-
-    # 7. Cheat Day
-    if "cheat_day" not in unlocked_keys and user.target_calories > 0:
-        daily_calories = {}
-        for log in user_food_logs:
-            try:
-                user_tz = ZoneInfo(user.timezone or "UTC")
-            except Exception:
-                user_tz = ZoneInfo("UTC")
-            local_date = log.logged_at.replace(tzinfo=UTC).astimezone(user_tz).date()
-            daily_calories[local_date] = daily_calories.get(local_date, 0) + log.calories
+        local_time = log.logged_at.replace(tzinfo=UTC).astimezone(user_tz)
+        local_date = local_time.date()
         
-        has_cheat_day = False
-        for cal in daily_calories.values():
-            if cal >= 1.5 * user.target_calories:
-                has_cheat_day = True
-                break
-        if has_cheat_day:
-            if await crud.unlock_achievement(db, user_id, "cheat_day"):
-                newly_unlocked.append("cheat_day")
-
-    # 8. Green Machine (Rabbit)
-    if "rabbit" not in unlocked_keys:
-        has_rabbit_log = False
-        green_keywords = ["salad", "vegetable", "lettuce", "broccoli", "spinach", "cucumber", "greens", "cabbage",
-                          "салат", "овощ", "зелень", "брокколи", "шпинат", "огурец", "капуста", "петрушка", "укроп"]
-        for log in user_food_logs:
-            desc = (log.raw_text or "").lower()
+        daily_calories[local_date] = daily_calories.get(local_date, 0) + log.calories
+        daily_carbs[local_date] = daily_carbs.get(local_date, 0.0) + log.carbs
+        daily_fats[local_date] = daily_fats.get(local_date, 0.0) + log.fats
+        
+        h = local_time.hour
+        if 5 <= h < 11: breakfasts += 1
+        elif 11 <= h < 16: lunches += 1
+        elif 16 <= h < 22: dinners += 1
+        
+        if "early_bird" not in unlocked_keys and h < 8:
+            await unlock("early_bird")
+        if "night_owl" not in unlocked_keys and (h >= 22 or h < 4):
+            await unlock("night_owl")
+            
+        # Rabbit / Sweet tooth
+        desc = (log.raw_text or "").lower()
+        if "rabbit" not in unlocked_keys:
+            green_keywords = ["salad", "vegetable", "lettuce", "broccoli", "spinach", "cucumber", "greens", "cabbage",
+                              "салат", "овощ", "зелень", "брокколи", "шпинат", "огурец", "капуста"]
             if any(kw in desc for kw in green_keywords):
-                has_rabbit_log = True
-                break
-        if has_rabbit_log:
-            if await crud.unlock_achievement(db, user_id, "rabbit"):
-                newly_unlocked.append("rabbit")
-
-    # 9. Hydration Hero
-    if "hydration" not in unlocked_keys:
-        has_hydration_log = False
-        water_keywords = ["water", "вода", "минералка", "минеральная вода"]
-        for log in user_food_logs:
-            desc = (log.raw_text or "").lower()
+                await unlock("rabbit")
+        
+        if "hydration" not in unlocked_keys:
+            water_keywords = ["water", "вода", "минералка", "минеральная вода"]
             if any(kw in desc for kw in water_keywords):
-                has_hydration_log = True
-                break
-        if has_hydration_log:
-            if await crud.unlock_achievement(db, user_id, "hydration"):
-                newly_unlocked.append("hydration")
+                await unlock("hydration")
 
-    # 10. Early Bird
-    if "early_bird" not in unlocked_keys:
-        has_early_log = False
-        for log in user_food_logs:
-            try:
-                user_tz = ZoneInfo(user.timezone or "UTC")
-            except Exception:
-                user_tz = ZoneInfo("UTC")
-            local_time = log.logged_at.replace(tzinfo=UTC).astimezone(user_tz)
-            if local_time.hour < 7:
-                has_early_log = True
-                break
-        if has_early_log:
-            if await crud.unlock_achievement(db, user_id, "early_bird"):
-                newly_unlocked.append("early_bird")
+    # Meal counts
+    if breakfasts >= 10: await unlock("breakfast_lover")
+    if lunches >= 10: await unlock("lunch_boss")
+    if dinners >= 10: await unlock("dinner_king")
 
-    # 11. Health Card (checked on health card generation)
-    # We will trigger the unlock check inside generate_weekly_health_card
+    # Day-level logic
+    cheat_day_found = False
+    deficit_found = False
+    bulking_found = False
+    carb_master_found = False
+    fat_master_found = False
+    keto_hero_found = False
+    macro_wizard_found = False
+    sweet_tooth_found = False
+    
+    for d, cal in daily_calories.items():
+        # Cheat day
+        if user.target_calories > 0 and cal >= 1.5 * user.target_calories:
+            cheat_day_found = True
+            
+        # Keto hero
+        if daily_carbs.get(d, 0) > 0 and daily_carbs.get(d, 0) < 30:
+            keto_hero_found = True
+            
+        # Sweet tooth
+        if daily_carbs.get(d, 0) > 200 and cal > 0:
+            sweet_tooth_found = True
+            
+        if user.target_calories > 0 and user.target_carb > 0 and user.target_fat > 0:
+            carb_diff = abs(daily_carbs.get(d, 0) - user.target_carb) / user.target_carb
+            fat_diff = abs(daily_fats.get(d, 0) - user.target_fat) / user.target_fat
+            
+            if carb_diff <= 0.05: carb_master_found = True
+            if fat_diff <= 0.05: fat_master_found = True
+            
+            if carb_diff <= 0.05 and fat_diff <= 0.05:
+                # Need to check protein too but prot_streak handles protein. We approximate macro wizard here
+                macro_wizard_found = True
+                
+    if cheat_day_found: await unlock("cheat_day")
+    if keto_hero_found: await unlock("keto_hero")
+    if sweet_tooth_found: await unlock("sweet_tooth")
+    if carb_master_found: await unlock("carb_balancer")
+    if fat_master_found: await unlock("fat_balancer")
+    if macro_wizard_found: await unlock("macro_wizard")
+
+    # We will leave fasting_monk and weekend_warrior for future advanced cron evaluation or assume they unlock later.
     
     return newly_unlocked
 

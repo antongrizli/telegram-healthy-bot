@@ -49,6 +49,19 @@ def format_dict_stats(stats_dict: dict, label_map: dict = None) -> str:
         lines.append(f"  • **{label}**: {v}")
     return "\n".join(lines)
 
+
+def format_queue_errors(queue_errors: dict, lang: str = "en") -> str:
+    if not queue_errors:
+        return "  • Ошибок нет" if lang == "ru" else "  • No errors"
+    lines = []
+    for err_msg, count in queue_errors.items():
+        if err_msg is None:
+            continue
+        clean_err = str(err_msg).replace("```", "'''")
+        label = "Количество" if lang == "ru" else "Count"
+        lines.append(f"  • **{label}**: {count}\n```\n{clean_err}\n```")
+    return "\n".join(lines)
+
 @router.message(F.text.in_(["📊 Stats", "📊 Статистика"]))
 async def cmd_admin_stats(message: Message, user_language: str):
     await message.answer(
@@ -192,7 +205,7 @@ async def cmd_admin_stats_queue(message: Message, user_language: str):
             f"⏳ **Запросов ИИ в очереди**: {stats['queued_requests']}\n"
             f"📊 **Статусы очереди**:\n{format_dict_stats(stats['queue_status_counts'])}\n"
             f"⏱️ **Среднее время ожидания в очереди**: {stats['queue_avg_latency_seconds']:.1f} сек.\n\n"
-            f"⚠️ **Последние ошибки в очереди**:\n{format_dict_stats(stats['queue_errors'])}\n"
+            f"⚠️ **Последние ошибки в очереди**:\n{format_queue_errors(stats['queue_errors'], user_language)}\n"
         )
     else:
         stats_text = (
@@ -200,7 +213,7 @@ async def cmd_admin_stats_queue(message: Message, user_language: str):
             f"⏳ **Active / Pending Requests in Queue**: {stats['queued_requests']}\n"
             f"📊 **Queue Status counts**:\n{format_dict_stats(stats['queue_status_counts'])}\n"
             f"⏱️ **Average Queue Latency**: {stats['queue_avg_latency_seconds']:.1f} seconds\n\n"
-            f"⚠️ **Recent Queue Errors**:\n{format_dict_stats(stats['queue_errors'])}\n"
+            f"⚠️ **Recent Queue Errors**:\n{format_queue_errors(stats['queue_errors'], user_language)}\n"
         )
 
     await message.answer(

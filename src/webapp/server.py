@@ -219,12 +219,35 @@ async def get_user_settings(request: web.Request) -> web.Response:
         })
 
 
+async def health_check(request: web.Request) -> web.Response:
+    """
+    GET /health
+    """
+    try:
+        async with AsyncSessionLocal() as db:
+            await db.execute(select(1))
+        return web.json_response({
+            "status": "healthy",
+            "database": "connected",
+            "timestamp": datetime.now(UTC).isoformat()
+        })
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return web.json_response({
+            "status": "unhealthy",
+            "database": "disconnected",
+            "error": str(e),
+            "timestamp": datetime.now(UTC).isoformat()
+        }, status=500)
+
+
 # Web App Routing Setup
 
 def create_app(bot) -> web.Application:
     app = web.Application()
     
     # Expose API endpoints
+    app.router.add_get("/health", health_check)
     app.router.add_get("/api/user/settings", get_user_settings)
     app.router.add_get("/api/charts/nutrition", get_nutrition_data)
     app.router.add_get("/api/charts/weight", get_weight_data)

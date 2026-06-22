@@ -9,6 +9,7 @@ from src.database import crud
 from src.services import gemini, rate_limiter
 from src.utils import i18n_locales
 from src.utils.escape import split_message
+from src.config import settings
 
 scheduler = AsyncIOScheduler()
 

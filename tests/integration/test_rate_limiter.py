@@ -416,3 +416,38 @@ async def test_execute_queued_analyze_food_input_multiple_images(db_session: Asy
     assert state == FoodLoggingState.waiting_for_confirm
 
 
+async def test_execute_queued_report_generation(db_session: AsyncSession, setup_test_user, mock_bot, monkeypatch):
+    storage = MemoryStorage()
+
+    # Mock DB queries / external services
+    monkeypatch.setattr("src.services.gemini.generate_report", AsyncMock(return_value="Mocked AI Weekly Report"))
+    monkeypatch.setattr("src.services.scheduler.send_multipart_message", AsyncMock())
+    monkeypatch.setattr("src.services.rate_limiter.check_rate_limit", AsyncMock(return_value=(False, 0)))
+
+    # Queue a weekly report
+    qid = await rate_limiter.add_to_queue(
+        db_session,
+        user_id=55555,
+        chat_id=55555,
+        request_type="generate_report",
+        payload={"report_type": "weekly"}
+    )
+
+    import sqlalchemy as sa
+    res = await db_session.execute(sa.select(AiRequestQueue).where(AiRequestQueue.id == qid))
+    item = res.scalar()
+
+    # Process item (this should succeed and mark status as completed)
+    await rate_limiter.process_next_queue_item(mock_bot, storage)
+    await db_session.commit()
+
+    # Fetch item again to verify updates
+    res = await db_session.execute(sa.select(AiRequestQueue).where(AiRequestQueue.id == qid))
+    item_after = res.scalar()
+
+    assert item_after.status == "completed"
+    assert item_after.processed_at is not None
+    assert item_after.last_error is None
+
+
+

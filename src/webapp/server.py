@@ -11,6 +11,7 @@ from src.database.models import FoodLog, WeightLog, Streak, Achievement, HealthC
 from src.webapp.auth import validate_init_data
 from src.services.gamification import ACHIEVEMENTS
 from src.utils import i18n_locales
+from src.webapp.middlewares import block_scanners_middleware
 
 logger = logging.getLogger(__name__)
 
@@ -244,7 +245,7 @@ async def health_check(request: web.Request) -> web.Response:
 # Web App Routing Setup
 
 def create_app(bot) -> web.Application:
-    app = web.Application()
+    app = web.Application(middlewares=[block_scanners_middleware])
     
     # Expose API endpoints
     app.router.add_get("/health", health_check)

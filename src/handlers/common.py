@@ -54,6 +54,9 @@ async def view_profile(message: Message, state: FSMContext, user_language: str, 
     )
     goal_str = i18n_locales.get_text(goal_key, user_language)
     daily_time = db_user.daily_report_time.strftime("%H:%M")
+    weekly_day_idx = db_user.weekly_report_day if db_user.weekly_report_day is not None else 6
+    weekly_day_name = i18n_locales.get_text(f"weekday_{weekly_day_idx}", user_language)
+    monthly_day = db_user.monthly_report_day if db_user.monthly_report_day is not None else 1
     
     profile_text = i18n_locales.get_text(
         "profile_view",
@@ -72,7 +75,9 @@ async def view_profile(message: Message, state: FSMContext, user_language: str, 
         target_fat=db_user.target_fat,
         target_carb=db_user.target_carb,
         notifications=notifications_str,
-        report_time=daily_time
+        report_time=daily_time,
+        weekly_day=weekly_day_name,
+        monthly_day=monthly_day
     )
     
     markup = reply.get_setup_profile_keyboard(user_language)

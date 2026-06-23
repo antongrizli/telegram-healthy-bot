@@ -38,3 +38,12 @@ async def init_db():
             await conn.execute(sa.text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_freeze_used_at TIMESTAMP WITHOUT TIME ZONE"))
         except Exception as e:
             logger.info(f"Users gamification columns check/migration skipped or handled: {e}")
+
+        # Add weekly_report_day and monthly_report_day to existing PostgreSQL users table if they don't exist
+        try:
+            await conn.execute(sa.text("ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_report_day INTEGER NOT NULL DEFAULT 6"))
+            await conn.execute(sa.text("ALTER TABLE users ADD COLUMN IF NOT EXISTS monthly_report_day INTEGER NOT NULL DEFAULT 1"))
+            # Migrate old default value 0 (intended as Sunday but mapped to Monday) to 6 (Sunday in APScheduler)
+            await conn.execute(sa.text("UPDATE users SET weekly_report_day = 6 WHERE weekly_report_day = 0"))
+        except Exception as e:
+            logger.info(f"Users report scheduling columns check/migration skipped or handled: {e}")

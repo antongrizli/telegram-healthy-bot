@@ -6,6 +6,7 @@ from aiogram.fsm.context import FSMContext
 from src.handlers.weight import WeightState, start_weight_logging, process_weight_input
 from src.handlers.profile import (
     ProfileStatesGroup, start_profile_setup, process_name, process_sex, process_notifications,
+    process_report_time, process_weekly_report_day, process_monthly_report_day,
     start_profile_deletion, process_confirm_delete,
     cancel_profile_deletion, process_invalid_delete_confirm
 )
@@ -484,6 +485,57 @@ async def test_weight_feedback_gain_weight_warn(db_session, mock_state):
     response_msg = message.answer.call_args[0][0]
     assert "78.5 kg" in response_msg
     assert "Please pay attention to your food intake or physical activity." in response_msg
+
+
+async def test_process_report_time_transitions_to_weekly_report_day(mock_state):
+    mock_state.get_data.return_value = {"language": "en"}
+    message = make_mock_message("21:30")
+    await process_report_time(message, mock_state, "en")
+
+    mock_state.update_data.assert_called_once()
+    mock_state.set_state.assert_called_once_with(ProfileStatesGroup.weekly_report_day)
+
+
+async def test_process_weekly_report_day_valid(mock_state):
+    mock_state.get_data.return_value = {"language": "en"}
+    message = make_mock_message("Sunday")
+    await process_weekly_report_day(message, mock_state, "en")
+
+    mock_state.update_data.assert_called_once_with(weekly_report_day=6)
+    mock_state.set_state.assert_called_once_with(ProfileStatesGroup.monthly_report_day)
+
+
+async def test_process_weekly_report_day_invalid(mock_state):
+    mock_state.get_data.return_value = {"language": "en"}
+    message = make_mock_message("InvalidDay")
+    await process_weekly_report_day(message, mock_state, "en")
+
+    mock_state.update_data.assert_not_called()
+    assert "Invalid weekday" in message.answer.call_args[0][0]
+
+
+async def test_process_monthly_report_day_valid(mock_state):
+    mock_state.get_data.return_value = {"language": "en"}
+    message = make_mock_message("15")
+    await process_monthly_report_day(message, mock_state, "en")
+
+    mock_state.update_data.assert_called_once_with(monthly_report_day=15)
+    mock_state.set_state.assert_called_once_with(ProfileStatesGroup.timezone)
+
+
+async def test_process_monthly_report_day_invalid(mock_state):
+    mock_state.get_data.return_value = {"language": "en"}
+    
+    # Text input
+    message = make_mock_message("abc")
+    await process_monthly_report_day(message, mock_state, "en")
+    assert "Invalid day of the month" in message.answer.call_args[0][0]
+
+    # Out of range input
+    message2 = make_mock_message("29")
+    await process_monthly_report_day(message2, mock_state, "en")
+    assert "Invalid day of the month" in message2.answer.call_args[0][0]
+
 
 
 

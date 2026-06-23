@@ -1700,6 +1700,238 @@ LOCALES = {
     },
 }
 
+# Programmatically update and extend locales for report scheduling preferences
+_scheduling_extensions = {
+    "en": {
+        "profile_view": (
+            "👤 *Your Profile*:\n\n"
+            "• *Name*: {name}\n"
+            "• *Sex*: {sex}\n"
+            "• *Age*: {age} years\n"
+            "• *Height*: {height} cm\n"
+            "• *Weight*: {weight} kg\n"
+            "• *Activity Level*: {activity}\n"
+            "• *Goal*: {goal}\n"
+            "• *Language*: {language}\n"
+            "• *Timezone*: {timezone}\n\n"
+            "📊 *Targets*:\n"
+            "• *Calories*: {target_calories} kcal\n"
+            "• *Protein*: {target_protein}g | *Fat*: {target_fat}g | *Carbs*: {target_carb}g\n\n"
+            "🔔 *Notifications*: {notifications}\n"
+            "• *Daily Report*: {report_time}\n"
+            "• *Weekly Report*: {weekly_day} at 21:00\n"
+            "• *Monthly Report*: Day {monthly_day} of month at 21:00"
+        ),
+        "profile_prompt_weekly_report_day": "Select the day of the week to receive your *weekly report*:",
+        "profile_prompt_monthly_report_day": "Select the day of the month to receive your *monthly report* (1-28):",
+        "invalid_weekday": "⚠️ Invalid weekday. Please choose from the buttons below:",
+        "invalid_day_of_month": "⚠️ Invalid day of the month. Please write a number between 1 and 28:",
+        "weekday_0": "Monday",
+        "weekday_1": "Tuesday",
+        "weekday_2": "Wednesday",
+        "weekday_3": "Thursday",
+        "weekday_4": "Friday",
+        "weekday_5": "Saturday",
+        "weekday_6": "Sunday",
+    },
+    "ru": {
+        "profile_view": (
+            "👤 *Ваш профиль*:\n\n"
+            "• *Имя*: {name}\n"
+            "• *Пол*: {sex}\n"
+            "• *Возраст*: {age} лет\n"
+            "• *Рост*: {height} см\n"
+            "• *Вес*: {weight} кг\n"
+            "• *Активность*: {activity}\n"
+            "• *Цель*: {goal}\n"
+            "• *Язык*: {language}\n"
+            "• *Часовой пояс*: {timezone}\n\n"
+            "📊 *Цели*:\n"
+            "• *Калории*: {target_calories} ккал\n"
+            "• *Белки*: {target_protein} г | *Жиры*: {target_fat} г | *Углеводы*: {target_carb} г\n\n"
+            "🔔 *Уведомления*: {notifications}\n"
+            "• *Дневной отчет*: {report_time}\n"
+            "• *Недельный отчет*: {weekly_day} в 21:00\n"
+            "• *Ежемесячный отчет*: {monthly_day}-е число в 21:00"
+        ),
+        "profile_prompt_weekly_report_day": "Выберите день недели для получения *еженедельного отчета*:",
+        "profile_prompt_monthly_report_day": "Выберите день месяца для получения *ежемесячного отчета* (1-28):",
+        "invalid_weekday": "⚠️ Некорректный день недели. Пожалуйста, выберите с помощью кнопок:",
+        "invalid_day_of_month": "⚠️ Некорректный день месяца. Пожалуйста, введите число от 1 до 28:",
+        "weekday_0": "Понедельник",
+        "weekday_1": "Вторник",
+        "weekday_2": "Среда",
+        "weekday_3": "Четверг",
+        "weekday_4": "Пятница",
+        "weekday_5": "Суббота",
+        "weekday_6": "Воскресенье",
+    },
+    "uk": {
+        "profile_view": (
+            "👤 *Ваш профіль*:\n\n"
+            "• *Ім'я*: {name}\n"
+            "• *Стать*: {sex}\n"
+            "• *Вік*: {age} років\n"
+            "• *Зріст*: {height} см\n"
+            "• *Вага*: {weight} кг\n"
+            "• *Рівень активності*: {activity}\n"
+            "• *Ціль*: {goal}\n"
+            "• *Мова*: {language}\n"
+            "• *Часовий пояс*: {timezone}\n\n"
+            "📊 *Цілі*:\n"
+            "• *Калорії*: {target_calories} ккал\n"
+            "• *Білки*: {target_protein} г | *Жири*: {target_fat} г | *Вуглеводи*: {target_carb} г\n\n"
+            "🔔 *Сповіщення*: {notifications}\n"
+            "• *Щоденний звіт*: {report_time}\n"
+            "• *Щотижневий звіт*: {weekly_day} о 21:00\n"
+            "• *Щомісячний звіт*: {monthly_day}-й день місяця о 21:00"
+        ),
+        "profile_prompt_weekly_report_day": "Оберіть день тижня для отримання *щотижневого звіту*:",
+        "profile_prompt_monthly_report_day": "Оберіть день місяця для отримання *щомісячного звіту* (1-28):",
+        "invalid_weekday": "⚠️ Неправильний день тижня. Будь ласка, оберіть за допомогою кнопок:",
+        "invalid_day_of_month": "⚠️ Неправильний день місяця. Будь ласка, введіть число від 1 до 28:",
+        "weekday_0": "Понеділок",
+        "weekday_1": "Вівторок",
+        "weekday_2": "Середа",
+        "weekday_3": "Четвер",
+        "weekday_4": "П'ятниця",
+        "weekday_5": "Субота",
+        "weekday_6": "Неділя",
+    },
+    "pl": {
+        "profile_view": (
+            "👤 *Twój Profil*:\n\n"
+            "• *Imię*: {name}\n"
+            "• *Płeć*: {sex}\n"
+            "• *Wiek*: {age} lat\n"
+            "• *Wzrost*: {height} cm\n"
+            "• *Waga*: {weight} kg\n"
+            "• *Poziom aktywności*: {activity}\n"
+            "• *Cel*: {goal}\n"
+            "• *Język*: {language}\n"
+            "• *Strefa czasowa*: {timezone}\n\n"
+            "📊 *Wartości docelowe*:\n"
+            "• *Kalorie*: {target_calories} kcal\n"
+            "• *Białko*: {target_protein}g | *Tłuszcz*: {target_fat}g | *Węglowodany*: {target_carb}g\n\n"
+            "🔔 *Powiadomienia*: {notifications}\n"
+            "• *Raport dzienny*: {report_time}\n"
+            "• *Raport tygodniowy*: {weekly_day} o 21:00\n"
+            "• *Raport miesięczny*: {monthly_day}. dzień miesiąca o 21:00"
+        ),
+        "profile_prompt_weekly_report_day": "Wybierz dzień tygodnia, aby otrzymywać *raport tygodniowy*:",
+        "profile_prompt_monthly_report_day": "Wybierz dzień miesiąca, aby otrzymywać *raport miesięczny* (1-28):",
+        "invalid_weekday": "⚠️ Nieprawidłowy dzień tygodnia. Wybierz z poniższych przycisków:",
+        "invalid_day_of_month": "⚠️ Nieprawidłowy dzień miesiąca. Wpisz liczbę od 1 do 28:",
+        "weekday_0": "Poniedziałek",
+        "weekday_1": "Wtorek",
+        "weekday_2": "Środa",
+        "weekday_3": "Czwartek",
+        "weekday_4": "Piątek",
+        "weekday_5": "Sobota",
+        "weekday_6": "Niedziela",
+    },
+    "de": {
+        "profile_view": (
+            "👤 *Dein Profil*:\n\n"
+            "• *Name*: {name}\n"
+            "• *Geschlecht*: {sex}\n"
+            "• *Alter*: {age} Jahre\n"
+            "• *Größe*: {height} cm\n"
+            "• *Gewicht*: {weight} kg\n"
+            "• *Aktivitätsniveau*: {activity}\n"
+            "• *Ziel*: {goal}\n"
+            "• *Sprache*: {language}\n"
+            "• *Zeitzone*: {timezone}\n\n"
+            "📊 *Ziele*:\n"
+            "• *Kalorien*: {target_calories} kcal\n"
+            "• *Eiweiß*: {target_protein}g | *Fett*: {target_fat}g | *Kohlenhydrate*: {target_carb}g\n\n"
+            "🔔 *Benachrichtigungen*: {notifications}\n"
+            "• *Täglicher Bericht*: {report_time}\n"
+            "• *Wöchentlicher Bericht*: {weekly_day} um 21:00 Uhr\n"
+            "• *Monatlicher Bericht*: {monthly_day}. des Monats um 21:00 Uhr"
+        ),
+        "profile_prompt_weekly_report_day": "Wählen Sie den Wochentag aus, an dem Sie Ihren *wöchentlichen Bericht* erhalten möchten:",
+        "profile_prompt_monthly_report_day": "Wählen Sie den Tag des Monats aus, an dem Sie Ihren *monatlichen Bericht* erhalten möchten (1-28):",
+        "invalid_weekday": "⚠️ Ungültiger Wochentag. Bitte wählen Sie aus den Schaltflächen unten:",
+        "invalid_day_of_month": "⚠️ Ungültiger Tag des Monats. Bitte geben Sie eine Zahl zwischen 1 und 28 ein:",
+        "weekday_0": "Montag",
+        "weekday_1": "Dienstag",
+        "weekday_2": "Mittwoch",
+        "weekday_3": "Donnerstag",
+        "weekday_4": "Freitag",
+        "weekday_5": "Samstag",
+        "weekday_6": "Sonntag",
+    },
+    "tr": {
+        "profile_view": (
+            "👤 *Profiliniz*:\n\n"
+            "• *İsim*: {name}\n"
+            "• *Cinsiyet*: {sex}\n"
+            "• *Yaş*: {age} yaş\n"
+            "• *Boy*: {height} cm\n"
+            "• *Kilo*: {weight} kg\n"
+            "• *Aktivite Seviyesi*: {activity}\n"
+            "• *Hedef*: {goal}\n"
+            "• *Dil*: {language}\n"
+            "• *Saat Dilimi*: {timezone}\n\n"
+            "📊 *Hedefler*:\n"
+            "• *Kalori*: {target_calories} kcal\n"
+            "• *Protein*: {target_protein}g | *Yağ*: {target_fat}g | *Karbonhidrat*: {target_carb}g\n\n"
+            "🔔 *Bildirimler*: {notifications}\n"
+            "• *Günlük Rapor*: {report_time}\n"
+            "• *Haftalık Rapor*: {weekly_day} saat 21:00'de\n"
+            "• *Aylık Rapor*: Ayın {monthly_day}. günü saat 21:00'de"
+        ),
+        "profile_prompt_weekly_report_day": "*Haftalık raporunuzu* almak istediğiniz haftanın gününü seçin:",
+        "profile_prompt_monthly_report_day": "*Aylık raporunuzu* almak istediğiniz ayın gününü seçin (1-28):",
+        "invalid_weekday": "⚠️ Geçersiz gün. Lütfen aşağıdaki butonlardan seçin:",
+        "invalid_day_of_month": "⚠️ Geçersiz ayın günü. Lütfen 1 ile 28 arasında bir sayı girin:",
+        "weekday_0": "Pazartesi",
+        "weekday_1": "Salı",
+        "weekday_2": "Çarşamba",
+        "weekday_3": "Perşembe",
+        "weekday_4": "Cuma",
+        "weekday_5": "Cumartesi",
+        "weekday_6": "Pazar",
+    },
+    "es": {
+        "profile_view": (
+            "👤 *Tu Perfil*:\n\n"
+            "• *Nombre*: {name}\n"
+            "• *Sexo*: {sex}\n"
+            "• *Edad*: {age} años\n"
+            "• *Altura*: {height} cm\n"
+            "• *Peso*: {weight} kg\n"
+            "• *Nivel de actividad*: {activity}\n"
+            "• *Objetivo*: {goal}\n"
+            "• *Idioma*: {language}\n"
+            "• *Zona horaria*: {timezone}\n\n"
+            "📊 *Objetivos*:\n"
+            "• *Calorías*: {target_calories} kcal\n"
+            "• *Proteínas*: {target_protein}g | *Grasas*: {target_fat}g | *Carbohidratos*: {target_carb}g\n\n"
+            "🔔 *Notificaciones*: {notifications}\n"
+            "• *Informe Diario*: {report_time}\n"
+            "• *Informe Semanal*: {weekly_day} a las 21:00\n"
+            "• *Informe Mensual*: El día {monthly_day} del mes a las 21:00"
+        ),
+        "profile_prompt_weekly_report_day": "Seleccione el día de la semana para recibir su *informe semanal*:",
+        "profile_prompt_monthly_report_day": "Seleccione el día del mes para recibir su *informe mensual* (1-28):",
+        "invalid_weekday": "⚠️ Día de la semana no válido. Seleccione uno de los botones:",
+        "invalid_day_of_month": "⚠️ Día del mes no válido. Ingrese un número entre 1 y 28:",
+        "weekday_0": "Lunes",
+        "weekday_1": "Martes",
+        "weekday_2": "Miércoles",
+        "weekday_3": "Jueves",
+        "weekday_4": "Viernes",
+        "weekday_5": "Sábado",
+        "weekday_6": "Domingo",
+    }
+}
+
+for _lang, _ext in _scheduling_extensions.items():
+    if _lang in LOCALES:
+        LOCALES[_lang].update(_ext)
+
 def get_text(key: str, lang: str = "en", **kwargs) -> str:
     lang = lang if lang in LOCALES else "en"
     text = LOCALES[lang].get(key, LOCALES["en"].get(key, key))

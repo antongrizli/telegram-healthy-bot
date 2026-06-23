@@ -25,6 +25,8 @@ class ProfileStatesGroup(StatesGroup):
     goal = State()
     notifications = State()
     report_time = State()
+    weekly_report_day = State()
+    monthly_report_day = State()
     timezone = State()
     confirm_delete = State()
 
@@ -109,6 +111,8 @@ async def start_profile_setup(message: Message, state: FSMContext, user_language
             "language": db_user.language,
             "notifications_enabled": db_user.notifications_enabled,
             "daily_report_time": db_user.daily_report_time.strftime("%H:%M") if db_user.daily_report_time else "21:00",
+            "weekly_report_day": db_user.weekly_report_day if db_user.weekly_report_day is not None else 6,
+            "monthly_report_day": db_user.monthly_report_day if db_user.monthly_report_day is not None else 1,
             "timezone": db_user.timezone or "UTC"
         }
     await state.update_data(current_profile=current_profile)
@@ -476,12 +480,81 @@ async def process_report_time(message: Message, state: FSMContext, user_language
             return
         
     await state.update_data(daily_report_time=parsed_time)
+    await state.set_state(ProfileStatesGroup.weekly_report_day)
+    
+    current_val = current_profile.get("weekly_report_day") if current_profile else None
+    await message.answer(
+        i18n_locales.get_text("profile_prompt_weekly_report_day", lang),
+        reply_markup=reply.get_weekly_report_day_keyboard(lang, current_val=current_val),
+        parse_mode="Markdown"
+    )
+
+@router.message(ProfileStatesGroup.weekly_report_day)
+async def process_weekly_report_day(message: Message, state: FSMContext, user_language: str):
+    state_data = await state.get_data()
+    lang = state_data.get("language", user_language)
+    current_profile = state_data.get("current_profile")
+    
+    text = message.text.strip()
+    
+    current_idx = current_profile.get("weekly_report_day") if current_profile else None
+    if current_profile and current_idx is not None and text == i18n_locales.get_text("btn_keep_current", lang, value=i18n_locales.get_text(f"weekday_{current_idx}", lang)):
+        selected_day = current_idx
+    else:
+        selected_day = None
+        for i in range(7):
+            if text in i18n_locales.get_all_translations(f"weekday_{i}"):
+                selected_day = i
+                break
+                
+        if selected_day is None:
+            current_val = current_idx
+            await message.answer(
+                i18n_locales.get_text("invalid_weekday", lang),
+                reply_markup=reply.get_weekly_report_day_keyboard(lang, current_val=current_val)
+            )
+            return
+
+    await state.update_data(weekly_report_day=selected_day)
+    await state.set_state(ProfileStatesGroup.monthly_report_day)
+    
+    current_val_monthly = current_profile.get("monthly_report_day") if current_profile else None
+    await message.answer(
+        i18n_locales.get_text("profile_prompt_monthly_report_day", lang),
+        reply_markup=reply.get_monthly_report_day_keyboard(lang, current_val=current_val_monthly),
+        parse_mode="Markdown"
+    )
+
+@router.message(ProfileStatesGroup.monthly_report_day)
+async def process_monthly_report_day(message: Message, state: FSMContext, user_language: str):
+    state_data = await state.get_data()
+    lang = state_data.get("language", user_language)
+    current_profile = state_data.get("current_profile")
+    
+    text = message.text.strip()
+    
+    current_val = current_profile.get("monthly_report_day") if current_profile else None
+    if current_profile and current_val is not None and text == i18n_locales.get_text("btn_keep_current", lang, value=str(current_val)):
+        selected_day = current_val
+    else:
+        try:
+            selected_day = int(text)
+            if not (1 <= selected_day <= 28):
+                raise ValueError()
+        except ValueError:
+            await message.answer(
+                i18n_locales.get_text("invalid_day_of_month", lang),
+                reply_markup=reply.get_monthly_report_day_keyboard(lang, current_val=current_val)
+            )
+            return
+
+    await state.update_data(monthly_report_day=selected_day)
     await state.set_state(ProfileStatesGroup.timezone)
     
-    current_val = current_profile["timezone"] if current_profile else None
+    current_val_tz = current_profile["timezone"] if current_profile else None
     await message.answer(
         i18n_locales.get_text("profile_prompt_timezone", lang),
-        reply_markup=reply.get_timezone_list_button_keyboard(lang, current_val=current_val),
+        reply_markup=reply.get_timezone_list_button_keyboard(lang, current_val=current_val_tz),
         parse_mode="Markdown"
     )
 
@@ -633,6 +706,8 @@ async def complete_profile_setup(
         except Exception:
             pass
     daily_report_time = state_data.get("daily_report_time", default_time)
+    weekly_report_day = state_data.get("weekly_report_day", current_profile.get("weekly_report_day") if current_profile else 6)
+    monthly_report_day = state_data.get("monthly_report_day", current_profile.get("monthly_report_day") if current_profile else 1)
     
     targets = formulas.calculate_targets(
         weight_kg=weight,
@@ -659,6 +734,8 @@ async def complete_profile_setup(
             timezone=selected_tz,
             notifications_enabled=notifications_enabled,
             daily_report_time=daily_report_time,
+            weekly_report_day=weekly_report_day,
+            monthly_report_day=monthly_report_day,
             target_calories=targets["calories"],
             target_protein=targets["protein"],
             target_fat=targets["fat"],

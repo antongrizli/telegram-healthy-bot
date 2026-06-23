@@ -20,7 +20,8 @@ class User(Base):
     timezone = Column(String(50), nullable=False, default="UTC")
     notifications_enabled = Column(Boolean, default=True)
     daily_report_time = Column(Time, default=time(21, 0))
-    weekly_report_day = Column(Integer, default=0) # 0 = Sunday, 6 = Saturday
+    weekly_report_day = Column(Integer, default=6) # 0 = Monday, 6 = Sunday
+    monthly_report_day = Column(Integer, default=1) # Day of the month: 1 to 28
     food_reminder_time = Column(Time, default=time(11, 0))
     target_calories = Column(Integer, nullable=False)
     target_protein = Column(Integer, nullable=False)

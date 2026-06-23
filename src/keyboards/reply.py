@@ -299,3 +299,34 @@ def get_admin_stats_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
+def get_weekly_report_day_keyboard(lang: str = "en", current_val: int = None) -> ReplyKeyboardMarkup:
+    kb = []
+    if current_val is not None:
+        current_name = get_text(f"weekday_{current_val}", lang)
+        kb.append([KeyboardButton(text=get_text("btn_keep_current", lang, value=current_name))])
+    
+    row = []
+    for i in range(6):  # 0 (Mon) to 5 (Sat)
+        row.append(KeyboardButton(text=get_text(f"weekday_{i}", lang)))
+        if len(row) == 2:
+            kb.append(row)
+            row = []
+            
+    kb.append([KeyboardButton(text=get_text("weekday_6", lang))]) # Sunday (6)
+    kb.append([KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")])
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_monthly_report_day_keyboard(lang: str = "en", current_val: int = None) -> ReplyKeyboardMarkup:
+    kb = []
+    if current_val is not None:
+        kb.append([KeyboardButton(text=get_text("btn_keep_current", lang, value=str(current_val)))])
+        
+    kb.append([
+        KeyboardButton(text="1"),
+        KeyboardButton(text="7"),
+        KeyboardButton(text="15"),
+        KeyboardButton(text="28")
+    ])
+    kb.append([KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")])
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+

@@ -399,7 +399,7 @@ def reschedule_user_jobs(bot: Bot, user):
         )
         
         # 3. Weekly Report
-        w_day = user.weekly_report_day or 0  # 0 = Sunday
+        w_day = user.weekly_report_day if user.weekly_report_day is not None else 6  # 6 = Sunday
         scheduler.add_job(
             send_weekly_report,
             CronTrigger(day_of_week=w_day, hour=21, minute=0, timezone=user_tz),
@@ -409,9 +409,10 @@ def reschedule_user_jobs(bot: Bot, user):
         )
         
         # 4. Monthly Report
+        m_day = user.monthly_report_day if user.monthly_report_day is not None else 1
         scheduler.add_job(
             send_monthly_report,
-            CronTrigger(day=1, hour=21, minute=0, timezone=user_tz),
+            CronTrigger(day=m_day, hour=21, minute=0, timezone=user_tz),
             id=f"user_{user_id}_monthly",
             args=[bot, user_id],
             replace_existing=True

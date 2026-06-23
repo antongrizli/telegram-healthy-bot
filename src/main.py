@@ -76,8 +76,18 @@ async def main():
     queue_worker_task = asyncio.create_task(start_queue_worker(bot, dp.storage))
 
     logger.info("Bot is starting polling...")
+    from aiogram.exceptions import TelegramNetworkError
+    
     try:
-        await dp.start_polling(bot)
+        retry_delay = 5
+        while True:
+            try:
+                await dp.start_polling(bot)
+                break  # Normal exit (e.g. shutdown signal received)
+            except (TelegramNetworkError, asyncio.TimeoutError) as e:
+                logger.error(f"Telegram connection timed out or failed: {e}. Retrying in {retry_delay} seconds...")
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, 60)
     finally:
         await bot.session.close()
         scheduler.scheduler.shutdown()

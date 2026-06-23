@@ -25,17 +25,27 @@ async def main():
     dp = Dispatcher(storage=MemoryStorage())
 
     # Set persistent Menu Button next to the message input field
-    try:
-        from aiogram.types import MenuButtonWebApp, WebAppInfo
-        await bot.set_chat_menu_button(
-            menu_button=MenuButtonWebApp(
-                text="Progress",
-                web_app=WebAppInfo(url=f"{settings.WEBAPP_URL}")
+    menu_button_set = False
+    async def try_set_menu_button():
+        nonlocal menu_button_set
+        if menu_button_set:
+            return True
+        try:
+            from aiogram.types import MenuButtonWebApp, WebAppInfo
+            await bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(
+                    text="Progress",
+                    web_app=WebAppInfo(url=f"{settings.WEBAPP_URL}")
+                )
             )
-        )
-        logger.info("Chat menu button configured successfully.")
-    except Exception as e:
-        logger.error(f"Failed to set chat menu button: {e}")
+            logger.info("Chat menu button configured successfully.")
+            menu_button_set = True
+            return True
+        except Exception as e:
+            logger.error(f"Failed to set chat menu button: {e}")
+            return False
+
+    await try_set_menu_button()
 
     # Register Global Telemetry and Localization Middlewares
     from src.middlewares.media_group import MediaGroupMiddleware
@@ -82,6 +92,8 @@ async def main():
         retry_delay = 5
         while True:
             try:
+                if not menu_button_set:
+                    await try_set_menu_button()
                 await dp.start_polling(bot)
                 break  # Normal exit (e.g. shutdown signal received)
             except (TelegramNetworkError, asyncio.TimeoutError) as e:

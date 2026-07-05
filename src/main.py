@@ -21,7 +21,16 @@ async def main():
     await init_db()
 
     logger.info("Initializing Bot and Dispatcher...")
-    bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
+    if settings.FORCE_IPV6:
+        import socket
+        import aiohttp
+        from aiogram.client.session.aiohttp import AiohttpSession
+        logger.info("Forcing IPv6 for Bot connection...")
+        connector = aiohttp.TCPConnector(family=socket.AF_INET6)
+        session = AiohttpSession(connector=connector)
+        bot = Bot(token=settings.TELEGRAM_BOT_TOKEN, session=session)
+    else:
+        bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
     dp = Dispatcher(storage=MemoryStorage())
 
     # Set persistent Menu Button next to the message input field

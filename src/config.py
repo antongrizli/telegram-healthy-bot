@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     ADMIN_USER_IDS: List[int] = Field(default_factory=list)
     DATABASE_URL: str
     WEBAPP_URL: str
+    FORCE_IPV6: bool = False
 
     @field_validator("ADMIN_USER_IDS", mode="before")
     @classmethod

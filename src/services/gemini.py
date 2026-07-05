@@ -35,7 +35,22 @@ class FoodAnalysisResponse(BaseModel):
     total_carb: float = Field(description="Sum of all carbohydrates in grams")
 
 # Initialize the Gemini Client
-client = genai.Client(api_key=settings.GEMINI_API_KEY)
+import httpx
+
+client_args = {"timeout": 30.0}
+async_client_args = {"timeout": 30.0}
+
+if settings.FORCE_IPV6:
+    client_args["transport"] = httpx.HTTPTransport(local_address="::")
+    async_client_args["transport"] = httpx.AsyncHTTPTransport(local_address="::")
+
+client = genai.Client(
+    api_key=settings.GEMINI_API_KEY,
+    http_options=types.HttpOptions(
+        client_args=client_args,
+        async_client_args=async_client_args
+    )
+)
 
 async def call_gemini_with_retry(
     contents,

@@ -23,11 +23,10 @@ async def main():
     logger.info("Initializing Bot and Dispatcher...")
     if settings.FORCE_IPV6:
         import socket
-        import aiohttp
         from aiogram.client.session.aiohttp import AiohttpSession
         logger.info("Forcing IPv6 for Bot connection...")
-        connector = aiohttp.TCPConnector(family=socket.AF_INET6)
-        session = AiohttpSession(connector=connector)
+        session = AiohttpSession()
+        session._connector_init["family"] = socket.AF_INET6
         bot = Bot(token=settings.TELEGRAM_BOT_TOKEN, session=session)
     else:
         bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)

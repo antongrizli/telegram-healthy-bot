@@ -57,7 +57,7 @@ async def send_daily_reminder(bot: Bot, user_id: int):
         except Exception as e:
             print(f"Error sending daily reminder to {user_id}: {e}")
 
-async def generate_and_send_report_direct(bot: Bot, db: AsyncSession, user, report_type: str):
+async def generate_and_send_report_direct(bot: Bot, db: AsyncSession, user, report_type: str, report_at: datetime | None = None):
     """Compiles logs, generates an AI report, logs the request, and sends it to the user."""
     user_id = user.telegram_id
     try:
@@ -65,7 +65,7 @@ async def generate_and_send_report_direct(bot: Bot, db: AsyncSession, user, repo
     except Exception:
         user_tz = ZoneInfo("UTC")
         
-    now_local = datetime.now(user_tz)
+    now_local = (report_at or datetime.now(UTC)).astimezone(user_tz)
     
     if report_type == "daily":
         start_of_day_local = datetime(now_local.year, now_local.month, now_local.day, tzinfo=user_tz)
@@ -160,6 +160,7 @@ async def generate_and_send_report_direct(bot: Bot, db: AsyncSession, user, repo
 
 
 async def send_daily_report(bot: Bot, user_id: int):
+    report_at = datetime.now(UTC)
     async with AsyncSessionLocal() as db:
         user = await crud.get_user(db, user_id)
         if not user or user.is_blocked:
@@ -172,7 +173,7 @@ async def send_daily_report(bot: Bot, user_id: int):
                 user_id=user_id,
                 chat_id=user_id,
                 request_type="generate_report",
-                payload={"report_type": "daily"}
+                payload={"report_type": "daily", "report_at": report_at.isoformat()}
             )
             position = await rate_limiter.get_queue_position(db, queue_id)
             await bot.send_message(
@@ -184,7 +185,7 @@ async def send_daily_report(bot: Bot, user_id: int):
 
         try:
             await bot.send_message(user_id, i18n_locales.get_text("report_calculating", user.language), parse_mode="Markdown")
-            await generate_and_send_report_direct(bot, db, user, "daily")
+            await generate_and_send_report_direct(bot, db, user, "daily", report_at=report_at)
         except Exception as e:
             print(f"Error sending daily report to {user_id}: {e}")
             queue_id = await rate_limiter.add_to_queue(
@@ -192,7 +193,7 @@ async def send_daily_report(bot: Bot, user_id: int):
                 user_id=user_id,
                 chat_id=user_id,
                 request_type="generate_report",
-                payload={"report_type": "daily"}
+                payload={"report_type": "daily", "report_at": report_at.isoformat()}
             )
             await bot.send_message(
                 user_id,
@@ -201,6 +202,7 @@ async def send_daily_report(bot: Bot, user_id: int):
             )
 
 async def send_weekly_report(bot: Bot, user_id: int):
+    report_at = datetime.now(UTC)
     async with AsyncSessionLocal() as db:
         user = await crud.get_user(db, user_id)
         if not user or user.is_blocked:
@@ -213,7 +215,7 @@ async def send_weekly_report(bot: Bot, user_id: int):
                 user_id=user_id,
                 chat_id=user_id,
                 request_type="generate_report",
-                payload={"report_type": "weekly"}
+                payload={"report_type": "weekly", "report_at": report_at.isoformat()}
             )
             position = await rate_limiter.get_queue_position(db, queue_id)
             await bot.send_message(
@@ -225,7 +227,7 @@ async def send_weekly_report(bot: Bot, user_id: int):
 
         try:
             await bot.send_message(user_id, i18n_locales.get_text("report_calculating", user.language), parse_mode="Markdown")
-            await generate_and_send_report_direct(bot, db, user, "weekly")
+            await generate_and_send_report_direct(bot, db, user, "weekly", report_at=report_at)
         except Exception as e:
             print(f"Error sending weekly report to {user_id}: {e}")
             queue_id = await rate_limiter.add_to_queue(
@@ -233,7 +235,7 @@ async def send_weekly_report(bot: Bot, user_id: int):
                 user_id=user_id,
                 chat_id=user_id,
                 request_type="generate_report",
-                payload={"report_type": "weekly"}
+                payload={"report_type": "weekly", "report_at": report_at.isoformat()}
             )
             await bot.send_message(
                 user_id,
@@ -242,6 +244,7 @@ async def send_weekly_report(bot: Bot, user_id: int):
             )
 
 async def send_monthly_report(bot: Bot, user_id: int):
+    report_at = datetime.now(UTC)
     async with AsyncSessionLocal() as db:
         user = await crud.get_user(db, user_id)
         if not user or user.is_blocked:
@@ -254,7 +257,7 @@ async def send_monthly_report(bot: Bot, user_id: int):
                 user_id=user_id,
                 chat_id=user_id,
                 request_type="generate_report",
-                payload={"report_type": "monthly"}
+                payload={"report_type": "monthly", "report_at": report_at.isoformat()}
             )
             position = await rate_limiter.get_queue_position(db, queue_id)
             await bot.send_message(
@@ -266,7 +269,7 @@ async def send_monthly_report(bot: Bot, user_id: int):
 
         try:
             await bot.send_message(user_id, i18n_locales.get_text("report_calculating", user.language), parse_mode="Markdown")
-            await generate_and_send_report_direct(bot, db, user, "monthly")
+            await generate_and_send_report_direct(bot, db, user, "monthly", report_at=report_at)
         except Exception as e:
             print(f"Error sending monthly report to {user_id}: {e}")
             queue_id = await rate_limiter.add_to_queue(
@@ -274,7 +277,7 @@ async def send_monthly_report(bot: Bot, user_id: int):
                 user_id=user_id,
                 chat_id=user_id,
                 request_type="generate_report",
-                payload={"report_type": "monthly"}
+                payload={"report_type": "monthly", "report_at": report_at.isoformat()}
             )
             await bot.send_message(
                 user_id,

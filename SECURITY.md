@@ -43,3 +43,14 @@ If you discover a security vulnerability in this project, please **do not open a
 
 ### 4. Input Sanitization and Markdown Escaping
 - Sanitise all user inputs before displaying them in responses using `escape_markdown` from `src.utils.escape` to avoid injection vulnerabilities or bot crashes caused by malformed markdown tokens.
+
+
+### 5. Dashboard Authentication and Database Access
+- Every private dashboard endpoint requires Telegram-signed `initData` with a valid timestamp. Plain user IDs are never credentials.
+- Blocked accounts are denied dashboard access and queued AI work.
+- Public health checks return generic failure status; database exception details stay in server logs.
+
+### 6. Durable Meal Confirmation
+- Meal drafts live in `ai_request_queue` with status `awaiting_confirm`. Confirmation and cancellation check ownership and atomically consume the draft. Meal insertion and draft consumption commit together.
+- Inline confirmation IDs survive bot restarts. `/pending` retrieves up to 20 outstanding drafts, oldest first; confirm or cancel those to see more.
+- The queue worker assumes a single application instance and resumes interrupted `processing` requests on startup. Horizontal scaling requires a database lease/claim mechanism first.

@@ -1948,3 +1948,41 @@ def get_all_translations(key: str) -> list[str]:
     for locale_dict in LOCALES.values():
         translations.add(locale_dict.get(key, LOCALES["en"].get(key, key)))
     return list(translations)
+
+
+for _lang, _text in {
+    "en": "This meal was already saved or cancelled, or is no longer available.",
+    "ru": "Этот приём пищи уже сохранён, отменён или больше недоступен.",
+    "uk": "Цей прийом їжі вже збережено, скасовано або він більше недоступний.",
+    "pl": "Ten posiłek został już zapisany, anulowany lub nie jest już dostępny.",
+    "de": "Diese Mahlzeit wurde bereits gespeichert, storniert oder ist nicht mehr verfügbar.",
+    "tr": "Bu öğün zaten kaydedildi, iptal edildi veya artık mevcut değil.",
+    "es": "Esta comida ya se guardó, se canceló o ya no está disponible.",
+}.items():
+    LOCALES[_lang]["draft_unavailable"] = _text
+
+
+for _lang, _text in {
+    "en": "No meals are waiting for confirmation.",
+    "ru": "Нет приёмов пищи, ожидающих подтверждения.",
+    "uk": "Немає прийомів їжі, що очікують підтвердження.",
+    "pl": "Żadne posiłki nie czekają na potwierdzenie.",
+    "de": "Keine Mahlzeiten warten auf Bestätigung.",
+    "tr": "Onay bekleyen öğün yok.",
+    "es": "No hay comidas pendientes de confirmación.",
+}.items():
+    LOCALES[_lang]["no_pending_meals"] = _text
+
+
+_recent_user_stats = {
+    "en": ("Recently joined (latest 10 in 30 days)", "No registrations in the last 30 days.", "No meals yet", "{name} (ID: {user_id})\nJoined: {joined_at}\nLast meal tracked: {last_meal_at}"),
+    "ru": ("Недавно зарегистрировались (последние 10 за 30 дней)", "За последние 30 дней регистраций нет.", "Ещё нет записей еды", "{name} (ID: {user_id})\nРегистрация: {joined_at}\nПоследняя запись еды: {last_meal_at}"),
+    "uk": ("Нещодавно зареєструвалися (останні 10 за 30 днів)", "За останні 30 днів реєстрацій немає.", "Ще немає записів їжі", "{name} (ID: {user_id})\nРеєстрація: {joined_at}\nОстанній запис їжі: {last_meal_at}"),
+    "pl": ("Nowi użytkownicy (ostatnich 10 w ciągu 30 dni)", "Brak rejestracji w ostatnich 30 dniach.", "Brak posiłków", "{name} (ID: {user_id})\nRejestracja: {joined_at}\nOstatni posiłek: {last_meal_at}"),
+    "de": ("Neue Nutzer (letzte 10 in 30 Tagen)", "Keine Registrierungen in den letzten 30 Tagen.", "Noch keine Mahlzeiten", "{name} (ID: {user_id})\nRegistriert: {joined_at}\nLetzte erfasste Mahlzeit: {last_meal_at}"),
+    "tr": ("Yeni katılanlar (30 gündeki son 10 kişi)", "Son 30 günde kayıt yok.", "Henüz öğün yok", "{name} (ID: {user_id})\nKatılım: {joined_at}\nSon kaydedilen öğün: {last_meal_at}"),
+    "es": ("Nuevos usuarios (últimos 10 en 30 días)", "No hubo registros en los últimos 30 días.", "Sin comidas todavía", "{name} (ID: {user_id})\nRegistro: {joined_at}\nÚltima comida registrada: {last_meal_at}"),
+}
+for _lang, _values in _recent_user_stats.items():
+    LOCALES[_lang].update(dict(zip(
+        ("admin_recent_users_header", "admin_recent_users_empty", "admin_no_meals_yet", "admin_recent_user_row"), _values)))

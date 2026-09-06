@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, UTC
 from unittest.mock import AsyncMock, MagicMock
 from aiogram.types import Message, User, Chat
 from aiogram.fsm.context import FSMContext
@@ -21,6 +22,7 @@ def make_mock_message(text: str, user_id: int = 12345, username: str = "testuser
     message = MagicMock(spec=Message)
     message.from_user = from_user
     message.chat = chat
+    message.date = datetime.now(UTC)
     message.text = text
     message.bot = MagicMock()
     message.bot.send_message = AsyncMock()

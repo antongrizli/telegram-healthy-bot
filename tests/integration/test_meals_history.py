@@ -391,7 +391,7 @@ async def test_process_food_input_photo_and_caption(mock_state, monkeypatch):
     )
     
     # State should be updated with the analysis results and the image/raw text info
-    mock_state.update_data.assert_called_once_with(
+    mock_state.update_data.assert_any_call(
         analysis=mock_analysis.model_dump(),
         image_file_id="photo2",
         raw_text="This is a delicious breakfast of oatmeal and berries"

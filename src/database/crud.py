@@ -50,8 +50,12 @@ async def add_food_log(
     carbs: float,
     image_file_id: str = None,
     raw_text: str = None,
-    meal_type: str = "food"
+    meal_type: str = "food",
+    logged_at: datetime | None = None
 ) -> FoodLog:
+    logged_at = logged_at or datetime.now(UTC)
+    if logged_at.tzinfo is None:
+        logged_at = logged_at.replace(tzinfo=UTC)
     food_log = FoodLog(
         user_id=user_id,
         items_json=items_json,
@@ -62,7 +66,7 @@ async def add_food_log(
         image_file_id=image_file_id,
         raw_text=raw_text,
         meal_type=meal_type,
-        logged_at=datetime.now(UTC).replace(tzinfo=None)
+        logged_at=logged_at.astimezone(UTC).replace(tzinfo=None)
     )
     db.add(food_log)
     await db.commit()
@@ -460,3 +464,78 @@ async def get_latest_health_card(db: AsyncSession, user_id: int) -> HealthCard |
     )
     return result.scalars().first()
 
+
+
+async def save_meal_draft(db, user_id, payload, draft_id=None, commit=True):
+    """Persist a confirmation independently of the bot's in-memory FSM."""
+    if draft_id is not None:
+        result = await db.execute(
+            update(AiRequestQueue).where(
+                AiRequestQueue.id == draft_id, AiRequestQueue.user_id == user_id,
+                AiRequestQueue.status == "awaiting_confirm"
+            ).values(payload=payload).returning(AiRequestQueue.id)
+        )
+        saved_id = result.scalar_one_or_none()
+        await db.commit()
+        return saved_id
+    draft = AiRequestQueue(user_id=user_id, chat_id=user_id, request_type="meal_draft",
+                           payload=payload, status="awaiting_confirm")
+    db.add(draft)
+    await db.flush()
+    if commit:
+        await db.commit()
+    return draft.id
+
+
+async def get_meal_draft(db, draft_id, user_id):
+    result = await db.execute(select(AiRequestQueue).where(
+        AiRequestQueue.id == draft_id, AiRequestQueue.user_id == user_id,
+        AiRequestQueue.status == "awaiting_confirm"))
+    return result.scalar_one_or_none()
+
+
+async def finish_meal_draft(db, draft_id, user_id, accept=True):
+    """Atomically consume a user's draft and insert its meal once, even on retries."""
+    result = await db.execute(update(AiRequestQueue).where(
+        AiRequestQueue.id == draft_id, AiRequestQueue.user_id == user_id,
+        AiRequestQueue.status == "awaiting_confirm"
+    ).values(status="saved" if accept else "cancelled").returning(AiRequestQueue.payload))
+    payload = result.scalar_one_or_none()
+    if payload is None:
+        return None
+    if not accept:
+        await db.commit()
+        return True
+    analysis = payload["analysis"]
+    logged_at = datetime.fromisoformat(payload["logged_at"])
+    meal = FoodLog(user_id=user_id, items_json=analysis["food_items"],
+        calories=analysis["total_calories"], proteins=analysis["total_protein"],
+        fats=analysis["total_fat"], carbs=analysis["total_carb"],
+        raw_text=payload.get("raw_text"), image_file_id=payload.get("image_file_id"),
+        meal_type=payload.get("meal_type", "food"),
+        logged_at=logged_at.replace(tzinfo=UTC) if logged_at.tzinfo is None else logged_at)
+    meal.logged_at = meal.logged_at.astimezone(UTC).replace(tzinfo=None)
+    db.add(meal)
+    await db.commit()
+    return meal
+
+
+async def get_pending_meals(db, user_id):
+    result = await db.execute(select(AiRequestQueue).where(
+        AiRequestQueue.user_id == user_id, AiRequestQueue.status == "awaiting_confirm"
+    ).order_by(AiRequestQueue.id.asc()).limit(20))
+    return list(result.scalars().all())
+
+
+async def get_recent_user_activity(db: AsyncSession) -> list[dict]:
+    """Latest 10 registrations in 30 days, including users with no saved meals."""
+    cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=30)
+    last_meal = (select(func.max(FoodLog.logged_at))
+                 .where(FoodLog.user_id == User.telegram_id)
+                 .correlate(User).scalar_subquery())
+    result = await db.execute(select(
+        User.telegram_id, User.name, User.created_at.label("joined_at"),
+        last_meal.label("last_meal_at")
+    ).where(User.created_at >= cutoff)
+     .order_by(User.created_at.desc(), User.telegram_id.desc()).limit(10))
+    return [dict(row) for row in result.mappings()]

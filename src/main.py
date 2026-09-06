@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher
-from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.fsm.storage.memory import MemoryStorage, SimpleEventIsolation
 from src.config import settings
 from src.handlers import common, profile, food, weight, admin, callbacks
 from src.middlewares.i18n import LanguageMiddleware
@@ -30,7 +30,7 @@ async def main():
         bot = Bot(token=settings.TELEGRAM_BOT_TOKEN, session=session)
     else:
         bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
-    dp = Dispatcher(storage=MemoryStorage())
+    dp = Dispatcher(storage=MemoryStorage(), events_isolation=SimpleEventIsolation())
 
     # Set persistent Menu Button next to the message input field
     menu_button_set = False

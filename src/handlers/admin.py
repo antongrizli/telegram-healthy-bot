@@ -1,4 +1,5 @@
 import re
+from datetime import UTC
 from aiogram import Router, F
 from aiogram.filters import Command, StateFilter
 from aiogram.types import Message
@@ -118,10 +119,30 @@ async def cmd_admin_stats_demographics(message: Message, user_language: str):
         parse_mode="Markdown"
     )
 
+def format_recent_user_activity(users: list[dict], language: str) -> str:
+    lines = [i18n_locales.get_text("admin_recent_users_header", language)]
+    if not users:
+        lines.append(i18n_locales.get_text("admin_recent_users_empty", language))
+    for user in users:
+        def timestamp(value):
+            if value is None:
+                return i18n_locales.get_text("admin_no_meals_yet", language)
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=UTC)
+            return value.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+        name = " ".join(user["name"].split())[:80]
+        lines.append(i18n_locales.get_text("admin_recent_user_row", language,
+            name=name, user_id=user["telegram_id"],
+            joined_at=timestamp(user["joined_at"]), last_meal_at=timestamp(user["last_meal_at"])))
+    return "\n\n".join(lines)
+
+
 @router.message(F.text.in_(i18n_locales.get_all_translations("btn_stats_engagement")))
 async def cmd_admin_stats_engagement(message: Message, user_language: str):
     async with AsyncSessionLocal() as db:
         stats = await crud.get_admin_stats(db)
+        recent_users = await crud.get_recent_user_activity(db)
         
     active_24h = stats['active_users_24h']
     avg_meals = (stats['food_logs_24h'] / active_24h) if active_24h > 0 else 0.0
@@ -154,6 +175,8 @@ async def cmd_admin_stats_engagement(message: Message, user_language: str):
         reply_markup=reply.get_admin_stats_keyboard(user_language),
         parse_mode="Markdown"
     )
+
+    await message.answer(format_recent_user_activity(recent_users, user_language), parse_mode=None)
 
 @router.message(F.text.in_(i18n_locales.get_all_translations("btn_stats_ai")))
 async def cmd_admin_stats_ai(message: Message, user_language: str):

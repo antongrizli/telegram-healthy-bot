@@ -42,3 +42,22 @@ def test_format_queue_errors_escapes_triple_backticks():
     result = format_queue_errors(errors, "en")
     assert "'''" in result
     assert "```" in result  # outer block still present
+
+
+def test_recent_user_activity_formats_timestamps_and_names_safely():
+    from datetime import datetime, timezone, timedelta
+    from src.handlers.admin import format_recent_user_activity
+    result = format_recent_user_activity([{
+        "telegram_id": 42, "name": "Test_*\n User",
+        "joined_at": datetime(2026, 9, 6, 12, 0, tzinfo=timezone(timedelta(hours=2))),
+        "last_meal_at": datetime(2026, 9, 6, 11, 30)
+    }], "en")
+    assert "Test_* User (ID: 42)" in result
+    assert "Joined: 2026-09-06 10:00:00 UTC" in result
+    assert "Last meal tracked: 2026-09-06 11:30:00 UTC" in result
+
+
+def test_recent_user_activity_empty_is_localized():
+    from src.handlers.admin import format_recent_user_activity
+    assert "No registrations" in format_recent_user_activity([], "en")
+    assert "регистраций нет" in format_recent_user_activity([], "ru")

@@ -15,6 +15,15 @@ from src.webapp.middlewares import block_scanners_middleware
 
 logger = logging.getLogger(__name__)
 
+async def require_active_user(user_id, db):
+    user = await crud.get_user(db, user_id)
+    if not user:
+        raise web.HTTPUnauthorized(text="User not found")
+    if user.is_blocked:
+        raise web.HTTPForbidden(text="Access denied")
+    return user
+
+
 # JSON API Endpoints
 
 async def get_nutrition_data(request: web.Request) -> web.Response:
@@ -32,9 +41,7 @@ async def get_nutrition_data(request: web.Request) -> web.Response:
         days_count = 90
         
     async with AsyncSessionLocal() as db:
-        user = await crud.get_user(db, user_id)
-        if not user:
-            return web.json_response({"error": "User not found"}, status=404)
+        user = await require_active_user(user_id, db)
             
         try:
             user_tz = ZoneInfo(user.timezone or "UTC")
@@ -42,7 +49,7 @@ async def get_nutrition_data(request: web.Request) -> web.Response:
             user_tz = ZoneInfo("UTC")
             
         local_now = datetime.now(user_tz)
-        local_today = datetime(local_now.year, local_now.month, local_now.day)
+        local_today = datetime(local_now.year, local_now.month, local_now.day, tzinfo=user_tz)
         
         start_date_local = local_today - timedelta(days=days_count - 1)
         start_date_utc = start_date_local.astimezone(UTC).replace(tzinfo=None)
@@ -105,9 +112,7 @@ async def get_weight_data(request: web.Request) -> web.Response:
         days_count = 180
         
     async with AsyncSessionLocal() as db:
-        user = await crud.get_user(db, user_id)
-        if not user:
-            return web.json_response({"error": "User not found"}, status=404)
+        user = await require_active_user(user_id, db)
             
         try:
             user_tz = ZoneInfo(user.timezone or "UTC")
@@ -141,9 +146,7 @@ async def get_streaks_data(request: web.Request) -> web.Response:
     """
     user_id = validate_init_data(request)
     async with AsyncSessionLocal() as db:
-        user = await crud.get_user(db, user_id)
-        if not user:
-            return web.json_response({"error": "User not found"}, status=404)
+        user = await require_active_user(user_id, db)
             
         streaks = await crud.get_user_streaks(db, user_id)
         result = []
@@ -166,9 +169,7 @@ async def get_achievements_data(request: web.Request) -> web.Response:
     """
     user_id = validate_init_data(request)
     async with AsyncSessionLocal() as db:
-        user = await crud.get_user(db, user_id)
-        if not user:
-            return web.json_response({"error": "User not found"}, status=404)
+        user = await require_active_user(user_id, db)
             
         unlocked = await crud.get_user_achievements(db, user_id)
         unlocked_keys = {a.achievement_key: a.unlocked_at for a in unlocked}
@@ -193,6 +194,7 @@ async def get_health_card_data(request: web.Request) -> web.Response:
     """
     user_id = validate_init_data(request)
     async with AsyncSessionLocal() as db:
+        await require_active_user(user_id, db)
         card = await crud.get_latest_health_card(db, user_id)
         if not card:
             return web.json_response({"error": "No health card generated yet"}, status=404)
@@ -210,9 +212,7 @@ async def get_user_settings(request: web.Request) -> web.Response:
     """
     user_id = validate_init_data(request)
     async with AsyncSessionLocal() as db:
-        user = await crud.get_user(db, user_id)
-        if not user:
-            return web.json_response({"error": "User not found"}, status=404)
+        user = await require_active_user(user_id, db)
         return web.json_response({
             "language": user.language or "en",
             "name": user.name or "Guest",
@@ -237,7 +237,6 @@ async def health_check(request: web.Request) -> web.Response:
         return web.json_response({
             "status": "unhealthy",
             "database": "disconnected",
-            "error": str(e),
             "timestamp": datetime.now(UTC).isoformat()
         }, status=500)
 

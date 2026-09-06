@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, UTC, timedelta
 from typing import Optional, Tuple
 
-from sqlalchemy import select, delete, func
+from sqlalchemy import select, delete, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from aiogram import Bot
 from aiogram.fsm.storage.base import StorageKey
@@ -119,7 +119,7 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
     payload = item.payload
 
     user = await crud.get_user(db, user_id)
-    if not user:
+    if not user or user.is_blocked:
         logger.warning(f"Queue item {item.id} has no user in database.")
         return False
 
@@ -127,9 +127,17 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
     key = StorageKey(bot_id=bot.id, chat_id=chat_id, user_id=user_id)
     fsm_context = FSMContext(storage=storage, key=key)
 
+    # A retry after delivery failure reuses the persisted result and confirmation.
+    if payload.get("result_draft_id"):
+        from src.handlers.food import get_draft_keyboard
+        draft = await crud.get_meal_draft(db, payload["result_draft_id"], user_id)
+        if draft:
+            await bot.send_message(chat_id, payload["result_text"],
+                reply_markup=get_draft_keyboard(draft.id, user_language), parse_mode="Markdown")
+        return True
+
     if req_type == "analyze_food_input":
         from src.handlers.food import FoodLoggingState
-        current_state = await fsm_context.get_state()
 
         text_desc = payload.get("text_description")
         image_file_id = payload.get("image_file_id")
@@ -194,29 +202,23 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
             carb=analysis.total_carb
         )
 
-        if current_state == FoodLoggingState.waiting_for_input:
-            analysis_dict = analysis.model_dump()
-            await fsm_context.update_data(
-                analysis=analysis_dict,
-                image_file_id=image_file_id,
-                image_file_ids=image_file_ids,
-                raw_text=text_desc,
-                meal_type=meal_type
-            )
+        draft_payload = {
+            "analysis": analysis.model_dump(), "raw_text": text_desc,
+            "image_file_id": image_file_id, "meal_type": meal_type,
+            "logged_at": payload.get("logged_at") or item.created_at.replace(tzinfo=UTC).isoformat()
+        }
+        draft_id = await crud.save_meal_draft(db, user_id, draft_payload, commit=False)
+        item.payload = {**payload, "result_draft_id": draft_id, "result_text": result_text}
+        await db.commit()
+        # Do not replace another meal's state if the user moved on during analysis.
+        current_data = await fsm_context.get_data()
+        if (await fsm_context.get_state() == FoodLoggingState.waiting_for_input
+                and current_data.get("logged_at") == payload.get("logged_at")):
+            await fsm_context.update_data(**draft_payload, draft_id=draft_id)
             await fsm_context.set_state(FoodLoggingState.waiting_for_confirm)
-            from src.keyboards import reply
-            await bot.send_message(
-                chat_id,
-                result_text,
-                reply_markup=reply.get_food_confirm_keyboard(user_language),
-                parse_mode="Markdown"
-            )
-        else:
-            await bot.send_message(
-                chat_id,
-                f"ℹ️ *Queued Food Analysis Ready* (you are no longer in the food logging flow):\n\n{result_text}",
-                parse_mode="Markdown"
-            )
+        from src.handlers.food import get_draft_keyboard
+        await bot.send_message(chat_id, result_text,
+            reply_markup=get_draft_keyboard(draft_id, user_language), parse_mode="Markdown")
         return True
 
     elif req_type == "adjust_food_analysis":
@@ -259,6 +261,20 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
             fat=adjusted_analysis.total_fat,
             carb=adjusted_analysis.total_carb
         )
+
+        draft_id = payload.get("draft_id")
+        if draft_id:
+            draft = await crud.get_meal_draft(db, draft_id, user_id)
+            if not draft:
+                return True
+            await crud.save_meal_draft(db, user_id,
+                {**draft.payload, "analysis": adjusted_analysis.model_dump()}, draft_id=draft_id)
+            item.payload = {**payload, "result_draft_id": draft_id, "result_text": result_text}
+            await db.commit()
+            from src.handlers.food import get_draft_keyboard
+            await bot.send_message(chat_id, result_text,
+                reply_markup=get_draft_keyboard(draft_id, user_language), parse_mode="Markdown")
+            return True
 
         if current_state == FoodLoggingState.waiting_for_correction:
             analysis_dict = adjusted_analysis.model_dump()
@@ -349,7 +365,8 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
         report_type = payload.get("report_type", "daily")
         from src.services.scheduler import generate_and_send_report_direct
         # Generate the report direct helper will query user, generate via Gemini and log request
-        await generate_and_send_report_direct(bot, db, user, report_type)
+        report_at = datetime.fromisoformat(payload["report_at"]) if payload.get("report_at") else item.created_at.replace(tzinfo=UTC)
+        await generate_and_send_report_direct(bot, db, user, report_type, report_at=report_at)
         return True
 
     return False
@@ -394,6 +411,10 @@ async def start_queue_worker(bot: Bot, storage):
     global _worker_running, _worker_task
     _worker_running = True
     logger.info("AI Request Queue worker starting...")
+    # This application has one queue worker. Resume work interrupted by a restart.
+    async with AsyncSessionLocal() as db:
+        await db.execute(update(AiRequestQueue).where(AiRequestQueue.status == "processing").values(status="pending"))
+        await db.commit()
     while _worker_running:
         try:
             await process_next_queue_item(bot, storage)

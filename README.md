@@ -174,8 +174,10 @@ telegram-healthy-bot/
 
 ### Meal confirmation and report dates
 
-After analysis, use the Accept, Correct, or Cancel buttons attached to the meal. Confirmations survive bot restarts; send `/pending` to recover outstanding meals (up to 20 at a time). Accepting the same meal twice does not create duplicates. Meals retain the date and time of the original Telegram entry, even if analysis or confirmation finishes after midnight.
+After analysis, use the Accept, Correct, or Cancel buttons attached to the meal. Confirmations survive bot restarts; tap **📥 Pending meals** to recover outstanding meals (up to 20 at a time). Accepting the same meal twice does not create duplicates. Meals retain the date and time of the original Telegram entry, even if analysis or confirmation finishes after midnight.
 
 Daily reports are snapshots through the time they were requested, using your profile timezone. Queued reports retain that cutoff instead of switching to the next day after midnight. Meals confirmed after a report was generated require a new report; existing Telegram report messages do not update automatically.
 
 Admin Statistics → Engagement shows the 10 newest registrations in the last 30 days, with profile registration and latest saved meal-entry timestamps in UTC. Users with no saved meals are listed explicitly.
+
+If an old reply keyboard remains after a restart, tap any old keyboard button to restore the main menu. Unmatched messages without an active session also restore the menu and point to the **📥 Pending meals** button; they never automatically accept a meal. Recovery commands preserve saved meal drafts.

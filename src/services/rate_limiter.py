@@ -7,6 +7,7 @@ from typing import Optional, Tuple
 from sqlalchemy import select, delete, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from aiogram import Bot
+from aiogram.exceptions import TelegramForbiddenError
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.context import FSMContext
 
@@ -395,6 +396,12 @@ async def process_next_queue_item(bot: Bot, storage):
             else:
                 item.status = "failed"
                 item.error_message = "Execution returned failure"
+        except TelegramForbiddenError:
+            item.status = "failed"
+            item.error_message = "Telegram delivery forbidden"
+            item.last_error = "Telegram delivery forbidden"
+            item.next_retry_at = None
+            logger.info("Queue item %s cannot be delivered; not retrying", item.id)
         except Exception as e:
             logger.error(f"Error executing queued item {item.id}: {e}", exc_info=True)
             item.retry_count += 1

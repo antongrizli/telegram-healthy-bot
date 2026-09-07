@@ -71,6 +71,7 @@ async def main():
     admin.router.callback_query.middleware(AdminCheckMiddleware())
     
     # Register handlers routers
+    dp.include_router(common.recovery_router)
     dp.include_router(admin.router)
     dp.include_router(profile.router)
     dp.include_router(food.router)

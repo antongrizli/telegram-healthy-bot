@@ -40,3 +40,53 @@ async def test_generate_and_send_report_direct_weekly_name_error_fix(mocker):
     # Check that settings.WEBAPP_URL is in the URL of the WebAppInfo button
     button = kwargs["reply_markup"].inline_keyboard[0][0]
     assert button.web_app.url.startswith("http")  # Should be the configured URL, e.g. from settings
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name", ["send_daily_report", "send_weekly_report", "send_monthly_report"])
+async def test_forbidden_report_is_not_queued(name, mocker):
+    from aiogram.exceptions import TelegramForbiddenError
+    from aiogram.methods import SendMessage
+    from src.services import scheduler
+    user = MagicMock(telegram_id=123, is_blocked=False, language="en")
+    mocker.patch.object(scheduler.crud, "get_user", AsyncMock(return_value=user))
+    mocker.patch.object(scheduler.rate_limiter, "check_rate_limit", AsyncMock(return_value=(False, "")))
+    queue = mocker.patch.object(scheduler.rate_limiter, "add_to_queue", AsyncMock())
+    bot = AsyncMock()
+    bot.send_message.side_effect = TelegramForbiddenError(method=SendMessage(chat_id=123, text="x"), message="bot was blocked by the user")
+    await getattr(scheduler, name)(bot, 123)
+    queue.assert_not_awaited()
+    assert bot.send_message.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_report_error_notice_failure_does_not_escape(mocker):
+    from aiogram.exceptions import TelegramNetworkError, TelegramForbiddenError
+    from aiogram.methods import SendMessage
+    from src.services import scheduler
+    mocker.patch.object(scheduler.crud, "get_user", AsyncMock(return_value=MagicMock(telegram_id=123, is_blocked=False, language="en")))
+    mocker.patch.object(scheduler.rate_limiter, "check_rate_limit", AsyncMock(return_value=(False, "")))
+    queue = mocker.patch.object(scheduler.rate_limiter, "add_to_queue", AsyncMock())
+    method = SendMessage(chat_id=123, text="x")
+    bot = AsyncMock()
+    bot.send_message.side_effect = [TelegramNetworkError(method=method, message="timeout"),
+                                   TelegramForbiddenError(method=method, message="blocked")]
+    await scheduler.send_daily_report(bot, 123)
+    queue.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_multipart_does_not_swallow_delivery_failure():
+    from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
+    from aiogram.methods import SendMessage
+    from src.services.scheduler import send_multipart_message
+    method = SendMessage(chat_id=123, text="x")
+    bot = AsyncMock()
+    bot.send_message.side_effect = TelegramForbiddenError(method=method, message="blocked")
+    with pytest.raises(TelegramForbiddenError):
+        await send_multipart_message(bot, 123, "hello")
+    assert bot.send_message.await_count == 1
+    bot.send_message.reset_mock()
+    bot.send_message.side_effect = [TelegramBadRequest(method=method, message="can't parse entities"), True]
+    await send_multipart_message(bot, 123, "*bad markdown")
+    assert bot.send_message.call_args.kwargs["parse_mode"] is None

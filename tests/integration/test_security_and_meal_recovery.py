@@ -260,3 +260,19 @@ async def test_recent_users_limit_and_engagement_output(db_session):
     assert "Last meal tracked: No meals yet" in text
     assert "UTC" in text
     assert message.answer.call_args.kwargs["parse_mode"] is None
+
+
+@pytest.mark.asyncio
+async def test_forbidden_queue_delivery_is_terminal(db_session, monkeypatch):
+    from aiogram.exceptions import TelegramForbiddenError
+    from aiogram.methods import SendMessage
+    await make_user(db_session)
+    queue_id = await rate_limiter.add_to_queue(db_session, 123, 123, "generate_report", {"report_type": "daily"})
+    monkeypatch.setattr(rate_limiter, "execute_queued_item", AsyncMock(side_effect=TelegramForbiddenError(
+        method=SendMessage(chat_id=123, text="x"), message="blocked")))
+    await rate_limiter.process_next_queue_item(SimpleNamespace(id=1), MemoryStorage())
+    item = await db_session.get(AiRequestQueue, queue_id)
+    assert item.status == "failed"
+    assert item.next_retry_at is None
+    assert item.retry_count == 0
+    assert await rate_limiter.get_next_pending_queue_item(db_session) is None

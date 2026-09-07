@@ -11,10 +11,12 @@ from src.database.connection import AsyncSessionLocal
 from src.database import crud
 
 router = Router()
+recovery_router = Router()
 
-@router.message(CommandStart())
+@recovery_router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext, user_language: str, db_user):
     if db_user and not db_user.is_blocked:
+        await state.clear()
         is_admin = db_user.telegram_id in settings.ADMIN_USER_IDS or db_user.is_admin
         await message.answer(
             i18n_locales.get_text("welcome", user_language),
@@ -155,3 +157,22 @@ async def cmd_back_to_main_menu(message: Message, state: FSMContext, user_langua
         "Returning to main menu..." if user_language == "en" else "Возвращаюсь в главное меню...",
         reply_markup=reply.get_main_menu(user_language, is_admin=is_admin)
     )
+
+
+@recovery_router.message(Command("cancel"))
+async def recover_menu(message: Message, state: FSMContext, user_language: str, db_user):
+    """Reset navigation without deleting durable meal drafts."""
+    if not db_user or db_user.is_blocked:
+        await cmd_start(message, state, user_language, db_user)
+        return
+    await state.clear()
+    is_admin = db_user.telegram_id in settings.ADMIN_USER_IDS or db_user.is_admin if db_user else False
+    await message.answer(i18n_locales.get_text("session_recovery", user_language),
+                         reply_markup=reply.get_main_menu(user_language, is_admin=is_admin))
+
+
+@router.message(StateFilter(None))
+async def recover_stale_keyboard(message: Message, state: FSMContext, user_language: str, db_user):
+    # Telegram keeps reply keyboards after MemoryStorage is lost on restart.
+    # Never infer which pending meal a stale Accept button refers to.
+    await recover_menu(message, state, user_language, db_user)

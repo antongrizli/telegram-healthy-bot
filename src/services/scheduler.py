@@ -1,9 +1,11 @@
+import logging
 from datetime import datetime, UTC, time, timedelta
 from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from aiogram import Bot
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramForbiddenError
 from src.database.connection import AsyncSessionLocal
 from src.database import crud
 from src.services import gemini, rate_limiter
@@ -11,6 +13,7 @@ from src.utils import i18n_locales
 from src.utils.escape import split_message
 from src.config import settings
 
+logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
 
 async def send_multipart_message(bot: Bot, chat_id: int, text: str, parse_mode: str = "Markdown"):
@@ -24,11 +27,19 @@ async def send_multipart_message(bot: Bot, chat_id: int, text: str, parse_mode: 
             continue
         try:
             await bot.send_message(chat_id, part, parse_mode=parse_mode)
-        except Exception:
-            try:
-                await bot.send_message(chat_id, part)
-            except Exception as e:
-                print(f"Failed to send plain message part to {chat_id}: {e}")
+        except TelegramBadRequest as exc:
+            if "parse entities" not in str(exc).lower():
+                raise
+            await bot.send_message(chat_id, part, parse_mode=None)
+
+
+async def send_report_notice(bot, user_id, text, **kwargs):
+    """Notification failure must not mask an already queued report."""
+    try:
+        await bot.send_message(user_id, text, **kwargs)
+    except TelegramAPIError as exc:
+        logger.info("Report notice could not be delivered to %s: %s", user_id, exc)
+
 
 async def send_daily_reminder(bot: Bot, user_id: int):
     async with AsyncSessionLocal() as db:
@@ -176,8 +187,8 @@ async def send_daily_report(bot: Bot, user_id: int):
                 payload={"report_type": "daily", "report_at": report_at.isoformat()}
             )
             position = await rate_limiter.get_queue_position(db, queue_id)
-            await bot.send_message(
-                user_id,
+            await send_report_notice(
+                bot, user_id,
                 i18n_locales.get_text("rate_limit_queued", user.language, position=position),
                 parse_mode="Markdown"
             )
@@ -186,6 +197,9 @@ async def send_daily_report(bot: Bot, user_id: int):
         try:
             await bot.send_message(user_id, i18n_locales.get_text("report_calculating", user.language), parse_mode="Markdown")
             await generate_and_send_report_direct(bot, db, user, "daily", report_at=report_at)
+        except TelegramForbiddenError:
+            logger.info("Report delivery forbidden for %s; not queued", user_id)
+            return
         except Exception as e:
             print(f"Error sending daily report to {user_id}: {e}")
             queue_id = await rate_limiter.add_to_queue(
@@ -195,8 +209,8 @@ async def send_daily_report(bot: Bot, user_id: int):
                 request_type="generate_report",
                 payload={"report_type": "daily", "report_at": report_at.isoformat()}
             )
-            await bot.send_message(
-                user_id,
+            await send_report_notice(
+                bot, user_id,
                 i18n_locales.get_text("ai_service_unavailable", user.language),
                 parse_mode="Markdown"
             )
@@ -218,8 +232,8 @@ async def send_weekly_report(bot: Bot, user_id: int):
                 payload={"report_type": "weekly", "report_at": report_at.isoformat()}
             )
             position = await rate_limiter.get_queue_position(db, queue_id)
-            await bot.send_message(
-                user_id,
+            await send_report_notice(
+                bot, user_id,
                 i18n_locales.get_text("rate_limit_queued", user.language, position=position),
                 parse_mode="Markdown"
             )
@@ -228,6 +242,9 @@ async def send_weekly_report(bot: Bot, user_id: int):
         try:
             await bot.send_message(user_id, i18n_locales.get_text("report_calculating", user.language), parse_mode="Markdown")
             await generate_and_send_report_direct(bot, db, user, "weekly", report_at=report_at)
+        except TelegramForbiddenError:
+            logger.info("Report delivery forbidden for %s; not queued", user_id)
+            return
         except Exception as e:
             print(f"Error sending weekly report to {user_id}: {e}")
             queue_id = await rate_limiter.add_to_queue(
@@ -237,8 +254,8 @@ async def send_weekly_report(bot: Bot, user_id: int):
                 request_type="generate_report",
                 payload={"report_type": "weekly", "report_at": report_at.isoformat()}
             )
-            await bot.send_message(
-                user_id,
+            await send_report_notice(
+                bot, user_id,
                 i18n_locales.get_text("ai_service_unavailable", user.language),
                 parse_mode="Markdown"
             )
@@ -260,8 +277,8 @@ async def send_monthly_report(bot: Bot, user_id: int):
                 payload={"report_type": "monthly", "report_at": report_at.isoformat()}
             )
             position = await rate_limiter.get_queue_position(db, queue_id)
-            await bot.send_message(
-                user_id,
+            await send_report_notice(
+                bot, user_id,
                 i18n_locales.get_text("rate_limit_queued", user.language, position=position),
                 parse_mode="Markdown"
             )
@@ -270,6 +287,9 @@ async def send_monthly_report(bot: Bot, user_id: int):
         try:
             await bot.send_message(user_id, i18n_locales.get_text("report_calculating", user.language), parse_mode="Markdown")
             await generate_and_send_report_direct(bot, db, user, "monthly", report_at=report_at)
+        except TelegramForbiddenError:
+            logger.info("Report delivery forbidden for %s; not queued", user_id)
+            return
         except Exception as e:
             print(f"Error sending monthly report to {user_id}: {e}")
             queue_id = await rate_limiter.add_to_queue(
@@ -279,8 +299,8 @@ async def send_monthly_report(bot: Bot, user_id: int):
                 request_type="generate_report",
                 payload={"report_type": "monthly", "report_at": report_at.isoformat()}
             )
-            await bot.send_message(
-                user_id,
+            await send_report_notice(
+                bot, user_id,
                 i18n_locales.get_text("ai_service_unavailable", user.language),
                 parse_mode="Markdown"
             )

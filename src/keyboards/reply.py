@@ -20,6 +20,7 @@ def get_main_menu(lang: str = "en", is_admin: bool = False) -> ReplyKeyboardMark
             KeyboardButton(text=get_text("btn_my_meals", lang))
         ],
         [
+            KeyboardButton(text=get_text("btn_pending_meals", lang)),
             KeyboardButton(text=get_text("btn_help", lang))
         ]
     ]

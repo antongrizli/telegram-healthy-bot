@@ -61,3 +61,14 @@ def test_recent_user_activity_empty_is_localized():
     from src.handlers.admin import format_recent_user_activity
     assert "No registrations" in format_recent_user_activity([], "en")
     assert "регистраций нет" in format_recent_user_activity([], "ru")
+
+
+def test_pending_meal_button_is_localized_and_available_in_main_menu():
+    from src.keyboards.reply import get_main_menu
+    from src.utils.i18n_locales import LOCALES, get_text
+    for lang in LOCALES:
+        label = get_text("btn_pending_meals", lang)
+        assert label != "btn_pending_meals"
+        assert label in [button.text for row in get_main_menu(lang).keyboard for button in row]
+        assert label in get_text("session_recovery", lang)
+        assert "/pending" not in get_text("session_recovery", lang)

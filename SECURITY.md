@@ -52,5 +52,5 @@ If you discover a security vulnerability in this project, please **do not open a
 
 ### 6. Durable Meal Confirmation
 - Meal drafts live in `ai_request_queue` with status `awaiting_confirm`. Confirmation and cancellation check ownership and atomically consume the draft. Meal insertion and draft consumption commit together.
-- Inline confirmation IDs survive bot restarts. `/pending` retrieves up to 20 outstanding drafts, oldest first; confirm or cancel those to see more.
+- Inline confirmation IDs survive bot restarts. The Pending meals button retrieves up to 20 outstanding drafts, oldest first; confirm or cancel those to see more.
 - The queue worker assumes a single application instance and resumes interrupted `processing` requests on startup. Horizontal scaling requires a database lease/claim mechanism first.

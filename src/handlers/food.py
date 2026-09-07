@@ -39,7 +39,7 @@ class MealViewingState(StatesGroup):
     viewing = State()
 
 
-@router.message(F.text == "/pending")
+@router.message(F.text.in_(i18n_locales.get_all_translations("btn_pending_meals")))
 async def show_pending_meals(message: Message, user_language: str):
     async with AsyncSessionLocal() as db:
         drafts = await crud.get_pending_meals(db, message.from_user.id)
@@ -284,9 +284,13 @@ async def process_food_confirm(message: Message, state: FSMContext, user_languag
     
     if text in i18n_locales.get_all_translations("btn_accept"):
         state_data = await state.get_data()
-        analysis = state_data["analysis"]
-        image_file_id = state_data["image_file_id"]
-        raw_text = state_data["raw_text"]
+        if not state_data.get("draft_id") and not state_data.get("analysis"):
+            from src.handlers.common import recover_menu
+            await recover_menu(message, state, user_language, db_user)
+            return
+        analysis = state_data.get("analysis", {})
+        image_file_id = state_data.get("image_file_id")
+        raw_text = state_data.get("raw_text")
         meal_type = state_data.get("meal_type", "food")
         
         async with AsyncSessionLocal() as db:

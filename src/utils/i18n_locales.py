@@ -1986,3 +1986,19 @@ _recent_user_stats = {
 for _lang, _values in _recent_user_stats.items():
     LOCALES[_lang].update(dict(zip(
         ("admin_recent_users_header", "admin_recent_users_empty", "admin_no_meals_yet", "admin_recent_user_row"), _values)))
+
+
+for _lang, _text in {
+    "en": "This keyboard no longer has an active session. The main menu is restored. Use «📥 Pending meals» to confirm saved meal drafts, or start a new meal entry.",
+    "ru": "У этой клавиатуры больше нет активного сеанса. Главное меню восстановлено. Используйте «📥 Неподтверждённая еда» для подтверждения сохранённых черновиков еды или начните новую запись.",
+    "uk": "Ця клавіатура більше не має активного сеансу. Головне меню відновлено. Використайте «📥 Непідтверджена їжа» для підтвердження збережених чернеток їжі або почніть новий запис.",
+    "pl": "Ta klawiatura nie ma już aktywnej sesji. Przywrócono menu główne. Użyj «📥 Posiłki do potwierdzenia», aby potwierdzić zapisane wersje robocze posiłków, lub dodaj nowy posiłek.",
+    "de": "Diese Tastatur hat keine aktive Sitzung mehr. Das Hauptmenü wurde wiederhergestellt. Mit «📥 Unbestätigte Mahlzeiten» kannst du gespeicherte Mahlzeitentwürfe bestätigen oder eine neue Mahlzeit erfassen.",
+    "tr": "Bu klavyenin etkin oturumu yok. Ana menü geri yüklendi. Kayıtlı öğün taslaklarını onaylamak için «📥 Onay bekleyen öğünler» kullanın veya yeni bir öğün girin.",
+    "es": "Este teclado ya no tiene una sesión activa. Se restauró el menú principal. Usa «📥 Comidas pendientes» para confirmar los borradores guardados o registra una nueva comida.",
+}.items():
+    LOCALES[_lang]["session_recovery"] = _text
+
+
+for _lang, _label in {'en': '📥 Pending meals', 'ru': '📥 Неподтверждённая еда', 'uk': '📥 Непідтверджена їжа', 'pl': '📥 Posiłki do potwierdzenia', 'de': '📥 Unbestätigte Mahlzeiten', 'tr': '📥 Onay bekleyen öğünler', 'es': '📥 Comidas pendientes'}.items():
+    LOCALES[_lang]["btn_pending_meals"] = _label

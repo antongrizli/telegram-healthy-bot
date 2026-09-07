@@ -244,7 +244,9 @@ async def health_check(request: web.Request) -> web.Response:
 # Web App Routing Setup
 
 def create_app(bot) -> web.Application:
-    app = web.Application(middlewares=[block_scanners_middleware])
+    app = web.Application(middlewares=[block_scanners_middleware], client_max_size=6 * 1024 * 1024)
+    from src.webapp.medications import register_routes
+    register_routes(app)
     
     # Expose API endpoints
     app.router.add_get("/health", health_check)

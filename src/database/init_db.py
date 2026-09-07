@@ -8,7 +8,9 @@ logger = logging.getLogger(__name__)
 async def init_db():
     logger.info("Initializing database schema...")
     async with engine.begin() as conn:
-        # Auto-create tables if they do not exist
+        # Auto-create tables, including medications, medication_reminders and
+        # medication_intakes with their indexes and occurrence uniqueness constraint.
+        # New tables need no ALTER on existing installations.
         await conn.run_sync(Base.metadata.create_all)
         
         # Add timezone column to existing PostgreSQL users table if it doesn't exist

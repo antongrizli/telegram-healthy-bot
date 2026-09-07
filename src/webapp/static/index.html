@@ -190,6 +190,7 @@
                     </div>
                 </div>
             </div>
+            <div class="tab-content hidden" id="medications-tab"></div>
         </main>
 
         <!-- Tab Bar Navigation -->
@@ -210,11 +211,16 @@
                 <i class="fa-solid fa-id-card"></i>
                 <span data-i18n="webapp_tab_card">Health Card</span>
             </button>
+            <button class="nav-item" onclick="switchTab('medications')">
+                <i class="fa-solid fa-pills"></i><span id="med-nav-label">Preparations</span>
+            </button>
         </nav>
     </div>
 
     <!-- Script Files -->
     <script src="locales.js"></script>
     <script src="app.js"></script>
+    <script src="medication-locales.js"></script>
+    <script src="medications.js"></script>
 </body>
 </html>

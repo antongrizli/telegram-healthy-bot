@@ -91,6 +91,7 @@ const initLocalization = async () => {
 
     // Run translation
     translatePage(state.userLanguage);
+    if (typeof mt === "function") document.getElementById("med-nav-label").textContent = mt("title");
 
     if (!state.user) {
         const dict = LOCALES[state.userLanguage] || LOCALES["en"];
@@ -113,11 +114,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     const tabParam = urlParams.get("tab");
     const hash = window.location.hash;
 
-    if (tabParam && ["dashboard", "charts", "achievements", "health-card"].includes(tabParam)) {
+    if (tabParam && ["dashboard", "charts", "achievements", "health-card", "medications"].includes(tabParam)) {
         switchTab(tabParam);
     } else if (hash) {
         const route = hash.replace("#/", "");
-        if (["dashboard", "charts", "achievements", "health-card"].includes(route)) {
+        if (["dashboard", "charts", "achievements", "health-card", "medications"].includes(route)) {
             switchTab(route);
         } else {
             loadTab("dashboard");
@@ -149,7 +150,7 @@ const switchTab = (tabName) => {
     const navItems = document.querySelectorAll(".nav-item");
     navItems.forEach(item => item.classList.remove("active"));
 
-    const indexMap = { "dashboard": 0, "charts": 1, "achievements": 2, "health-card": 3 };
+    const indexMap = { "dashboard": 0, "charts": 1, "achievements": 2, "health-card": 3, "medications": 4 };
     if (navItems[indexMap[tabName]]) {
         navItems[indexMap[tabName]].classList.add("active");
     }
@@ -180,7 +181,9 @@ const loadTab = async (tabName) => {
         // Load streaks data on every tab to keep header updated
         await loadStreaksData();
 
-        if (tabName === "dashboard") {
+        if (tabName === "medications") {
+            await loadMedications();
+        } else if (tabName === "dashboard") {
             await loadDashboardData();
         } else if (tabName === "charts") {
             await loadTrendsCharts();

@@ -23,6 +23,7 @@ async def test_generate_and_send_report_direct_weekly_name_error_fix(mocker):
     user.target_fat = 70
     user.target_carb = 200
 
+    mocker.patch("src.database.crud.list_medication_reminders", new_callable=AsyncMock, return_value=[])
     # Mock DB functions
     mocker.patch("src.database.crud.get_food_logs", new_callable=AsyncMock, return_value=[])
     mocker.patch("src.database.crud.get_weight_logs", new_callable=AsyncMock, return_value=[])

@@ -3,7 +3,7 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage, SimpleEventIsolation
 from src.config import settings
-from src.handlers import common, profile, food, weight, admin, callbacks
+from src.handlers import common, profile, food, weight, admin, callbacks, medications
 from src.middlewares.i18n import LanguageMiddleware
 from src.middlewares.logging import InteractionLoggingMiddleware
 from src.middlewares.admin_check import AdminCheckMiddleware
@@ -74,6 +74,7 @@ async def main():
     dp.include_router(common.recovery_router)
     dp.include_router(admin.router)
     dp.include_router(profile.router)
+    dp.include_router(medications.router)
     dp.include_router(food.router)
     dp.include_router(weight.router)
     dp.include_router(callbacks.router)

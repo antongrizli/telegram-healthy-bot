@@ -54,3 +54,15 @@ If you discover a security vulnerability in this project, please **do not open a
 - Meal drafts live in `ai_request_queue` with status `awaiting_confirm`. Confirmation and cancellation check ownership and atomically consume the draft. Meal insertion and draft consumption commit together.
 - Inline confirmation IDs survive bot restarts. The Pending meals button retrieves up to 20 outstanding drafts, oldest first; confirm or cancel those to see more.
 - The queue worker assumes a single application instance and resumes interrupted `processing` requests on startup. Horizontal scaling requires a database lease/claim mechanism first.
+
+### Medication data
+
+Medication library, reminders, intake marks and OCR results are private to the authenticated
+Telegram user. `/api/medications` routes validate signed initData and reject blocked profiles;
+CRUD and bot callbacks additionally constrain every object by its owner. Photo recognition
+uses the existing Gemini queue; image bytes are removed from the queue payload after successful
+recognition. Recognition requires user review before saving a product. AI reports receive
+user-entered medication context only when reminder tasks exist. All product and recognized
+text is rendered with `textContent` or plain Telegram text. Profile deletion includes medications,
+schedules, intake records and queued photos. The local preview/test authentication overrides are
+in temporary test scripts only and must never be used for deployment.

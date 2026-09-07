@@ -122,6 +122,8 @@ async def generate_and_send_report_direct(bot: Bot, db: AsyncSession, user, repo
         "target_carb": user.target_carb
     }
     
+    from src.services.medications import report_context
+    profile_dict["medications"] = await report_context(db, user_id, start_date, end_date)
     report = await gemini.generate_report(profile_dict, food_logs, weight_logs, report_type, user.language)
     await rate_limiter.log_ai_request(db, user_id=user_id, request_type="generate_report")
 
@@ -475,6 +477,10 @@ def remove_user_jobs(user_id: int):
             scheduler.remove_job(job_id)
 
 async def init_scheduler(bot: Bot):
+    from src.services.medications import send_medication_reminders
+    scheduler.add_job(send_medication_reminders, "interval", seconds=30,
+                      args=[bot], id="medication_reminders", replace_existing=True,
+                      max_instances=1, coalesce=True)
     # Register global freeze reset job
     scheduler.add_job(
         reset_weekly_freezes_global,

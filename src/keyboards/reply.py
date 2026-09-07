@@ -24,6 +24,7 @@ def get_main_menu(lang: str = "en", is_admin: bool = False) -> ReplyKeyboardMark
             KeyboardButton(text=get_text("btn_help", lang))
         ]
     ]
+    kb.append([KeyboardButton(text=get_text("btn_medications", lang))])
     if is_admin:
         kb.append([KeyboardButton(text="👑 Admin Panel" if lang == "en" else "👑 Админ-панель")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)

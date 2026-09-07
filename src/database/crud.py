@@ -539,3 +539,137 @@ async def get_recent_user_activity(db: AsyncSession) -> list[dict]:
     ).where(User.created_at >= cutoff)
      .order_by(User.created_at.desc(), User.telegram_id.desc()).limit(10))
     return [dict(row) for row in result.mappings()]
+
+
+# Medication access always includes the authenticated owner's ID.
+from src.database.models import Medication, MedicationReminder, MedicationIntake
+from sqlalchemy.orm import selectinload
+
+
+async def list_medications(db, user_id):
+    return list((await db.scalars(select(Medication).where(Medication.user_id == user_id)
+                                 .order_by(Medication.id.desc()))).all())
+
+
+async def save_medication(db, user_id, values, medication_id=None):
+    item = await db.scalar(select(Medication).where(Medication.id == medication_id,
+                                                  Medication.user_id == user_id)) if medication_id else None
+    if medication_id and item is None:
+        return None
+    if item is None:
+        item = Medication(user_id=user_id)
+        db.add(item)
+    for key in ('name', 'category', 'details'):
+        setattr(item, key, values[key])
+    await db.commit()
+    return item
+
+
+async def list_medication_reminders(db, user_id):
+    return list((await db.scalars(select(MedicationReminder).where(MedicationReminder.user_id == user_id)
+        .options(selectinload(MedicationReminder.medication)).order_by(MedicationReminder.id))).all())
+
+
+async def save_medication_reminder(db, user_id, values, reminder_id=None):
+    owned = await db.scalar(select(Medication.id).where(Medication.id == values['medication_id'],
+                                                       Medication.user_id == user_id))
+    if owned is None:
+        return None
+    item = await db.scalar(select(MedicationReminder).where(MedicationReminder.id == reminder_id,
+        MedicationReminder.user_id == user_id)) if reminder_id else None
+    if reminder_id and item is None:
+        return None
+    if item is None:
+        item = MedicationReminder(user_id=user_id)
+        db.add(item)
+    for key in ('medication_id', 'weekdays', 'reminder_time', 'start_date', 'end_date', 'dose'):
+        setattr(item, key, values[key])
+    await db.commit()
+    return item
+
+
+async def delete_medication_item(db, user_id, item_id, reminder=False):
+    model = MedicationReminder if reminder else Medication
+    item = await db.scalar(select(model).where(model.id == item_id, model.user_id == user_id))
+    if item is None:
+        return False
+    await db.delete(item)
+    await db.commit()
+    return True
+
+
+async def get_medication_intakes(db, user_id, start, end):
+    return list((await db.scalars(select(MedicationIntake).where(MedicationIntake.user_id == user_id,
+        MedicationIntake.scheduled_at >= start, MedicationIntake.scheduled_at <= end)
+        .options(selectinload(MedicationIntake.reminder).selectinload(MedicationReminder.medication))
+        .order_by(MedicationIntake.scheduled_at.desc()))).all())
+
+
+async def mark_medication_intake(db, user_id, intake_id, status):
+    if status not in ('taken', 'skipped'):
+        raise ValueError('Invalid intake status')
+    result = await db.execute(update(MedicationIntake).where(MedicationIntake.id == intake_id,
+        MedicationIntake.user_id == user_id, MedicationIntake.scheduled_at <= datetime.now(UTC).replace(tzinfo=None))
+        .values(status=status, marked_at=datetime.now(UTC).replace(tzinfo=None)))
+    await db.commit()
+    return result.rowcount > 0
+
+
+async def create_medication_occurrence(db, reminder, day, scheduled_at):
+    from sqlalchemy.exc import IntegrityError
+    existing = await db.scalar(select(MedicationIntake).where(
+        MedicationIntake.reminder_id == reminder.id, MedicationIntake.local_date == day))
+    if existing:
+        return existing
+    item = MedicationIntake(user_id=reminder.user_id, reminder_id=reminder.id,
+                            local_date=day, scheduled_at=scheduled_at)
+    try:
+        async with db.begin_nested():
+            db.add(item)
+            await db.flush()
+        await db.commit()
+    except IntegrityError:
+        return await db.scalar(select(MedicationIntake).where(
+            MedicationIntake.reminder_id == reminder.id, MedicationIntake.local_date == day))
+    return item
+
+
+async def claim_medication_delivery(db, intake_id):
+    # Commit before Telegram send: a retry/restart cannot send the same dose twice.
+    result = await db.execute(update(MedicationIntake).where(MedicationIntake.id == intake_id,
+        MedicationIntake.delivery_status == 'pending').values(delivery_status='sending'))
+    await db.commit()
+    return result.rowcount > 0
+
+
+async def finish_medication_delivery(db, intake_id, status):
+    await db.execute(update(MedicationIntake).where(MedicationIntake.id == intake_id).values(
+        delivery_status=status, notified_at=datetime.now(UTC).replace(tzinfo=None) if status == 'sent' else None))
+    await db.commit()
+
+
+async def get_medication_photo_request(db, user_id, request_id):
+    return await db.scalar(select(AiRequestQueue).where(AiRequestQueue.user_id == user_id,
+        AiRequestQueue.id == request_id, AiRequestQueue.request_type == 'medication_photo'))
+
+
+async def confirm_medication_photo(db, user_id, request_id):
+    # Lock the owned draft so duplicate confirmations cannot create two products.
+    request = await db.scalar(select(AiRequestQueue).where(AiRequestQueue.id == request_id,
+        AiRequestQueue.user_id == user_id, AiRequestQueue.request_type == 'medication_photo').with_for_update())
+    if not request or not request.payload.get('bot_category') or not request.payload.get('result'):
+        return None
+    if request.payload.get('medication_id'):
+        return await db.scalar(select(Medication).where(Medication.id == request.payload['medication_id'],
+                                                       Medication.user_id == user_id))
+    from src.services.medications import medication_values
+    try:
+        values = medication_values({**request.payload['result'], 'category': request.payload['bot_category']})
+    except ValueError:
+        return None
+    item = Medication(user_id=user_id, **values)
+    db.add(item)
+    await db.flush()
+    request.payload = {**request.payload, 'medication_id': item.id}
+    await db.commit()
+    return item

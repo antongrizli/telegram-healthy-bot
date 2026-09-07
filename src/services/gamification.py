@@ -510,6 +510,8 @@ async def generate_weekly_health_card(db: AsyncSession, user_id: int) -> HealthC
         "goal": user.goal,
     }
     
+    from src.services.medications import report_context
+    profile_dict["medications"] = await report_context(db, user_id)
     coach_message = await gemini_generate_card_note(profile_dict, card_data, user.language)
     card_data["coach_message"] = coach_message
     
@@ -532,6 +534,9 @@ async def gemini_generate_card_note(profile: dict, card_data: dict, language: st
         f"Language: {i18n_locales.get_text('lang_' + language, language)}"
     )
     
+    from src.services.medications import report_instructions
+    prompt += report_instructions(profile.get("medications"))
+
     try:
         response = await gemini.call_gemini_with_retry(
             contents=[prompt],

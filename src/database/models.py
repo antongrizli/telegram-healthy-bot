@@ -1,5 +1,5 @@
 from datetime import datetime, time, UTC
-from sqlalchemy import BigInteger, Column, Integer, Float, String, Boolean, DateTime, Time, ForeignKey, JSON
+from sqlalchemy import BigInteger, Column, Integer, Float, String, Boolean, DateTime, Time, ForeignKey, JSON, Date, UniqueConstraint
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -35,6 +35,10 @@ class User(Base):
     current_streak = Column(Integer, default=0, nullable=False)
     streak_freezes_left = Column(Integer, default=1, nullable=False)
     last_freeze_used_at = Column(DateTime, nullable=True)
+
+    medications = relationship("Medication", cascade="all, delete-orphan", back_populates="user")
+    medication_reminders = relationship("MedicationReminder", cascade="all, delete-orphan")
+    medication_intakes = relationship("MedicationIntake", cascade="all, delete-orphan")
 
     food_logs = relationship("FoodLog", back_populates="user", cascade="all, delete-orphan")
     weight_logs = relationship("WeightLog", back_populates="user", cascade="all, delete-orphan")
@@ -142,3 +146,45 @@ class HealthCard(Base):
 
     user = relationship("User", back_populates="health_cards")
 
+
+
+class Medication(Base):
+    __tablename__ = "medications"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False, index=True)
+    category = Column(String(20), nullable=False)
+    name = Column(String(200), nullable=False)
+    details = Column(String(500), nullable=False, default="")
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+    user = relationship("User", back_populates="medications")
+    reminders = relationship("MedicationReminder", cascade="all, delete-orphan", back_populates="medication")
+
+
+class MedicationReminder(Base):
+    __tablename__ = "medication_reminders"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False, index=True)
+    medication_id = Column(Integer, ForeignKey("medications.id", ondelete="CASCADE"), nullable=False)
+    weekdays = Column(JSON, nullable=False)  # Monday=0; all seven days means daily
+    reminder_time = Column(Time, nullable=False)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=True)  # Inclusive local date
+    dose = Column(String(200), nullable=False, default="")
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+    medication = relationship("Medication", back_populates="reminders")
+    intakes = relationship("MedicationIntake", cascade="all, delete-orphan", back_populates="reminder")
+
+
+class MedicationIntake(Base):
+    __tablename__ = "medication_intakes"
+    __table_args__ = (UniqueConstraint("reminder_id", "local_date", name="uq_medication_occurrence"),)
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False, index=True)
+    reminder_id = Column(Integer, ForeignKey("medication_reminders.id", ondelete="CASCADE"), nullable=False)
+    local_date = Column(Date, nullable=False)
+    scheduled_at = Column(DateTime, nullable=False, index=True)  # UTC
+    status = Column(String(20), nullable=False, default="unmarked")
+    delivery_status = Column(String(20), nullable=False, default="pending")
+    notified_at = Column(DateTime, nullable=True)
+    marked_at = Column(DateTime, nullable=True)
+    reminder = relationship("MedicationReminder", back_populates="intakes")

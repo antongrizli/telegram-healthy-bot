@@ -137,6 +137,18 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
                 reply_markup=get_draft_keyboard(draft.id, user_language), parse_mode="Markdown")
         return True
 
+    if req_type == "medication_photo":
+        import base64
+        if "result" not in payload:
+            result = await gemini.recognize_medication(base64.b64decode(payload["image"]), payload["mime_type"])
+            await log_ai_request(db, user_id=user_id, request_type=req_type)
+            item.payload = {"result": result, **({"bot_category": payload["bot_category"]} if payload.get("bot_category") else {})}
+            await db.commit()
+        if item.payload.get("bot_category"):
+            from src.handlers.medications import send_photo_result
+            await send_photo_result(bot, item, user_language)
+        return True
+
     if req_type == "analyze_food_input":
         from src.handlers.food import FoodLoggingState
 

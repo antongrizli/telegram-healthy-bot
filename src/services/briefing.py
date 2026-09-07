@@ -99,6 +99,9 @@ async def generate_morning_briefing(db: AsyncSession, user_id: int) -> str:
         f"Language: {lang_name}"
     )
     
+    from src.services.medications import report_context, report_instructions
+    prompt += report_instructions(await report_context(db, user_id, start_utc, end_utc))
+
     try:
         response = await gemini.call_gemini_with_retry(
             contents=[prompt],

@@ -112,7 +112,7 @@ If you want to run the project locally without Docker:
 
 ## Developer Guidelines
 
-Developers and AI agents working on this repository must review and adhere to the [Developer Skill Guide](.agents/skills/developer-skill.md) located at `.agents/skills/developer-skill.md`.
+Developers and AI agents working on this repository must review and adhere to the [Developer Skill Guide](.agents/skills/developer-skill.md) located at `.agents/skills/developer-skill.md`. For keyboard changes, use the [Keyboard Configuration Skill](.agents/skills/keyboard-configuration/SKILL.md).
 
 Crucial rules in the guide include:
 - Enforcing database operations via local session blocks encapsulated within `src/database/crud.py`.
@@ -182,39 +182,39 @@ Admin Statistics → Engagement shows the 10 newest registrations in the last 30
 
 If an old reply keyboard remains after a restart, tap any old keyboard button to restore the main menu. Unmatched messages without an active session also restore the menu and point to the **📥 Pending meals** button; they never automatically accept a meal. Recovery commands preserve saved meal drafts.
 
-### 💊 Препараты и напоминания о приеме
+### 💊 Medications and intake reminders
 
-В главном меню бота откройте **«💊 Препараты»**. Выберите лекарство, витамины или другое,
-введите название или отправьте фото упаковки. Фото обрабатывается через общую AI-очередь;
-проверьте распознанный текст и нажмите «Сохранить». Препарат остается в личной библиотеке,
-и для него можно создавать несколько расписаний, например утром и вечером.
+Open **💊 Medications** from the bot's main menu. Select medicine, vitamin, or other, then
+enter its name or send a photo of the package. Photos are processed through the shared AI queue;
+review the recognized text and tap Save. The medication stays in your personal library, and you
+can create multiple schedules for it, such as morning and evening.
 
-Расписание: ежедневно либо каждую неделю в один или несколько выбранных дней → время
-в часовом поясе профиля → без конечной даты или дата `YYYY-MM-DD` включительно. В списке
-можно изменять и удалять уведомления, удалять препараты. Удаление препарата удаляет его
-расписания и историю отметок; интерфейс запрашивает подтверждение.
+Choose a schedule: daily or weekly on one or more selected days → a time in the profile timezone
+→ no end date or an inclusive `YYYY-MM-DD` end date. From the list, you can edit or delete
+reminders and delete medications. Deleting a medication also deletes its schedules and intake
+history; the interface asks for confirmation.
 
-В уведомлении доступны «Принято» и «Пропущено». Повторная отметка изменяет статус,
-не добавляя второй прием. В **WebApp → Препараты** доступны тот же мастер настройки,
-редактирование названия/состава, необязательная пользовательская доза, статистика за последние
-30 календарных дней, график и история с возможностью изменить отметку. «Без отметки» означает
-отсутствие ответа пользователя, а не подтвержденный пропуск. Процент приема — отмеченные
-«Принято» / все наступившие запланированные приемы в периоде, включая приемы без отметки.
+Each reminder offers Taken and Skipped. Recording it again changes the status rather than adding
+a second intake. **WebApp → Medications** provides the same setup wizard, name/details editing,
+an optional custom dose, statistics for the last 30 calendar days, a chart, and a history where
+an intake can be changed. Unmarked means the user did not respond, not that the dose was confirmed
+as skipped. The adherence rate is Taken entries divided by all scheduled intakes due in the period,
+including unmarked intakes.
 
-Дневные, недельные и месячные AI-отчеты, утренние сводки и AI-комментарий карты здоровья
-получают сведения о препаратах только при наличии сохраненных расписаний. Секция рассматривает
-возможную эффективность, побочные эффекты и сроки/проявления результата с указанием
-неопределенности. Расписание не считается доказательством фактического приема; неизвестные
-составы и дозировки не должны угадываться моделью.
+Daily, weekly, and monthly AI reports, morning briefings, and the AI note on the Health Card receive
+medication information only when schedules have been saved. The section discusses possible
+effectiveness, side effects, and expected timing or signs of results while communicating uncertainty.
+A schedule is not evidence that a medication was actually taken; the model must not guess unknown
+ingredients or doses.
 
-Таблицы `medications`, `medication_reminders`, `medication_intakes` создаются при штатном
-запуске приложения через `init_db`. Все API требуют подписанные Telegram initData и проверяют
-владельца и блокировку пользователя. Удаление профиля каскадно удаляет новые данные.
+The `medications`, `medication_reminders`, and `medication_intakes` tables are created during
+normal application startup by `init_db`. All APIs require signed Telegram initData and verify both
+ownership and whether the user is blocked. Deleting a profile cascades to these new records.
 
-Планировщик проверяет расписания каждые 30 секунд; они сохраняются в БД и переживают перезапуск.
-Общий переключатель уведомлений в профиле применяется и к препаратам. После задержки
-до 15 минут напоминание еще отправляется; более старые приемы остаются в истории без отметки.
-При неоднозначной сетевой ошибке Telegram автоматическая повторная отправка отключена,
-чтобы не дублировать напоминание об одной дозе. Проверяйте историю WebApp при сбоях доставки.
-В пропущенный при весеннем переводе часов момент уведомление не создается; повторяющийся
-осенью час дает только один прием. Приложение рассчитано на один процесс планировщика/AI-очереди.
+The scheduler checks schedules every 30 seconds; they are stored in the database and survive restarts.
+The profile's general notification setting also applies to medications. A delayed reminder is still
+sent for up to 15 minutes; older intakes remain unmarked in history. On an ambiguous Telegram
+network error, automatic redelivery is disabled to avoid duplicating a reminder for the same dose.
+Check the WebApp history after delivery failures. A nonexistent time at the spring DST transition
+does not create a reminder; a repeated hour in autumn creates only one intake. The application is
+designed for a single scheduler/AI-queue process.

@@ -528,7 +528,7 @@ async def get_pending_meals(db, user_id):
 
 
 async def get_recent_user_activity(db: AsyncSession) -> list[dict]:
-    """Latest 10 registrations in 30 days, including users with no saved meals."""
+    """Latest 10 active or newly registered users in 30 days."""
     cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=30)
     last_meal = (select(func.max(FoodLog.logged_at))
                  .where(FoodLog.user_id == User.telegram_id)
@@ -536,11 +536,12 @@ async def get_recent_user_activity(db: AsyncSession) -> list[dict]:
     last_bot_use = (select(func.max(MessageStat.sent_at))
                     .where(MessageStat.user_id == User.telegram_id)
                     .correlate(User).scalar_subquery())
+    recent_activity = func.coalesce(last_bot_use, User.created_at)
     result = await db.execute(select(
         User.telegram_id, User.name, User.created_at.label("joined_at"),
         last_meal.label("last_meal_at"), last_bot_use.label("last_bot_use_at")
-    ).where(User.created_at >= cutoff)
-     .order_by(User.created_at.desc(), User.telegram_id.desc()).limit(10))
+    ).where(recent_activity >= cutoff)
+     .order_by(recent_activity.desc(), User.telegram_id.desc()).limit(10))
     return [dict(row) for row in result.mappings()]
 
 

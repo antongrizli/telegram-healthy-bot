@@ -8,8 +8,7 @@ def get_main_menu(lang: str = "en", is_admin: bool = False) -> ReplyKeyboardMark
     """
     kb = [
         [
-            KeyboardButton(text=get_text("btn_log_food", lang)),
-            KeyboardButton(text=get_text("btn_pending_meals", lang))
+            KeyboardButton(text=get_text("btn_log_food", lang))
         ],
         [
             KeyboardButton(text=get_text("btn_log_weight", lang)),
@@ -27,6 +26,14 @@ def get_main_menu(lang: str = "en", is_admin: bool = False) -> ReplyKeyboardMark
     kb.append([KeyboardButton(text=get_text("btn_medications", lang))])
     if is_admin:
         kb.append([KeyboardButton(text="👑 Admin Panel" if lang == "en" else "👑 Админ-панель")])
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+
+def get_food_menu(lang: str, has_pending_meals: bool) -> ReplyKeyboardMarkup:
+    kb = [[KeyboardButton(text=get_text("btn_new_food", lang))]]
+    if has_pending_meals:
+        kb.append([KeyboardButton(text=get_text("btn_pending_meals", lang))])
+    kb.append([KeyboardButton(text="⬅️ Back to Main Menu" if lang == "en" else "⬅️ Главное меню")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_admin_menu(lang: str = "en") -> ReplyKeyboardMarkup:

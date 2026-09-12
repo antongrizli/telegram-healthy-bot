@@ -32,7 +32,7 @@ from datetime import datetime, UTC
 import base64
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message, KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
 from src.services import medications as meds, rate_limiter
 from src.utils.i18n_locales import LOCALES
 from src.config import settings
@@ -45,10 +45,8 @@ class MedicationSetup(StatesGroup):
 
 
 def keyboard(rows):
-    # Reply buttons do not carry callback data. Keep the action after an invisible
-    # separator so the message handler can route the selected, localized label.
-    return ReplyKeyboardMarkup(keyboard=[[
-        KeyboardButton(text=f'{label}\u2063{data}') for label, data in row] for row in rows], resize_keyboard=True)
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=label, callback_data=data) for label, data in row] for row in rows])
 
 
 def tr(key, lang):
@@ -68,7 +66,7 @@ async def show_library(message, uid, lang, page=0):
     if (page+1)*15 < len(entries): nav.append((tr('next',lang),f'med:page:{page+1}'))
     if nav: rows.append(nav)
     markup=keyboard(rows)
-    markup.keyboard.append([KeyboardButton(text=tr('statistics',lang),
+    markup.inline_keyboard.append([InlineKeyboardButton(text=tr('statistics',lang),
         web_app=WebAppInfo(url=f'{settings.WEBAPP_URL}?tab=medications'))])
     await message.answer(tr('library',lang)+' / '+tr('schedules',lang),reply_markup=markup)
 
@@ -90,18 +88,22 @@ async def days_prompt(message, state, lang):
     await message.answer('3 · '+tr('days',lang),reply_markup=keyboard(rows))
 
 
+@router.callback_query(F.data.startswith('med:'))
 @router.message(F.text.contains('\u2063med:'))
-async def medication_navigation(message: Message, state: FSMContext):
-    uid=message.from_user.id
+async def medication_navigation(event: Message | CallbackQuery, state: FSMContext):
+    callback = event if getattr(event, 'data', None) else None
+    message = callback.message if callback else event
+    uid=event.from_user.id
+    if callback:
+        await callback.answer()
     async with AsyncSessionLocal() as db:
         user=await crud.get_user(db,uid)
         if not user or user.is_blocked:
             await message.answer('Access denied');return
         lang=user.language
-        # Reply keyboard selections include their action after an invisible
-        # separator.  Accept bare callback-style data as well, which keeps this
-        # navigation usable from existing inline keyboards and direct callers.
-        payload = getattr(message, 'text', None) or getattr(message, 'data', '')
+        # Keep the message branch for users with a previously sent reply
+        # keyboard, while new keyboards use hidden inline callback data.
+        payload = callback.data if callback else getattr(message, 'text', '')
         if '\u2063' in payload:
             payload = payload.split('\u2063', 1)[1]
         parts = payload.split(':')
@@ -238,13 +240,19 @@ async def medication_end(message: Message,state: FSMContext):
     await finish_bot_schedule(message,state,user,message.text)
 
 
+@router.callback_query(F.data.startswith('medphoto:'))
 @router.message(F.text.contains('\u2063medphoto:'))
-async def confirm_photo(message: Message,state: FSMContext):
+async def confirm_photo(event: Message | CallbackQuery,state: FSMContext):
+    callback = event if getattr(event, 'data', None) else None
+    message = callback.message if callback else event
+    if callback:
+        await callback.answer()
     async with AsyncSessionLocal() as db:
-        user=await crud.get_user(db,message.from_user.id)
+        user=await crud.get_user(db,event.from_user.id)
         if not user or user.is_blocked:
             await message.answer('Access denied');return
-        item=await crud.confirm_medication_photo(db,user.telegram_id,int(message.text.split('\u2063', 1)[1].split(':')[1]))
+        payload = callback.data if callback else message.text.split('\u2063', 1)[1]
+        item=await crud.confirm_medication_photo(db,user.telegram_id,int(payload.split(':')[1]))
     if not item:
         await message.answer(tr('missing',user.language));return
     await state.clear();await state.update_data(med_id=item.id,med_days=list(range(7)))

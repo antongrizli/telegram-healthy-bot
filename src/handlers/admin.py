@@ -1,4 +1,5 @@
 import re
+from html import escape
 from datetime import UTC
 from aiogram import Router, F
 from aiogram.filters import Command, StateFilter
@@ -58,10 +59,18 @@ def format_queue_errors(queue_errors: dict, lang: str = "en") -> str:
     for err_msg, count in queue_errors.items():
         if err_msg is None:
             continue
-        clean_err = str(err_msg).replace("```", "'''")
+        clean_err = escape(str(err_msg), quote=False)
         label = "Количество" if lang == "ru" else "Count"
-        lines.append(f"  • **{label}**: {count}\n```\n{clean_err}\n```")
+        lines.append(f"  • <b>{label}</b>: {count}\n<pre>{clean_err}</pre>")
     return "\n".join(lines)
+
+
+def format_queue_status_counts(stats_dict: dict) -> str:
+    if not stats_dict:
+        return "  • No data"
+    return "\n".join(
+        f"  • <b>{escape(str(status))}</b>: {count}"
+        for status, count in stats_dict.items() if status is not None)
 
 @router.message(F.text.in_(["📊 Stats", "📊 Статистика"]))
 async def cmd_admin_stats(message: Message, user_language: str):
@@ -225,25 +234,25 @@ async def cmd_admin_stats_queue(message: Message, user_language: str):
 
     if user_language == "ru":
         stats_text = (
-            "⚙️ **Состояние очереди и надежность (24ч)**:\n\n"
-            f"⏳ **Запросов ИИ в очереди**: {stats['queued_requests']}\n"
-            f"📊 **Статусы очереди**:\n{format_dict_stats(stats['queue_status_counts'])}\n"
-            f"⏱️ **Среднее время ожидания в очереди**: {stats['queue_avg_latency_seconds']:.1f} сек.\n\n"
-            f"⚠️ **Последние ошибки в очереди**:\n{format_queue_errors(stats['queue_errors'], user_language)}\n"
+            "⚙️ <b>Состояние очереди и надежность (24ч)</b>:\n\n"
+            f"⏳ <b>Запросов ИИ в очереди</b>: {stats['queued_requests']}\n"
+            f"📊 <b>Статусы очереди</b>:\n{format_queue_status_counts(stats['queue_status_counts'])}\n"
+            f"⏱️ <b>Среднее время ожидания в очереди</b>: {stats['queue_avg_latency_seconds']:.1f} сек.\n\n"
+            f"⚠️ <b>Последние ошибки в очереди</b>:\n{format_queue_errors(stats['queue_errors'], user_language)}\n"
         )
     else:
         stats_text = (
-            "⚙️ **Queue & Reliability (24h)**:\n\n"
-            f"⏳ **Active / Pending Requests in Queue**: {stats['queued_requests']}\n"
-            f"📊 **Queue Status counts**:\n{format_dict_stats(stats['queue_status_counts'])}\n"
-            f"⏱️ **Average Queue Latency**: {stats['queue_avg_latency_seconds']:.1f} seconds\n\n"
-            f"⚠️ **Recent Queue Errors**:\n{format_queue_errors(stats['queue_errors'], user_language)}\n"
+            "⚙️ <b>Queue & Reliability (24h)</b>:\n\n"
+            f"⏳ <b>Active / Pending Requests in Queue</b>: {stats['queued_requests']}\n"
+            f"📊 <b>Queue Status counts</b>:\n{format_queue_status_counts(stats['queue_status_counts'])}\n"
+            f"⏱️ <b>Average Queue Latency</b>: {stats['queue_avg_latency_seconds']:.1f} seconds\n\n"
+            f"⚠️ <b>Recent Queue Errors</b>:\n{format_queue_errors(stats['queue_errors'], user_language)}\n"
         )
 
     await message.answer(
         stats_text,
         reply_markup=reply.get_admin_stats_keyboard(user_language),
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
 
 @router.message(F.text.in_(i18n_locales.get_all_translations("btn_stats_back_admin")))

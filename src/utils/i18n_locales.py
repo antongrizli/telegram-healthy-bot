@@ -1975,13 +1975,13 @@ for _lang, _text in {
 
 
 _recent_user_stats = {
-    "en": ("Recently joined (latest 10 in 30 days)", "No registrations in the last 30 days.", "No meals yet", "{name} (ID: {user_id})\nJoined: {joined_at}\nLast meal tracked: {last_meal_at}\nLast bot use: {last_bot_use_at}"),
-    "ru": ("Недавно зарегистрировались (последние 10 за 30 дней)", "За последние 30 дней регистраций нет.", "Ещё нет записей еды", "{name} (ID: {user_id})\nРегистрация: {joined_at}\nПоследняя запись еды: {last_meal_at}\nПоследнее использование бота: {last_bot_use_at}"),
-    "uk": ("Нещодавно зареєструвалися (останні 10 за 30 днів)", "За останні 30 днів реєстрацій немає.", "Ще немає записів їжі", "{name} (ID: {user_id})\nРеєстрація: {joined_at}\nОстанній запис їжі: {last_meal_at}"),
-    "pl": ("Nowi użytkownicy (ostatnich 10 w ciągu 30 dni)", "Brak rejestracji w ostatnich 30 dniach.", "Brak posiłków", "{name} (ID: {user_id})\nRejestracja: {joined_at}\nOstatni posiłek: {last_meal_at}"),
-    "de": ("Neue Nutzer (letzte 10 in 30 Tagen)", "Keine Registrierungen in den letzten 30 Tagen.", "Noch keine Mahlzeiten", "{name} (ID: {user_id})\nRegistriert: {joined_at}\nLetzte erfasste Mahlzeit: {last_meal_at}"),
-    "tr": ("Yeni katılanlar (30 gündeki son 10 kişi)", "Son 30 günde kayıt yok.", "Henüz öğün yok", "{name} (ID: {user_id})\nKatılım: {joined_at}\nSon kaydedilen öğün: {last_meal_at}"),
-    "es": ("Nuevos usuarios (últimos 10 en 30 días)", "No hubo registros en los últimos 30 días.", "Sin comidas todavía", "{name} (ID: {user_id})\nRegistro: {joined_at}\nÚltima comida registrada: {last_meal_at}"),
+    "en": ("Recent user activity (latest 10 in 30 days)", "No user activity or registrations in the last 30 days.", "No meals yet", "{name} (ID: {user_id})\nJoined: {joined_at}\nLast meal tracked: {last_meal_at}\nLast bot use: {last_bot_use_at}"),
+    "ru": ("Недавняя активность пользователей (последние 10 за 30 дней)", "За последние 30 дней нет активности или регистраций.", "Ещё нет записей еды", "{name} (ID: {user_id})\nРегистрация: {joined_at}\nПоследняя запись еды: {last_meal_at}\nПоследнее использование бота: {last_bot_use_at}"),
+    "uk": ("Нещодавня активність користувачів (останні 10 за 30 днів)", "За останні 30 днів немає активності або реєстрацій.", "Ще немає записів їжі", "{name} (ID: {user_id})\nРеєстрація: {joined_at}\nОстанній запис їжі: {last_meal_at}"),
+    "pl": ("Ostatnia aktywność użytkowników (ostatnich 10 w ciągu 30 dni)", "Brak aktywności ani rejestracji w ostatnich 30 dniach.", "Brak posiłków", "{name} (ID: {user_id})\nRejestracja: {joined_at}\nOstatni posiłek: {last_meal_at}"),
+    "de": ("Letzte Nutzeraktivität (letzte 10 in 30 Tagen)", "Keine Aktivität oder Registrierungen in den letzten 30 Tagen.", "Noch keine Mahlzeiten", "{name} (ID: {user_id})\nRegistriert: {joined_at}\nLetzte erfasste Mahlzeit: {last_meal_at}"),
+    "tr": ("Son kullanıcı etkinliği (30 gündeki son 10 kişi)", "Son 30 günde etkinlik veya kayıt yok.", "Henüz öğün yok", "{name} (ID: {user_id})\nKatılım: {joined_at}\nSon kaydedilen öğün: {last_meal_at}"),
+    "es": ("Actividad reciente de usuarios (últimos 10 en 30 días)", "No hubo actividad ni registros en los últimos 30 días.", "Sin comidas todavía", "{name} (ID: {user_id})\nRegistro: {joined_at}\nÚltima comida registrada: {last_meal_at}"),
 }
 for _lang, _values in _recent_user_stats.items():
     LOCALES[_lang].update(dict(zip(
@@ -1998,19 +1998,31 @@ for _lang, _label in {
 
 
 for _lang, _text in {
-    "en": "This keyboard no longer has an active session. The main menu is restored. Use «📥 Pending meals» to confirm saved meal drafts, or start a new meal entry.",
-    "ru": "У этой клавиатуры больше нет активного сеанса. Главное меню восстановлено. Используйте «📥 Неподтверждённая еда» для подтверждения сохранённых черновиков еды или начните новую запись.",
-    "uk": "Ця клавіатура більше не має активного сеансу. Головне меню відновлено. Використайте «📥 Непідтверджена їжа» для підтвердження збережених чернеток їжі або почніть новий запис.",
-    "pl": "Ta klawiatura nie ma już aktywnej sesji. Przywrócono menu główne. Użyj «📥 Posiłki do potwierdzenia», aby potwierdzić zapisane wersje robocze posiłków, lub dodaj nowy posiłek.",
-    "de": "Diese Tastatur hat keine aktive Sitzung mehr. Das Hauptmenü wurde wiederhergestellt. Mit «📥 Unbestätigte Mahlzeiten» kannst du gespeicherte Mahlzeitentwürfe bestätigen oder eine neue Mahlzeit erfassen.",
-    "tr": "Bu klavyenin etkin oturumu yok. Ana menü geri yüklendi. Kayıtlı öğün taslaklarını onaylamak için «📥 Onay bekleyen öğünler» kullanın veya yeni bir öğün girin.",
-    "es": "Este teclado ya no tiene una sesión activa. Se restauró el menú principal. Usa «📥 Comidas pendientes» para confirmar los borradores guardados o registra una nueva comida.",
+    "en": "This keyboard no longer has an active session. The main menu is restored. Use «📝 Log food» to confirm saved meal drafts or start a new meal entry.",
+    "ru": "У этой клавиатуры больше нет активного сеанса. Главное меню восстановлено. Используйте «📝 Записать еду», чтобы подтвердить сохранённые черновики или начать новую запись.",
+    "uk": "Ця клавіатура більше не має активного сеансу. Головне меню відновлено. Використайте «📝 Записати їжу», щоб підтвердити збережені чернетки або почати новий запис.",
+    "pl": "Ta klawiatura nie ma już aktywnej sesji. Przywrócono menu główne. Użyj «📝 Zapisz jedzenie», aby potwierdzić zapisane wersje robocze lub dodać nowy posiłek.",
+    "de": "Diese Tastatur hat keine aktive Sitzung mehr. Das Hauptmenü wurde wiederhergestellt. Nutze «📝 Essen eintragen», um gespeicherte Entwürfe zu bestätigen oder eine neue Mahlzeit zu erfassen.",
+    "tr": "Bu klavyenin etkin oturumu yok. Ana menü geri yüklendi. Kayıtlı öğün taslaklarını onaylamak veya yeni bir öğün girmek için «📝 Yemek kaydet» seçeneğini kullanın.",
+    "es": "Este teclado ya no tiene una sesión activa. Se restauró el menú principal. Usa «📝 Registrar comida» para confirmar los borradores guardados o registrar una nueva comida.",
 }.items():
     LOCALES[_lang]["session_recovery"] = _text
 
 
 for _lang, _label in {'en': '📥 Pending meals', 'ru': '📥 Неподтверждённая еда', 'uk': '📥 Непідтверджена їжа', 'pl': '📥 Posiłki do potwierdzenia', 'de': '📥 Unbestätigte Mahlzeiten', 'tr': '📥 Onay bekleyen öğünler', 'es': '📥 Comidas pendientes'}.items():
     LOCALES[_lang]["btn_pending_meals"] = _label
+
+for _lang, (_new_entry, _prompt) in {
+    'en': ('🍽️ New food entry', 'What would you like to do?'),
+    'ru': ('🍽️ Новая запись еды', 'Что вы хотите сделать?'),
+    'uk': ('🍽️ Новий запис їжі', 'Що ви хочете зробити?'),
+    'pl': ('🍽️ Nowy wpis posiłku', 'Co chcesz zrobić?'),
+    'de': ('🍽️ Neue Mahlzeit erfassen', 'Was möchtest du tun?'),
+    'tr': ('🍽️ Yeni öğün kaydı', 'Ne yapmak istersiniz?'),
+    'es': ('🍽️ Nuevo registro de comida', '¿Qué te gustaría hacer?'),
+}.items():
+    LOCALES[_lang]['btn_new_food'] = _new_entry
+    LOCALES[_lang]['food_menu_prompt'] = _prompt
 
 
 # Medication navigation and intake confirmations.

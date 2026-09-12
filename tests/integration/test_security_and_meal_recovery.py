@@ -232,16 +232,18 @@ async def test_recent_users_include_latest_meal_and_users_without_meals(db_sessi
     await make_user(db_session, 123, created_at=now - timedelta(days=1))
     await make_user(db_session, 124, created_at=now)
     await make_user(db_session, 125, created_at=now - timedelta(days=31))
+    await crud.log_message_stat(db_session, 125, "text")
     for age in [2, 1]:
         await crud.add_food_log(db_session, 123, [], 100, 1, 2, 3,
                                 logged_at=(now - timedelta(hours=age)).replace(tzinfo=UTC))
     # Pending analyses are not tracked meals.
     await crud.save_meal_draft(db_session, 124, {"analysis": ANALYSIS, "logged_at": now.isoformat()})
     rows = await crud.get_recent_user_activity(db_session)
-    assert [row["telegram_id"] for row in rows] == [124, 123]
-    assert rows[0]["joined_at"] == now
-    assert rows[0]["last_meal_at"] is None
-    assert rows[1]["last_meal_at"] == now - timedelta(hours=1)
+    assert [row["telegram_id"] for row in rows] == [125, 124, 123]
+    assert rows[0]["last_bot_use_at"] is not None
+    assert rows[1]["joined_at"] == now
+    assert rows[1]["last_meal_at"] is None
+    assert rows[2]["last_meal_at"] == now - timedelta(hours=1)
 
 
 @pytest.mark.asyncio

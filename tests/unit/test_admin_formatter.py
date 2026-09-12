@@ -11,14 +11,10 @@ def test_format_queue_errors_with_data_en():
     }
     result = format_queue_errors(errors, "en")
     expected = (
-        "  • **Count**: 2\n"
-        "```\n"
-        "503 Service Unavailable\n"
-        "```\n"
-        "  • **Count**: 1\n"
-        "```\n"
-        "name 'settings' is not defined\n"
-        "```"
+        "  • <b>Count</b>: 2\n"
+        "<pre>503 Service Unavailable</pre>\n"
+        "  • <b>Count</b>: 1\n"
+        "<pre>name 'settings' is not defined</pre>"
     )
     assert result == expected
 
@@ -28,20 +24,18 @@ def test_format_queue_errors_with_data_ru():
     }
     result = format_queue_errors(errors, "ru")
     expected = (
-        "  • **Количество**: 2\n"
-        "```\n"
-        "503 Service Unavailable\n"
-        "```"
+        "  • <b>Количество</b>: 2\n"
+        "<pre>503 Service Unavailable</pre>"
     )
     assert result == expected
 
-def test_format_queue_errors_escapes_triple_backticks():
+def test_format_queue_errors_escapes_html_and_markup():
     errors = {
-        "error with ```some code``` inside": 1
+        "error with <tag> & **unclosed": 1
     }
     result = format_queue_errors(errors, "en")
-    assert "'''" in result
-    assert "```" in result  # outer block still present
+    assert "&lt;tag&gt; &amp; **unclosed" in result
+    assert "<pre>" in result
 
 
 def test_recent_user_activity_formats_timestamps_and_names_safely():
@@ -59,16 +53,15 @@ def test_recent_user_activity_formats_timestamps_and_names_safely():
 
 def test_recent_user_activity_empty_is_localized():
     from src.handlers.admin import format_recent_user_activity
-    assert "No registrations" in format_recent_user_activity([], "en")
-    assert "регистраций нет" in format_recent_user_activity([], "ru")
+    assert "No user activity" in format_recent_user_activity([], "en")
+    assert "нет активности" in format_recent_user_activity([], "ru")
 
 
-def test_pending_meal_button_is_localized_and_available_in_main_menu():
+def test_pending_meals_are_available_from_log_food_instead_of_main_menu():
     from src.keyboards.reply import get_main_menu
     from src.utils.i18n_locales import LOCALES, get_text
     for lang in LOCALES:
         label = get_text("btn_pending_meals", lang)
         assert label != "btn_pending_meals"
-        assert label in [button.text for row in get_main_menu(lang).keyboard for button in row]
-        assert label in get_text("session_recovery", lang)
-        assert "/pending" not in get_text("session_recovery", lang)
+        assert label not in [button.text for row in get_main_menu(lang).keyboard for button in row]
+        assert label not in get_text("session_recovery", lang)

@@ -39,10 +39,10 @@ class MealViewingState(StatesGroup):
     viewing = State()
 
 
-@router.message(F.text.in_(i18n_locales.get_all_translations("btn_pending_meals")))
-async def show_pending_meals(message: Message, user_language: str):
-    async with AsyncSessionLocal() as db:
-        drafts = await crud.get_pending_meals(db, message.from_user.id)
+async def show_pending_meals(message: Message, user_language: str, drafts=None):
+    if drafts is None:
+        async with AsyncSessionLocal() as db:
+            drafts = await crud.get_pending_meals(db, message.from_user.id)
     if not drafts:
         await message.answer(i18n_locales.get_text("no_pending_meals", user_language))
     for draft in drafts:
@@ -54,8 +54,24 @@ async def show_pending_meals(message: Message, user_language: str):
         await message.answer(text, reply_markup=get_draft_keyboard(draft.id, user_language), parse_mode=None)
 
 
+@router.message(F.text.in_(i18n_locales.get_all_translations("btn_pending_meals")))
+async def show_pending_meals_from_legacy_button(message: Message, user_language: str):
+    """Keep the old button working in messages sent before the menu update."""
+    await show_pending_meals(message, user_language)
+
+
 @router.message(F.text.in_(i18n_locales.get_all_translations("btn_log_food")))
 async def start_food_logging(message: Message, state: FSMContext, user_language: str):
+    async with AsyncSessionLocal() as db:
+        drafts = await crud.get_pending_meals(db, message.from_user.id)
+    await state.clear()
+    await message.answer(
+        i18n_locales.get_text("food_menu_prompt", user_language),
+        reply_markup=reply.get_food_menu(user_language, has_pending_meals=bool(drafts)))
+
+
+@router.message(F.text.in_(i18n_locales.get_all_translations("btn_new_food")))
+async def start_new_food_entry(message: Message, state: FSMContext, user_language: str):
     await state.set_state(FoodLoggingState.waiting_for_meal_type)
     await message.answer(
         i18n_locales.get_text("meal_type_prompt", user_language),

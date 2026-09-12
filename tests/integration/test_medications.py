@@ -22,6 +22,18 @@ async def user(db, uid=123, **kwargs):
         target_calories=2000, target_protein=100, target_fat=70, target_carb=250, **kwargs)
 
 
+def test_medication_keyboard_hides_callback_data():
+    from aiogram.types import InlineKeyboardMarkup
+    from src.handlers.medications import keyboard
+
+    markup = keyboard([[('Добавить уведомление', 'med:schedule:1')]])
+
+    assert isinstance(markup, InlineKeyboardMarkup)
+    button = markup.inline_keyboard[0][0]
+    assert button.text == 'Добавить уведомление'
+    assert button.callback_data == 'med:schedule:1'
+
+
 async def setup(db):
     u = await user(db)
     m = await crud.save_medication(db, 123, dict(name='Test product', category='vitamin', details='label'))

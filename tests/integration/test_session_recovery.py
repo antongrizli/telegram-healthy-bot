@@ -43,7 +43,7 @@ async def test_restart_stale_keyboard_and_recovery_commands_through_dispatcher(d
     # Exact old reply buttons seen in the screenshot, with empty MemoryStorage.
     for index, text in enumerate(["✅ Принять", "❌ Отмена", "Завтрак", "✅ Принять"], 1):
         response = await send(text, index)
-        assert "📥 Неподтверждённая еда" in response.text
+        assert "📝 Записать еду" in response.text
         assert response.reply_markup.keyboard  # Main menu, replacing the old keyboard.
         assert await crud.get_meal_draft(db_session, draft_id, 123) is not None
 

@@ -92,7 +92,16 @@ async def medication_navigation(message: Message, state: FSMContext):
         if not user or user.is_blocked:
             await message.answer('Access denied');return
         lang=user.language
-        parts=message.text.split('\u2063', 1)[1].split(':');action=parts[1]
+        # Reply keyboard selections include their action after an invisible
+        # separator.  Accept bare callback-style data as well, which keeps this
+        # navigation usable from existing inline keyboards and direct callers.
+        payload = getattr(message, 'text', None) or getattr(message, 'data', '')
+        if '\u2063' in payload:
+            payload = payload.split('\u2063', 1)[1]
+        parts = payload.split(':')
+        if len(parts) < 2 or parts[0] != 'med':
+            return
+        action=parts[1]
         data=await state.get_data()
         if action in ('home','page'):
             await state.clear()

@@ -19,7 +19,13 @@ async def mark_intake(callback: CallbackQuery):
             saved = await crud.mark_medication_intake(db, user.telegram_id, int(row_id), status)
         except (ValueError, TypeError):
             saved = False
-        await callback.answer(get_text('med_saved' if saved else 'med_missing', user.language), show_alert=not saved)
+        if not saved:
+            await callback.answer(get_text('med_missing', user.language), show_alert=True)
+            return
+        status_text = get_text(f'med_{status}', user.language)
+        await callback.answer(f'{status_text} ✓')
+        await callback.message.edit_text(
+            f'{callback.message.text}\n\n✅ {status_text}', reply_markup=None, parse_mode=None)
 
 
 from datetime import datetime, UTC

@@ -612,7 +612,8 @@ async def mark_medication_intake(db, user_id, intake_id, status):
     if status not in ('taken', 'skipped'):
         raise ValueError('Invalid intake status')
     result = await db.execute(update(MedicationIntake).where(MedicationIntake.id == intake_id,
-        MedicationIntake.user_id == user_id, MedicationIntake.scheduled_at <= datetime.now(UTC).replace(tzinfo=None))
+        MedicationIntake.user_id == user_id, MedicationIntake.status == 'unmarked',
+        MedicationIntake.scheduled_at <= datetime.now(UTC).replace(tzinfo=None))
         .values(status=status, marked_at=datetime.now(UTC).replace(tzinfo=None)))
     await db.commit()
     return result.rowcount > 0

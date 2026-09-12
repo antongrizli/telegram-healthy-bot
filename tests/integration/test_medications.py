@@ -54,11 +54,35 @@ async def test_owner_crud_and_profile_cascade(db_session):
     intake=await crud.create_medication_occurrence(db_session,r,date(2026,1,1),datetime(2026,1,1,9))
     assert not await crud.mark_medication_intake(db_session,456,intake.id,'taken')
     assert await crud.mark_medication_intake(db_session,123,intake.id,'taken')
-    assert await crud.mark_medication_intake(db_session,123,intake.id,'taken')
-    assert await crud.mark_medication_intake(db_session,123,intake.id,'skipped')
+    assert not await crud.mark_medication_intake(db_session,123,intake.id,'taken')
+    assert not await crud.mark_medication_intake(db_session,123,intake.id,'skipped')
     assert await crud.delete_user(db_session,123)
     for model in (Medication, MedicationReminder, MedicationIntake):
         assert await db_session.scalar(select(func.count()).select_from(model)) == 0
+
+
+@pytest.mark.asyncio
+async def test_medication_reminder_choice_is_shown_and_final(db_session, monkeypatch):
+    from src.handlers import medications as handler
+
+    _, _, reminder = await setup(db_session)
+    intake = await crud.create_medication_occurrence(
+        db_session, reminder, date(2026, 1, 1), datetime(2026, 1, 1, 9))
+    patch_session(monkeypatch, handler, db_session)
+    message = SimpleNamespace(text='💊 Test product\n🕒 09:00', edit_text=AsyncMock())
+    callback = SimpleNamespace(
+        from_user=SimpleNamespace(id=123), data=f'medtake:{intake.id}:taken',
+        message=message, answer=AsyncMock())
+
+    await handler.mark_intake(callback)
+
+    callback.answer.assert_awaited_once_with('Принято ✓')
+    message.edit_text.assert_awaited_once_with(
+        '💊 Test product\n🕒 09:00\n\n✅ Принято', reply_markup=None, parse_mode=None)
+    callback.data = f'medtake:{intake.id}:skipped'
+    await handler.mark_intake(callback)
+    assert message.edit_text.await_count == 1
+    assert callback.answer.await_args.kwargs['show_alert'] is True
 
 
 @pytest.mark.asyncio

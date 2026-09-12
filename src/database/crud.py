@@ -533,9 +533,12 @@ async def get_recent_user_activity(db: AsyncSession) -> list[dict]:
     last_meal = (select(func.max(FoodLog.logged_at))
                  .where(FoodLog.user_id == User.telegram_id)
                  .correlate(User).scalar_subquery())
+    last_bot_use = (select(func.max(MessageStat.sent_at))
+                    .where(MessageStat.user_id == User.telegram_id)
+                    .correlate(User).scalar_subquery())
     result = await db.execute(select(
         User.telegram_id, User.name, User.created_at.label("joined_at"),
-        last_meal.label("last_meal_at")
+        last_meal.label("last_meal_at"), last_bot_use.label("last_bot_use_at")
     ).where(User.created_at >= cutoff)
      .order_by(User.created_at.desc(), User.telegram_id.desc()).limit(10))
     return [dict(row) for row in result.mappings()]

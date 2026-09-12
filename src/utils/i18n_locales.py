@@ -1975,8 +1975,8 @@ for _lang, _text in {
 
 
 _recent_user_stats = {
-    "en": ("Recently joined (latest 10 in 30 days)", "No registrations in the last 30 days.", "No meals yet", "{name} (ID: {user_id})\nJoined: {joined_at}\nLast meal tracked: {last_meal_at}"),
-    "ru": ("Недавно зарегистрировались (последние 10 за 30 дней)", "За последние 30 дней регистраций нет.", "Ещё нет записей еды", "{name} (ID: {user_id})\nРегистрация: {joined_at}\nПоследняя запись еды: {last_meal_at}"),
+    "en": ("Recently joined (latest 10 in 30 days)", "No registrations in the last 30 days.", "No meals yet", "{name} (ID: {user_id})\nJoined: {joined_at}\nLast meal tracked: {last_meal_at}\nLast bot use: {last_bot_use_at}"),
+    "ru": ("Недавно зарегистрировались (последние 10 за 30 дней)", "За последние 30 дней регистраций нет.", "Ещё нет записей еды", "{name} (ID: {user_id})\nРегистрация: {joined_at}\nПоследняя запись еды: {last_meal_at}\nПоследнее использование бота: {last_bot_use_at}"),
     "uk": ("Нещодавно зареєструвалися (останні 10 за 30 днів)", "За останні 30 днів реєстрацій немає.", "Ще немає записів їжі", "{name} (ID: {user_id})\nРеєстрація: {joined_at}\nОстанній запис їжі: {last_meal_at}"),
     "pl": ("Nowi użytkownicy (ostatnich 10 w ciągu 30 dni)", "Brak rejestracji w ostatnich 30 dniach.", "Brak posiłków", "{name} (ID: {user_id})\nRejestracja: {joined_at}\nOstatni posiłek: {last_meal_at}"),
     "de": ("Neue Nutzer (letzte 10 in 30 Tagen)", "Keine Registrierungen in den letzten 30 Tagen.", "Noch keine Mahlzeiten", "{name} (ID: {user_id})\nRegistriert: {joined_at}\nLetzte erfasste Mahlzeit: {last_meal_at}"),
@@ -1986,6 +1986,15 @@ _recent_user_stats = {
 for _lang, _values in _recent_user_stats.items():
     LOCALES[_lang].update(dict(zip(
         ("admin_recent_users_header", "admin_recent_users_empty", "admin_no_meals_yet", "admin_recent_user_row"), _values)))
+
+for _lang, _label in {
+    "uk": "Останнє використання бота",
+    "pl": "Ostatnie użycie bota",
+    "de": "Letzte Bot-Nutzung",
+    "tr": "Botun son kullanımı",
+    "es": "Último uso del bot",
+}.items():
+    LOCALES[_lang]["admin_recent_user_row"] += f"\\n{_label}: {{last_bot_use_at}}"
 
 
 for _lang, _text in {

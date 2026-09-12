@@ -26,7 +26,7 @@ from datetime import datetime, UTC
 import base64
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from aiogram.types import Message, KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
 from src.services import medications as meds, rate_limiter
 from src.utils.i18n_locales import LOCALES
 from src.config import settings
@@ -39,8 +39,10 @@ class MedicationSetup(StatesGroup):
 
 
 def keyboard(rows):
-    return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text=label, callback_data=data) for label, data in row] for row in rows])
+    # Reply buttons do not carry callback data. Keep the action after an invisible
+    # separator so the message handler can route the selected, localized label.
+    return ReplyKeyboardMarkup(keyboard=[[
+        KeyboardButton(text=f'{label}\u2063{data}') for label, data in row] for row in rows], resize_keyboard=True)
 
 
 def tr(key, lang):
@@ -60,7 +62,7 @@ async def show_library(message, uid, lang, page=0):
     if (page+1)*15 < len(entries): nav.append((tr('next',lang),f'med:page:{page+1}'))
     if nav: rows.append(nav)
     markup=keyboard(rows)
-    markup.inline_keyboard.append([InlineKeyboardButton(text=tr('statistics',lang),
+    markup.keyboard.append([KeyboardButton(text=tr('statistics',lang),
         web_app=WebAppInfo(url=f'{settings.WEBAPP_URL}?tab=medications'))])
     await message.answer(tr('library',lang)+' / '+tr('schedules',lang),reply_markup=markup)
 
@@ -82,80 +84,79 @@ async def days_prompt(message, state, lang):
     await message.answer('3 · '+tr('days',lang),reply_markup=keyboard(rows))
 
 
-@router.callback_query(F.data.startswith('med:'))
-async def medication_navigation(callback: CallbackQuery, state: FSMContext):
-    uid=callback.from_user.id
+@router.message(F.text.contains('\u2063med:'))
+async def medication_navigation(message: Message, state: FSMContext):
+    uid=message.from_user.id
     async with AsyncSessionLocal() as db:
         user=await crud.get_user(db,uid)
         if not user or user.is_blocked:
-            await callback.answer('Access denied',show_alert=True);return
+            await message.answer('Access denied');return
         lang=user.language
-        parts=callback.data.split(':');action=parts[1]
+        parts=message.text.split('\u2063', 1)[1].split(':');action=parts[1]
         data=await state.get_data()
         if action in ('home','page'):
             await state.clear()
-            await show_library(callback.message,uid,lang,int(parts[2]) if action=='page' else 0)
+            await show_library(message,uid,lang,int(parts[2]) if action=='page' else 0)
         elif action=='new':
             await state.clear()
-            await callback.message.answer('1 · '+tr('title',lang),reply_markup=keyboard([
+            await message.answer('1 · '+tr('title',lang),reply_markup=keyboard([
                 [(tr(cat,lang),f'med:category:{cat}')] for cat in ('medicine','vitamin','other')]))
         elif action=='category' and parts[2] in ('medicine','vitamin','other'):
             await state.update_data(med_category=parts[2])
             await state.set_state(MedicationSetup.name)
-            await callback.message.answer('2 · '+tr('name',lang)+' / '+tr('photo',lang),
+            await message.answer('2 · '+tr('name',lang)+' / '+tr('photo',lang),
                 reply_markup=keyboard([[(tr('cancel',lang),'med:home')]]))
         elif action=='item':
             item=next((m for m in await crud.list_medications(db,uid) if m.id==int(parts[2])),None)
-            if not item: await callback.answer(tr('missing',lang),show_alert=True);return
-            await callback.message.answer(f'{item.name}\n{item.details}',parse_mode=None,reply_markup=keyboard([
+            if not item: await message.answer(tr('missing',lang));return
+            await message.answer(f'{item.name}\n{item.details}',parse_mode=None,reply_markup=keyboard([
                 [(tr('add_schedule',lang),f'med:schedule:{item.id}')],
                 [(tr('delete',lang),f'med:deleteitem:{item.id}')],[(tr('back',lang),'med:home')]]))
         elif action=='reminder':
             r=next((r for r in await crud.list_medication_reminders(db,uid) if r.id==int(parts[2])),None)
-            if not r: await callback.answer(tr('missing',lang),show_alert=True);return
+            if not r: await message.answer(tr('missing',lang));return
             days=', '.join(get_text(f'weekday_{d}',lang) for d in r.weekdays)
-            await callback.message.answer(f'{r.medication.name}\n{days} · {r.reminder_time:%H:%M} ({user.timezone})\n{r.dose}\n'+
+            await message.answer(f'{r.medication.name}\n{days} · {r.reminder_time:%H:%M} ({user.timezone})\n{r.dose}\n'+
                 (f'{tr("until",lang)} {r.end_date}' if r.end_date else tr('unlimited',lang)),parse_mode=None,reply_markup=keyboard([
                 [(tr('edit',lang),f'med:edit:{r.id}')],[(tr('delete',lang),f'med:deletereminder:{r.id}')],[(tr('back',lang),'med:home')]]))
         elif action in ('deleteitem','deletereminder'):
-            await callback.message.answer(tr('confirm_delete',lang),reply_markup=keyboard([
+            await message.answer(tr('confirm_delete',lang),reply_markup=keyboard([
                 [(tr('delete',lang),f'med:confirmdelete:{action}:{int(parts[2])}')],[(tr('cancel',lang),'med:home')]]))
         elif action=='confirmdelete':
             deleted=await crud.delete_medication_item(db,uid,int(parts[3]),reminder=parts[2]=='deletereminder')
-            if not deleted: await callback.answer(tr('missing',lang),show_alert=True);return
-            await show_library(callback.message,uid,lang)
+            if not deleted: await message.answer(tr('missing',lang));return
+            await show_library(message,uid,lang)
         elif action in ('schedule','edit'):
             await state.clear()
             if action=='edit':
                 r=next((r for r in await crud.list_medication_reminders(db,uid) if r.id==int(parts[2])),None)
-                if not r: await callback.answer(tr('missing',lang),show_alert=True);return
+                if not r: await message.answer(tr('missing',lang));return
                 await state.update_data(med_id=r.medication_id,med_reminder=r.id,med_days=r.weekdays,med_dose=r.dose)
             else:
                 if not any(m.id==int(parts[2]) for m in await crud.list_medications(db,uid)):
-                    await callback.answer(tr('missing',lang),show_alert=True);return
+                    await message.answer(tr('missing',lang));return
                 await state.update_data(med_id=int(parts[2]),med_days=list(range(7)))
-            await days_prompt(callback.message,state,lang)
+            await days_prompt(message,state,lang)
         elif action in ('day','daily','weekly','time') and data.get('med_id'):
             days=set(data.get('med_days',[]))
             if action=='day':
                 day=int(parts[2])
-                if day not in range(7): await callback.answer();return
+                if day not in range(7): return
                 days.symmetric_difference_update({day})
             elif action=='daily':days=set(range(7))
             elif action=='weekly':days=set()
             await state.update_data(med_days=sorted(days))
             if action=='time':
-                if not days: await callback.answer(tr('days',lang),show_alert=True);return
+                if not days: await message.answer(tr('days',lang));return
                 await state.set_state(MedicationSetup.time)
-                await callback.message.answer('4 · '+tr('time',lang)+f' (HH:MM, {user.timezone})')
+                await message.answer('4 · '+tr('time',lang)+f' (HH:MM, {user.timezone})')
             else:
-                await days_prompt(callback.message,state,lang)
+                await days_prompt(message,state,lang)
         elif action=='unlimited' and data.get('med_time'):
-            await finish_bot_schedule(callback.message,state,user,None)
+            await finish_bot_schedule(message,state,user,None)
         else:
             await state.clear()
-            await show_library(callback.message,uid,lang)
-    await callback.answer()
+            await show_library(message,uid,lang)
 
 
 @router.message(MedicationSetup.name)
@@ -222,18 +223,18 @@ async def medication_end(message: Message,state: FSMContext):
     await finish_bot_schedule(message,state,user,message.text)
 
 
-@router.callback_query(F.data.startswith('medphoto:'))
-async def confirm_photo(callback: CallbackQuery,state: FSMContext):
+@router.message(F.text.contains('\u2063medphoto:'))
+async def confirm_photo(message: Message,state: FSMContext):
     async with AsyncSessionLocal() as db:
-        user=await crud.get_user(db,callback.from_user.id)
+        user=await crud.get_user(db,message.from_user.id)
         if not user or user.is_blocked:
-            await callback.answer('Access denied',show_alert=True);return
-        item=await crud.confirm_medication_photo(db,user.telegram_id,int(callback.data.split(':')[1]))
+            await message.answer('Access denied');return
+        item=await crud.confirm_medication_photo(db,user.telegram_id,int(message.text.split('\u2063', 1)[1].split(':')[1]))
     if not item:
-        await callback.answer(tr('missing',user.language),show_alert=True);return
+        await message.answer(tr('missing',user.language));return
     await state.clear();await state.update_data(med_id=item.id,med_days=list(range(7)))
-    await callback.answer(tr('saved',user.language))
-    await days_prompt(callback.message,state,user.language)
+    await message.answer(tr('saved',user.language))
+    await days_prompt(message,state,user.language)
 
 
 async def send_photo_result(bot, item, lang):

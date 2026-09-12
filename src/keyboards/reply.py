@@ -8,19 +8,19 @@ def get_main_menu(lang: str = "en", is_admin: bool = False) -> ReplyKeyboardMark
     """
     kb = [
         [
-            KeyboardButton(text=get_text("btn_log_food", lang)), 
-            KeyboardButton(text=get_text("btn_log_weight", lang))
+            KeyboardButton(text=get_text("btn_log_food", lang)),
+            KeyboardButton(text=get_text("btn_pending_meals", lang))
         ],
         [
-            KeyboardButton(text=get_text("btn_daily_report", lang)), 
-            KeyboardButton(text=get_text("btn_weekly_report", lang))
+            KeyboardButton(text=get_text("btn_log_weight", lang)),
+            KeyboardButton(text=get_text("btn_daily_report", lang))
         ],
         [
-            KeyboardButton(text=get_text("btn_my_profile", lang)), 
-            KeyboardButton(text=get_text("btn_my_meals", lang))
+            KeyboardButton(text=get_text("btn_weekly_report", lang)),
+            KeyboardButton(text=get_text("btn_my_profile", lang))
         ],
         [
-            KeyboardButton(text=get_text("btn_pending_meals", lang)),
+            KeyboardButton(text=get_text("btn_my_meals", lang)),
             KeyboardButton(text=get_text("btn_help", lang))
         ]
     ]
@@ -331,4 +331,3 @@ def get_monthly_report_day_keyboard(lang: str = "en", current_val: int = None) -
     ])
     kb.append([KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
-

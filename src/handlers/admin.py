@@ -134,7 +134,8 @@ def format_recent_user_activity(users: list[dict], language: str) -> str:
         name = " ".join(user["name"].split())[:80]
         lines.append(i18n_locales.get_text("admin_recent_user_row", language,
             name=name, user_id=user["telegram_id"],
-            joined_at=timestamp(user["joined_at"]), last_meal_at=timestamp(user["last_meal_at"])))
+            joined_at=timestamp(user["joined_at"]), last_meal_at=timestamp(user["last_meal_at"]),
+            last_bot_use_at=timestamp(user["last_bot_use_at"])))
     return "\n\n".join(lines)
 
 

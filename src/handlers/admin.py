@@ -153,6 +153,7 @@ async def cmd_admin_stats_engagement(message: Message, user_language: str):
     async with AsyncSessionLocal() as db:
         stats = await crud.get_admin_stats(db)
         recent_users = await crud.get_recent_user_activity(db)
+        metrics = await crud.get_product_metrics(db)
         
     active_24h = stats['active_users_24h']
     avg_meals = (stats['food_logs_24h'] / active_24h) if active_24h > 0 else 0.0
@@ -187,6 +188,14 @@ async def cmd_admin_stats_engagement(message: Message, user_language: str):
     )
 
     await message.answer(format_recent_user_activity(recent_users, user_language), parse_mode=None)
+    await message.answer(i18n_locales.get_text('ux_metrics', user_language,
+        completed=metrics['onboarding_completed'], started=metrics['onboarding_started'],
+        seconds=metrics['first_meal_median_seconds'] if metrics['first_meal_median_seconds'] is not None else '—',
+        confirmed=metrics['confirmed'], analyzed=metrics['analyzed'],
+        d1=f"{metrics['retention']['D1']['returned']}/{metrics['retention']['D1']['eligible']}",
+        d7=f"{metrics['retention']['D7']['returned']}/{metrics['retention']['D7']['eligible']}",
+        meal_days=metrics['active_days_with_meal'], active_days=metrics['active_days'],
+        opened=metrics['events']['meal_opened'], submitted=metrics['events']['meal_submitted'], reports=metrics['events']['report_opened']), parse_mode=None)
 
 @router.message(F.text.in_(i18n_locales.get_all_translations("btn_stats_ai")))
 async def cmd_admin_stats_ai(message: Message, user_language: str):

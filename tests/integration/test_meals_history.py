@@ -250,19 +250,19 @@ async def test_cancel_meal_edit(mock_state, mock_db_user):
 
 # --- Meal Type Classification Tests ---
 
-async def test_start_food_logging_prompt_meal_type(mock_state):
+async def test_start_food_logging_prompts_for_input_directly(mock_state):
     message = make_mock_message("📝 Log Food")
     await start_food_logging(message, mock_state, "en")
 
     mock_state.clear.assert_awaited_once()
-    mock_state.set_state.assert_not_awaited()
+    mock_state.set_state.assert_awaited_once_with(FoodLoggingState.waiting_for_input)
     message.answer.assert_called_once()
     buttons = message.answer.call_args.kwargs["reply_markup"].keyboard
     assert [button.text for row in buttons for button in row] == [
-        "🍽️ New food entry", "⬅️ Back to Main Menu"]
+        "❌ Cancel"]
 
 
-async def test_start_food_logging_shows_pending_drafts_first(db_session, mock_state):
+async def test_start_food_logging_keeps_pending_drafts_recoverable(db_session, mock_state):
     await crud.create_or_update_user(
         db_session, 12345, name="Test", sex="male", age=30, height_cm=180,
         weight_kg=80, activity_level="light", goal="maintain", language="en",
@@ -280,19 +280,20 @@ async def test_start_food_logging_shows_pending_drafts_first(db_session, mock_st
     await start_food_logging(message, mock_state, "en")
 
     mock_state.clear.assert_awaited_once()
-    mock_state.set_state.assert_not_awaited()
+    mock_state.set_state.assert_awaited_once_with(FoodLoggingState.waiting_for_input)
     buttons = message.answer.call_args.kwargs["reply_markup"].keyboard
     assert [button.text for row in buttons for button in row] == [
-        "🍽️ New food entry", "📥 Pending meals", "⬅️ Back to Main Menu"]
+        "❌ Cancel"]
+    assert await crud.get_meal_draft(db_session, draft_id, 12345) is not None
 
 
-async def test_start_new_food_entry_prompt_meal_type(mock_state):
+async def test_legacy_new_food_entry_also_prompts_for_input(mock_state):
     message = make_mock_message("🍽️ New food entry")
 
     await start_new_food_entry(message, mock_state, "en")
 
-    mock_state.set_state.assert_awaited_once_with(FoodLoggingState.waiting_for_meal_type)
-    assert "Select the meal type" in message.answer.call_args.args[0]
+    mock_state.set_state.assert_awaited_once_with(FoodLoggingState.waiting_for_input)
+    assert "Send a meal photo" in message.answer.call_args.args[0]
 
 async def test_process_meal_type_selection(mock_state, mock_db_user):
     message = make_mock_message("🍳 Breakfast")
@@ -305,6 +306,8 @@ async def test_process_meal_type_selection(mock_state, mock_db_user):
     assert "photo of your meal" in message.answer.call_args[0][0]
 
 async def test_accept_food_log_saves_meal_type(db_session, mock_state, mock_db_user):
+    from tests.integration.test_security_and_meal_recovery import make_user
+    await make_user(db_session, 12345)
     mock_state.get_data.return_value = {
         "analysis": {
             "food_items": [{"name": "Banana", "portion": "1 item", "calories": 90, "protein": 1.1, "fat": 0.3, "carb": 23.0}],

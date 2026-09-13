@@ -28,18 +28,15 @@ async def cmd_start(message: Message, state: FSMContext, user_language: str, db_
         from src.handlers.profile import start_profile_setup
         await start_profile_setup(message, state, user_language, db_user=None)
 
-@router.message(Command("help"))
-@router.message(F.text.in_([
-    LOCALES_EN := i18n_locales.LOCALES["en"]["btn_help"],
-    LOCALES_RU := i18n_locales.LOCALES["ru"]["btn_help"]
-]))
+@recovery_router.message(Command("help"))
+@recovery_router.message(F.text.in_(i18n_locales.get_all_translations("btn_help")))
 async def cmd_help(message: Message, user_language: str):
     await message.answer(
         i18n_locales.get_text("help_text", user_language),
         parse_mode="Markdown"
     )
 
-@router.message(F.text.in_(i18n_locales.get_all_translations("btn_my_profile")))
+@recovery_router.message(F.text.in_(i18n_locales.get_all_translations("btn_my_profile")))
 async def view_profile(message: Message, state: FSMContext, user_language: str, db_user):
     if not db_user:
         await cmd_start(message, state, user_language, db_user)
@@ -85,21 +82,25 @@ async def view_profile(message: Message, state: FSMContext, user_language: str, 
     markup = reply.get_setup_profile_keyboard(user_language)
     await message.answer(profile_text, reply_markup=markup, parse_mode="Markdown")
 
-@router.message(F.text.in_(i18n_locales.get_all_translations("btn_daily_report")))
+@recovery_router.message(F.text.in_(i18n_locales.get_all_translations("btn_daily_report")))
 async def trigger_daily_report(message: Message, state: FSMContext, user_language: str, db_user):
     if not db_user:
         await cmd_start(message, state, user_language, db_user)
         return
+    async with AsyncSessionLocal() as db:
+        await crud.record_event(db, message.from_user.id, 'report_opened')
     await send_daily_report(message.bot, message.from_user.id)
 
-@router.message(F.text.in_(i18n_locales.get_all_translations("btn_weekly_report")))
+@recovery_router.message(F.text.in_(i18n_locales.get_all_translations("btn_weekly_report")))
 async def trigger_weekly_report(message: Message, state: FSMContext, user_language: str, db_user):
     if not db_user:
         await cmd_start(message, state, user_language, db_user)
         return
+    async with AsyncSessionLocal() as db:
+        await crud.record_event(db, message.from_user.id, 'report_opened')
     await send_weekly_report(message.bot, message.from_user.id)
 
-@router.message(F.text.in_(i18n_locales.get_all_translations("btn_my_progress")))
+@recovery_router.message(F.text.in_(i18n_locales.get_all_translations("btn_my_progress")))
 @router.message(Command("streaks"))
 @router.message(Command("achievements"))
 async def view_progress(message: Message, state: FSMContext, user_language: str, db_user):
@@ -112,54 +113,35 @@ async def view_progress(message: Message, state: FSMContext, user_language: str,
         streaks = await crud.get_user_streaks(db, db_user.telegram_id)
         achievements = await crud.get_user_achievements(db, db_user.telegram_id)
         
-    streak_text = ""
-    if not streaks:
-        streak_text = "No active streaks yet! Keep tracking to build a streak." if user_language == "en" else "Нет активных стриков! Начните записывать еду/вес, чтобы запустить стрик."
-    else:
-        for s in streaks:
-            type_name = (
-                "Food logging 🍽️" if s.streak_type == "food_logging" else
-                "Weight logging ⚖️" if s.streak_type == "weight_logging" else
-                "Calorie goal hit 🎯" if s.streak_type == "calorie_target_hit" else "Protein goal hit 🥩"
-            )
-            streak_text += f"• *{type_name}*: {s.current_count} days (Longest: {s.longest_count} days)\n"
-            
-    ach_text = ""
+    from src.services.ux import streak_text
+    parts = [streak_text(db_user, streaks, user_language),
+             i18n_locales.get_text('ux_badges', user_language, count=len(achievements), total=len(gamification.ACHIEVEMENTS))]
     if not achievements:
-        ach_text = "No achievements unlocked yet." if user_language == "en" else "Достижений пока нет."
-    else:
-        total_ach = len(gamification.ACHIEVEMENTS)
-        ach_text = f"Unlocked {len(achievements)}/{total_ach} achievements:\n" if user_language == "en" else f"Открыто {len(achievements)}/{total_ach} достижений:\n"
-        for a in achievements[:5]:
-            ach_def = gamification.ACHIEVEMENTS.get(a.achievement_key)
-            if ach_def:
-                name = i18n_locales.get_text(ach_def["name_key"], user_language)
-                ach_text += f"- {ach_def['icon']} *{name}*\n"
-        if len(achievements) > 5:
-            ach_text += "...and more in the achievements tab!" if user_language == "en" else "...и другие во вкладке достижений!"
-            
-    msg = (
-        f"📈 *{i18n_locales.get_text('btn_my_progress', user_language)}*:\n\n"
-        f"🔥 *Streaks*:\n{streak_text}\n"
-        f"❄️ *Streak Freezes left*: {db_user.streak_freezes_left}/1\n\n"
-        f"🏆 *Achievements*:\n{ach_text}"
-    )
-    
+        parts.append(i18n_locales.get_text('ux_badge_empty', user_language))
+    for achievement in achievements[:5]:
+        definition = gamification.ACHIEVEMENTS.get(achievement.achievement_key)
+        if definition:
+            parts.append(definition['icon'] + ' ' + i18n_locales.get_text(definition['name_key'], user_language))
+    if len(achievements) > 5:
+        parts.append(i18n_locales.get_text('ux_badge_more', user_language))
+    msg = '\n\n'.join(parts)
+
     from src.keyboards import inline
     markup = inline.get_streak_inline(user_language)
-    await message.answer(msg, reply_markup=markup, parse_mode="Markdown")
+    await message.answer(msg, reply_markup=markup, parse_mode=None)
 
-@router.message(StateFilter("*"), F.text.in_(["⬅️ Back to Main Menu", "⬅️ Главное меню"]))
+@recovery_router.message(StateFilter("*"), F.text.in_(i18n_locales.get_all_translations('ux_back')))
 async def cmd_back_to_main_menu(message: Message, state: FSMContext, user_language: str, db_user):
     await state.clear()
     is_admin = db_user.telegram_id in settings.ADMIN_USER_IDS or db_user.is_admin if db_user else False
     await message.answer(
-        "Returning to main menu..." if user_language == "en" else "Возвращаюсь в главное меню...",
+        i18n_locales.get_text('ux_quick_food', user_language),
         reply_markup=reply.get_main_menu(user_language, is_admin=is_admin)
     )
 
 
 @recovery_router.message(Command("cancel"))
+@recovery_router.message(F.text.in_(i18n_locales.get_all_translations('btn_cancel')))
 async def recover_menu(message: Message, state: FSMContext, user_language: str, db_user):
     """Reset navigation without deleting durable meal drafts."""
     if not db_user or db_user.is_blocked:
@@ -172,7 +154,14 @@ async def recover_menu(message: Message, state: FSMContext, user_language: str, 
 
 
 @router.message(StateFilter(None))
-async def recover_stale_keyboard(message: Message, state: FSMContext, user_language: str, db_user):
+async def recover_stale_keyboard(message: Message, state: FSMContext, user_language: str, db_user, album=None):
     # Telegram keeps reply keyboards after MemoryStorage is lost on restart.
     # Never infer which pending meal a stale Accept button refers to.
-    await recover_menu(message, state, user_language, db_user)
+    from src.services.ux import is_food_entry
+    if db_user and not db_user.is_blocked and is_food_entry(message):
+        from src.handlers.food import process_food_input, FoodLoggingState
+        await state.clear()
+        await state.set_state(FoodLoggingState.waiting_for_input)
+        await process_food_input(message, state, user_language, album=album)
+    else:
+        await recover_menu(message, state, user_language, db_user)

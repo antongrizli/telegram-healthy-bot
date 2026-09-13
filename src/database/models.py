@@ -19,6 +19,7 @@ class User(Base):
     language = Column(String(5), nullable=False, default="en") # 'en', 'ru'
     timezone = Column(String(50), nullable=False, default="UTC")
     notifications_enabled = Column(Boolean, default=True)
+    ux_preferences = Column(JSON, nullable=False, default=dict)
     daily_report_time = Column(Time, default=time(21, 0))
     weekly_report_day = Column(Integer, default=6) # 0 = Monday, 6 = Sunday
     monthly_report_day = Column(Integer, default=1) # Day of the month: 1 to 28
@@ -47,6 +48,22 @@ class User(Base):
     streaks = relationship("Streak", back_populates="user", cascade="all, delete-orphan")
     achievements = relationship("Achievement", back_populates="user", cascade="all, delete-orphan")
     health_cards = relationship("HealthCard", back_populates="user", cascade="all, delete-orphan")
+    water_logs = relationship("WaterLog", cascade="all, delete-orphan")
+
+class WaterLog(Base):
+    __tablename__ = "water_logs"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False, index=True)
+    milliliters = Column(Integer, nullable=False)
+    logged_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+
+class ProductEvent(Base):
+    __tablename__ = "product_events"
+    id = Column(Integer, primary_key=True)
+    # Onboarding events precede the user record. Delete explicitly with the profile.
+    user_id = Column(BigInteger, nullable=False, index=True)
+    name = Column(String(40), nullable=False, index=True)
+    occurred_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None), index=True)
 
 class FoodLog(Base):
     __tablename__ = "food_logs"

@@ -1,8 +1,98 @@
 from datetime import datetime, UTC, timedelta
-from sqlalchemy import select, update, func, desc, and_
+from sqlalchemy import select, update, delete, func, desc, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.models import User, FoodLog, WeightLog, MessageStat, AiRequestLog, AiRequestQueue, Streak, Achievement, HealthCard
 from src.config import settings
+
+async def record_event(db, user_id, name):
+    from src.database.models import ProductEvent
+    db.add(ProductEvent(user_id=user_id, name=name))
+    # Retain only 90 days; no messages, photos or nutritional values in telemetry.
+    await db.execute(delete(ProductEvent).where(ProductEvent.occurred_at < datetime.now(UTC).replace(tzinfo=None) - timedelta(days=90)))
+    await db.commit()
+
+async def get_product_metrics(db, now=None):
+    from src.database.models import ProductEvent
+    from statistics import median
+    now = now or datetime.now(UTC).replace(tzinfo=None)
+    rows = (await db.execute(select(ProductEvent).where(ProductEvent.occurred_at >= now - timedelta(days=30)))).scalars().all()
+    by_user = {}
+    for row in rows:
+        by_user.setdefault(row.user_id, []).append(row)
+    starts = {uid: min(r.occurred_at for r in events if r.name == 'onboarding_started')
+              for uid, events in by_user.items() if any(r.name == 'onboarding_started' for r in events)}
+    completed = {uid for uid, events in by_user.items() if uid in starts and any(r.name == 'onboarding_completed' and r.occurred_at >= starts[uid] for r in events)}
+    first_meal = []
+    retention = {}
+    for uid in completed:
+        meals = [r.occurred_at for r in by_user[uid] if r.name in ('meal_confirmed', 'meal_manual_saved') and r.occurred_at >= starts[uid]]
+        if meals:
+            first_meal.append((min(meals) - starts[uid]).total_seconds())
+    for day in (1, 7):
+        eligible = [uid for uid, start in starts.items() if (now.date() - start.date()).days > day]
+        returned = sum(any((r.occurred_at.date() - starts[uid].date()).days == day and r.name == 'active' for r in by_user[uid]) for uid in eligible)
+        retention[f'D{day}'] = dict(returned=returned, eligible=len(eligible))
+    active_days = {(r.user_id, r.occurred_at.date()) for r in rows if r.name == 'active'}
+    meal_days = {(r.user_id, r.occurred_at.date()) for r in rows if r.name in ('meal_confirmed', 'meal_manual_saved')}
+    drafts = (await db.execute(select(AiRequestQueue).where(AiRequestQueue.request_type == 'meal_draft', AiRequestQueue.created_at >= now - timedelta(days=30)))).scalars().all()
+    return dict(onboarding_started=len(starts), onboarding_completed=len(completed),
+                first_meal_median_seconds=round(median(first_meal)) if first_meal else None,
+                analyzed=len(drafts),
+                confirmed=sum(d.status == 'saved' for d in drafts), retention=retention,
+                active_days=len(active_days), active_days_with_meal=len(active_days & meal_days),
+                events={name: sum(r.name == name for r in rows) for name in ('meal_opened', 'meal_submitted', 'report_opened')})
+
+async def add_water_log(db, user_id, milliliters):
+    from src.database.models import WaterLog
+    row = WaterLog(user_id=user_id, milliliters=milliliters)
+    db.add(row)
+    await db.commit()
+    return row
+
+async def water_total(db, user_id, start, end):
+    from src.database.models import WaterLog
+    return (await db.execute(select(func.coalesce(func.sum(WaterLog.milliliters), 0)).where(
+        WaterLog.user_id == user_id, WaterLog.logged_at >= start, WaterLog.logged_at <= end))).scalar_one()
+
+async def food_queue_status(db, user_id):
+    rows = (await db.execute(select(AiRequestQueue.status).where(AiRequestQueue.user_id == user_id,
+        AiRequestQueue.request_type == 'analyze_food_input',
+        AiRequestQueue.created_at >= datetime.now(UTC).replace(tzinfo=None) - timedelta(days=1)))).scalars().all()
+    return dict(pending=sum(status in ('pending', 'processing') for status in rows), failed=sum(status == 'failed' for status in rows))
+
+async def save_weight_entry(db, user_id, weight):
+    from src.utils.formulas import calculate_targets
+    user = await get_user(db, user_id)
+    if not user or user.is_blocked:
+        return None
+    baseline = (await db.execute(select(WeightLog).where(WeightLog.user_id == user_id).order_by(WeightLog.logged_at).limit(1))).scalar_one_or_none()
+    targets = calculate_targets(weight, user.height_cm, user.age, user.sex, user.activity_level, user.goal)
+    user.weight_kg = weight
+    for attr, key in [('target_calories', 'calories'), ('target_protein', 'protein'), ('target_fat', 'fat'), ('target_carb', 'carb')]:
+        setattr(user, attr, targets[key])
+    await add_weight_log(db, user_id, weight)
+    return baseline
+
+async def save_ux_settings(db, user_id, values):
+    user = await get_user(db, user_id)
+    if not user or user.is_blocked:
+        return None
+    user.timezone = values['timezone']
+    user.notifications_enabled = values['notifications_enabled']
+    user.ux_preferences = {key: values[key] for key in ('frequency', 'quiet_start', 'quiet_end')}
+    await db.commit()
+    return user
+
+async def get_saved_report(db, user_id, report_id):
+    return (await db.execute(select(AiRequestQueue).where(AiRequestQueue.id == report_id,
+        AiRequestQueue.user_id == user_id, AiRequestQueue.request_type == 'report_snapshot'))).scalar_one_or_none()
+
+async def save_report_snapshot(db, user_id, text):
+    row = AiRequestQueue(user_id=user_id, chat_id=user_id, request_type='report_snapshot',
+                         status='completed', payload={'text': text})
+    db.add(row)
+    await db.commit()
+    return row.id
 
 async def get_user(db: AsyncSession, telegram_id: int) -> User:
     result = await db.execute(select(User).where(User.telegram_id == telegram_id))
@@ -335,6 +425,8 @@ async def get_admin_stats(db: AsyncSession) -> dict:
     }
 
 async def delete_user(db: AsyncSession, telegram_id: int) -> bool:
+    from src.database.models import ProductEvent
+    await db.execute(delete(ProductEvent).where(ProductEvent.user_id == telegram_id))
     user = await get_user(db, telegram_id)
     if user:
         await db.delete(user)
@@ -481,6 +573,8 @@ async def save_meal_draft(db, user_id, payload, draft_id=None, commit=True):
     draft = AiRequestQueue(user_id=user_id, chat_id=user_id, request_type="meal_draft",
                            payload=payload, status="awaiting_confirm")
     db.add(draft)
+    from src.database.models import ProductEvent
+    db.add(ProductEvent(user_id=user_id, name="meal_analyzed"))
     await db.flush()
     if commit:
         await db.commit()
@@ -516,6 +610,8 @@ async def finish_meal_draft(db, draft_id, user_id, accept=True):
         logged_at=logged_at.replace(tzinfo=UTC) if logged_at.tzinfo is None else logged_at)
     meal.logged_at = meal.logged_at.astimezone(UTC).replace(tzinfo=None)
     db.add(meal)
+    from src.database.models import ProductEvent
+    db.add(ProductEvent(user_id=user_id, name="meal_confirmed"))
     await db.commit()
     return meal
 

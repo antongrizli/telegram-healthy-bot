@@ -616,3 +616,26 @@ h2 {
 #med-error { color: #f87171; margin: 16px; }
 
 #medications-tab [hidden] { display: none !important; }
+/* Daily entry forms remain readable at narrow widths and with browser zoom. */
+.ux-summary { white-space: pre-line; line-height: 1.6; }
+.ux-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.ux-button { min-height: 44px; padding: 10px 14px; cursor: pointer; color: var(--text-primary); background: var(--bg-secondary); border: 1px solid #8886; }
+.ux-meal-row { padding: 12px 0; border-top: 1px solid #8884; overflow-wrap: anywhere; }
+.ux-meal-row button { margin: 6px; }
+.ux-dialog { width: min(92vw, 480px); max-height: 90vh; overflow-y: auto; border-radius: 16px; padding: 24px; margin: auto; background: #17202d; color: #f4f7fb; border: 1px solid #8886; }
+.ux-dialog::backdrop { background: #0009; }
+.ux-dialog label { display: block; margin: 12px 0; line-height: 1.5; }
+.ux-dialog input:not([type=checkbox]), .ux-dialog select { display: block; box-sizing: border-box; width: 100%; min-height: 44px; margin-top: 6px; padding: 10px; font-size: 16px; border-radius: 8px; border: 1px solid #8a97a8; color: #17202d; background: #fff; }
+.ux-dialog input[type=checkbox] { margin-left: 12px; width: 22px; height: 22px; }
+.ux-dialog button { margin: 6px 4px 6px 0; min-height: 44px; }
+.ux-dialog :focus-visible, .ux-button:focus-visible { outline: 3px solid #5ddbc3; outline-offset: 3px; }
+.ux-button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.card, .grid-2 > *, .nav-item { min-width: 0; }
+.card-title { overflow-wrap: anywhere; }
+.donut-container canvas { max-width: 100%; max-height: 100%; }
+.nav-item { flex: 1; padding: 0 4px; }
+.nav-item span { overflow-wrap: anywhere; }
+@media (max-width: 420px) {
+    .grid-2 { grid-template-columns: minmax(0, 1fr); }
+    .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

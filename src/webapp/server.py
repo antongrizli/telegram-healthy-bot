@@ -247,6 +247,9 @@ def create_app(bot) -> web.Application:
     app = web.Application(middlewares=[block_scanners_middleware], client_max_size=6 * 1024 * 1024)
     from src.webapp.medications import register_routes
     register_routes(app)
+    from src.webapp.ux import register_routes as register_ux_routes, BOT_KEY
+    app[BOT_KEY] = bot
+    register_ux_routes(app)
     
     # Expose API endpoints
     app.router.add_get("/health", health_check)

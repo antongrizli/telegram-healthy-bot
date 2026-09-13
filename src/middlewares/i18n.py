@@ -12,13 +12,13 @@ logger = logging.getLogger(__name__)
 _user_menu_button_cache = {}
 
 MENU_BUTTON_TEXTS = {
-    "en": "Statistics",
-    "ru": "Статистика",
-    "uk": "Статистика",
-    "pl": "Statystyki",
-    "de": "Statistik",
-    "tr": "İstatistikler",
-    "es": "Estadísticas"
+    "en": "Today",
+    "ru": "Сегодня",
+    "uk": "Сьогодні",
+    "pl": "Dzisiaj",
+    "de": "Heute",
+    "tr": "Bugün",
+    "es": "Hoy"
 }
 
 async def update_user_menu_button(bot, chat_id: int, language: str):
@@ -26,7 +26,7 @@ async def update_user_menu_button(bot, chat_id: int, language: str):
     if cached_lang == language:
         return
         
-    text = MENU_BUTTON_TEXTS.get(language, "Statistics")
+    text = MENU_BUTTON_TEXTS.get(language, "Today")
     try:
         await bot.set_chat_menu_button(
             chat_id=chat_id,
@@ -71,4 +71,3 @@ class LanguageMiddleware(BaseMiddleware):
         data["user_language"] = language
         
         return await handler(event, data)
-

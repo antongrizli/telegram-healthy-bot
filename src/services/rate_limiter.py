@@ -215,6 +215,8 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
             carb=analysis.total_carb
         )
 
+        result_text += '\n' + i18n_locales.get_text('meal_type_' + meal_type, user_language)
+        result_text += '\n' + i18n_locales.get_text('ux_estimate', user_language)
         draft_payload = {
             "analysis": analysis.model_dump(), "raw_text": text_desc,
             "image_file_id": image_file_id, "meal_type": meal_type,
@@ -376,6 +378,10 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
 
     elif req_type == "generate_report":
         report_type = payload.get("report_type", "daily")
+        if payload.get('automated'):
+            from src.services.ux import coaching_allowed
+            if not coaching_allowed(user, 'weekly' if report_type == 'weekly' else 'daily'):
+                return True
         from src.services.scheduler import generate_and_send_report_direct
         # Generate the report direct helper will query user, generate via Gemini and log request
         report_at = datetime.fromisoformat(payload["report_at"]) if payload.get("report_at") else item.created_at.replace(tzinfo=UTC)

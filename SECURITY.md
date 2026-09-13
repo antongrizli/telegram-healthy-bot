@@ -55,6 +55,22 @@ If you discover a security vulnerability in this project, please **do not open a
 - Inline confirmation IDs survive bot restarts. The Pending meals button retrieves up to 20 outstanding drafts, oldest first; confirm or cancel those to see more.
 - The queue worker assumes a single application instance and resumes interrupted `processing` requests on startup. Horizontal scaling requires a database lease/claim mechanism first.
 
+### Daily actions and UX telemetry
+
+`/api/today` and `/api/ux/*` require signed Telegram initData and an active profile.
+Meal edits, draft consumption, and saved report details constrain every ID by owner.
+Client payloads cannot choose the acting user or overwrite profile roles. Numeric
+inputs reject non-finite and out-of-range values; meal descriptions render as text.
+Notification preferences and IANA timezones are validated before saving. Browser
+errors no longer display initData or Telegram user payloads.
+
+Product events store only user ID, a bounded server-controlled event name and time.
+They may exist before registration, have a 90-day cleanup window, and are explicitly
+removed on profile deletion. Water entries cascade with the profile. Saved detailed
+reports use owned completed queue rows and are removed with the profile as well.
+The browser smoke test intercepts all network requests using synthetic data; it does
+not install any authentication bypass in the application.
+
 ### Medication data
 
 Medication library, reminders, intake marks and OCR results are private to the authenticated

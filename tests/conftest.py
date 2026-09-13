@@ -72,7 +72,8 @@ def patch_async_session_local(monkeypatch, db_session):
         "src.services.scheduler",
         "src.services.rate_limiter",
         "src.services.gamification",
-        "src.services.briefing"
+        "src.services.briefing",
+        "src.handlers.ux", "src.webapp.ux", "src.middlewares.logging"
     ]
     
     for mod in modules:

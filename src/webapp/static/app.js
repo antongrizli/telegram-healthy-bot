@@ -184,6 +184,7 @@ const loadTab = async (tabName) => {
         if (tabName === "medications") {
             await loadMedications();
         } else if (tabName === "dashboard") {
+            await loadTodayActions();
             await loadDashboardData();
         } else if (tabName === "charts") {
             await loadTrendsCharts();
@@ -208,22 +209,11 @@ const showLoading = (show) => {
 const showError = (msg) => {
     els.errorCard.classList.remove("hidden");
     const dict = LOCALES[state.userLanguage] || LOCALES["en"];
-    let debugInfo = `\n\n[Debug Info]\n`;
-    debugInfo += `URL: ${window.location.href}\n`;
-    debugInfo += `Telegram SDK: ${window.Telegram ? "Loaded" : "Not Loaded"}\n`;
-    if (window.Telegram && window.Telegram.WebApp) {
-        const tg = window.Telegram.WebApp;
-        debugInfo += `initData exists: ${!!tg.initData}\n`;
-        debugInfo += `initData length: ${tg.initData ? tg.initData.length : 0}\n`;
-        debugInfo += `initDataUnsafe: ${JSON.stringify(tg.initDataUnsafe)}\n`;
-    } else {
-        debugInfo += `window.Telegram.WebApp is undefined\n`;
-    }
     const errDesc = document.querySelector("#error-card p");
     if (errDesc) {
         errDesc.innerText = dict.webapp_err_desc;
     }
-    els.errorMessage.innerText = msg + debugInfo;
+    els.errorMessage.innerText = dict.webapp_err_desc || msg;
 };
 
 const hideError = () => {

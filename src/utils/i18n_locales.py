@@ -1932,8 +1932,20 @@ for _lang, _ext in _scheduling_extensions.items():
     if _lang in LOCALES:
         LOCALES[_lang].update(_ext)
 
+from src.utils.ux_locales import install as install_ux_copy
+install_ux_copy(LOCALES)
+
 def get_text(key: str, lang: str = "en", **kwargs) -> str:
     lang = lang if lang in LOCALES else "en"
+    if key == 'session_recovery':
+        return LOCALES[lang]['ux_recovery'].format(add=LOCALES[lang]['ux_add'], pending=LOCALES[lang]['btn_pending_meals'], food=LOCALES[lang]['btn_log_food'])
+    if key == 'help_text':
+        d = LOCALES[lang]
+        return '\n\n'.join([d['ux_quick_food'], d['ux_estimate'],
+            f"{d['ux_add']} → {d['btn_log_food']} / {d['btn_log_weight']} / {d['ux_water']} / {d['btn_pending_meals']}",
+            f"{d['ux_today']} → {d['btn_daily_report']} / {d['btn_my_meals']}",
+            f"{d['ux_progress']} → {d['btn_weekly_report']} / {d['btn_all_achievements']}",
+            f"{d['ux_more']} → {d['btn_my_profile']} / {d['btn_medications']} / {d['ux_settings']}"])
     text = LOCALES[lang].get(key, LOCALES["en"].get(key, key))
     if kwargs:
         try:

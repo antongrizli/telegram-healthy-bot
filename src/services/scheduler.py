@@ -42,9 +42,12 @@ async def send_report_notice(bot, user_id, text, **kwargs):
 
 
 async def send_daily_reminder(bot: Bot, user_id: int):
+    from src.services import ux
     async with AsyncSessionLocal() as db:
         user = await crud.get_user(db, user_id)
         if not user or user.is_blocked or not user.notifications_enabled:
+            return
+        if not ux.coaching_allowed(user):
             return
         
         # Check if they logged any food today. If yes, skip reminder.
@@ -59,12 +62,13 @@ async def send_daily_reminder(bot: Bot, user_id: int):
         end_date = now_local.astimezone(UTC).replace(tzinfo=None)
         
         logs = await crud.get_food_logs(db, user_id, start_date, end_date)
-        if len(logs) > 0:
+        if any(log.meal_type == 'dinner' for log in logs) or (not user.ux_preferences and len(logs) > 0):
             return
 
         try:
-            msg = i18n_locales.get_text("daily_reminder", user.language)
-            await bot.send_message(user_id, msg, parse_mode="Markdown")
+            msg = i18n_locales.get_text('ux_evening' if logs else 'ux_empty', user.language)
+            from src.handlers.ux import today_keyboard
+            await bot.send_message(user_id, msg, reply_markup=today_keyboard(user.language))
         except Exception as e:
             print(f"Error sending daily reminder to {user_id}: {e}")
 
@@ -108,6 +112,11 @@ async def generate_and_send_report_direct(bot: Bot, db: AsyncSession, user, repo
         food_logs = await crud.get_food_logs(db, user_id, start_date, end_date)
         weight_logs = await crud.get_weight_logs(db, user_id, start_date, end_date)
 
+    from src.services import ux
+    from src.handlers.ux import today_keyboard
+    if not food_logs:
+        await bot.send_message(user_id, i18n_locales.get_text('ux_empty', user.language), reply_markup=today_keyboard(user.language))
+        return
     profile_dict = {
         "name": user.name,
         "sex": user.sex,
@@ -145,22 +154,36 @@ async def generate_and_send_report_direct(bot: Bot, db: AsyncSession, user, repo
     else:
         header = f"{i18n_locales.get_text('monthly_report_header', user.language)}\n\n"
         
-    await send_multipart_message(bot, user_id, header + report, parse_mode="Markdown")
+    report_id = await crud.save_report_snapshot(db, user_id, report)
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    if report_type == 'daily':
+        summary = (await ux.today_data(db, user, report_at or datetime.now(UTC)))['summary']
+    else:
+        logged_days = len({log.logged_at.replace(tzinfo=UTC).astimezone(user_tz).date() for log in food_logs})
+        summary = header.strip('*\n') + '\n' + i18n_locales.get_text('ux_period', user.language,
+            days=7 if report_type == 'weekly' else 30, count=logged_days,
+            cal=round(sum(log.calories for log in food_logs) / max(1, logged_days)))
+        ordered = sorted(weight_logs, key=lambda log: log.logged_at)
+        summary += '\n' + (i18n_locales.get_text('ux_trend', user.language, change=f'{ordered[-1].weight - ordered[0].weight:+.1f}') if len(ordered) > 1 else i18n_locales.get_text('ux_no_trend', user.language))
+        summary += '\n\n' + ux.next_action(user, dict(count=logged_days,
+            cal=sum(log.calories for log in food_logs) / max(1, logged_days),
+            protein=sum(log.proteins for log in food_logs) / max(1, logged_days)),
+            days=7 if report_type == 'weekly' else 30)
+    await bot.send_message(user_id, summary, reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=i18n_locales.get_text('ux_details', user.language), callback_data=f'ux:report:{report_id}')]]))
 
     if report_type == "weekly":
         from src.keyboards import inline
         from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
         
         promo_text = (
-            "📊 *Interactive weekly charts* are ready to view in your dashboard! Click below to see trends:"
-            if user.language == "en" else
-            "📊 *Интерактивные недельные графики* готовы к просмотру в вашем дашборде! Нажмите кнопку ниже:"
+            i18n_locales.get_text("ux_progress", user.language)
         )
         
         markup = InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="📈 View Trends" if user.language == "en" else "📈 Посмотреть графики",
+                    text=i18n_locales.get_text("ux_progress", user.language),
                     web_app=WebAppInfo(url=f"{settings.WEBAPP_URL}?tab=charts")
                 )
             ]
@@ -172,7 +195,7 @@ async def generate_and_send_report_direct(bot: Bot, db: AsyncSession, user, repo
             print(f"Failed to send weekly charts webapp promo to {user_id}: {e}")
 
 
-async def send_daily_report(bot: Bot, user_id: int):
+async def send_daily_report(bot: Bot, user_id: int, automated: bool = False):
     report_at = datetime.now(UTC)
     async with AsyncSessionLocal() as db:
         user = await crud.get_user(db, user_id)
@@ -186,7 +209,7 @@ async def send_daily_report(bot: Bot, user_id: int):
                 user_id=user_id,
                 chat_id=user_id,
                 request_type="generate_report",
-                payload={"report_type": "daily", "report_at": report_at.isoformat()}
+                payload={"report_type": "daily", "report_at": report_at.isoformat(), "automated": automated}
             )
             position = await rate_limiter.get_queue_position(db, queue_id)
             await send_report_notice(
@@ -209,7 +232,7 @@ async def send_daily_report(bot: Bot, user_id: int):
                 user_id=user_id,
                 chat_id=user_id,
                 request_type="generate_report",
-                payload={"report_type": "daily", "report_at": report_at.isoformat()}
+                payload={"report_type": "daily", "report_at": report_at.isoformat(), "automated": automated}
             )
             await send_report_notice(
                 bot, user_id,
@@ -217,7 +240,7 @@ async def send_daily_report(bot: Bot, user_id: int):
                 parse_mode="Markdown"
             )
 
-async def send_weekly_report(bot: Bot, user_id: int):
+async def send_weekly_report(bot: Bot, user_id: int, automated: bool = False):
     report_at = datetime.now(UTC)
     async with AsyncSessionLocal() as db:
         user = await crud.get_user(db, user_id)
@@ -231,7 +254,7 @@ async def send_weekly_report(bot: Bot, user_id: int):
                 user_id=user_id,
                 chat_id=user_id,
                 request_type="generate_report",
-                payload={"report_type": "weekly", "report_at": report_at.isoformat()}
+                payload={"report_type": "weekly", "report_at": report_at.isoformat(), "automated": automated}
             )
             position = await rate_limiter.get_queue_position(db, queue_id)
             await send_report_notice(
@@ -254,7 +277,7 @@ async def send_weekly_report(bot: Bot, user_id: int):
                 user_id=user_id,
                 chat_id=user_id,
                 request_type="generate_report",
-                payload={"report_type": "weekly", "report_at": report_at.isoformat()}
+                payload={"report_type": "weekly", "report_at": report_at.isoformat(), "automated": automated}
             )
             await send_report_notice(
                 bot, user_id,
@@ -262,7 +285,7 @@ async def send_weekly_report(bot: Bot, user_id: int):
                 parse_mode="Markdown"
             )
 
-async def send_monthly_report(bot: Bot, user_id: int):
+async def send_monthly_report(bot: Bot, user_id: int, automated: bool = False):
     report_at = datetime.now(UTC)
     async with AsyncSessionLocal() as db:
         user = await crud.get_user(db, user_id)
@@ -276,7 +299,7 @@ async def send_monthly_report(bot: Bot, user_id: int):
                 user_id=user_id,
                 chat_id=user_id,
                 request_type="generate_report",
-                payload={"report_type": "monthly", "report_at": report_at.isoformat()}
+                payload={"report_type": "monthly", "report_at": report_at.isoformat(), "automated": automated}
             )
             position = await rate_limiter.get_queue_position(db, queue_id)
             await send_report_notice(
@@ -299,7 +322,7 @@ async def send_monthly_report(bot: Bot, user_id: int):
                 user_id=user_id,
                 chat_id=user_id,
                 request_type="generate_report",
-                payload={"report_type": "monthly", "report_at": report_at.isoformat()}
+                payload={"report_type": "monthly", "report_at": report_at.isoformat(), "automated": automated}
             )
             await send_report_notice(
                 bot, user_id,
@@ -321,7 +344,8 @@ async def check_daily_streaks_and_targets(bot: Bot, user_id: int):
         new_ach_keys = await gamification.check_new_achievements(db, user_id)
         
         # Notify if any achievements unlocked
-        if new_ach_keys:
+        from src.services.ux import coaching_allowed
+        if new_ach_keys and coaching_allowed(user):
             ach_notifs = []
             for ach_key in new_ach_keys:
                 ach_def = gamification.ACHIEVEMENTS.get(ach_key)
@@ -342,6 +366,9 @@ async def send_morning_briefing_job(bot: Bot, user_id: int):
         user = await crud.get_user(db, user_id)
         if not user or user.is_blocked or not user.notifications_enabled:
             return
+        from src.services.ux import coaching_allowed
+        if user.ux_preferences or not coaching_allowed(user):
+            return
             
         from src.services import briefing
         msg = await briefing.generate_morning_briefing(db, user_id)
@@ -360,15 +387,20 @@ async def send_weekly_health_card_job(bot: Bot, user_id: int):
         user = await crud.get_user(db, user_id)
         if not user or user.is_blocked or not user.notifications_enabled:
             return
+        from src.services.ux import coaching_allowed
+        if not coaching_allowed(user, 'weekly'):
+            return
             
         from src.services import gamification
         card = await gamification.generate_weekly_health_card(db, user_id)
+        if user.ux_preferences:
+            return  # The card stays in WebApp; configured coaching sends one weekly report.
         
         # Send a summary message and an inline keyboard to view full details
         msg = (
             f"🃏 *{i18n_locales.get_text('health_card_title', user.language)}*\n\n"
             f"📊 *{i18n_locales.get_text('overall_score', user.language)}*: {card.card_data['overall_score']}/100\n\n"
-            f"💬 *Coach Notes*:\n{card.card_data['coach_message']}"
+            f"💬 *{i18n_locales.get_text('ux_details', user.language)}*:\n{card.card_data['coach_message']}"
         )
         
         # Keyboard linking to the Mini App
@@ -384,6 +416,17 @@ async def reset_weekly_freezes_global():
     async with AsyncSessionLocal() as db:
         from src.services import gamification
         await gamification.reset_weekly_freezes(db)
+
+async def scheduled_report(bot, user_id, report_type):
+    from src.services.ux import coaching_allowed, zone
+    async with AsyncSessionLocal() as db:
+        user = await crud.get_user(db, user_id)
+        if not user or not coaching_allowed(user, 'weekly' if report_type == 'weekly' else 'daily'):
+            return
+        if user.ux_preferences and (report_type == 'monthly' or (report_type == 'daily' and datetime.now(zone(user)).weekday() == user.weekly_report_day)):
+            return
+    await {'daily': send_daily_report, 'weekly': send_weekly_report, 'monthly': send_monthly_report}[report_type](bot, user_id, automated=True)
+
 
 def reschedule_user_jobs(bot: Bot, user):
     user_id = user.telegram_id
@@ -404,7 +447,7 @@ def reschedule_user_jobs(bot: Bot, user):
         
     if user.notifications_enabled:
         # 1. Daily Food Log Reminder
-        r_time = user.food_reminder_time or time(11, 0)
+        r_time = time(19, 0) if user.ux_preferences else user.food_reminder_time or time(11, 0)
         scheduler.add_job(
             send_daily_reminder,
             CronTrigger(hour=r_time.hour, minute=r_time.minute, timezone=user_tz),
@@ -416,30 +459,30 @@ def reschedule_user_jobs(bot: Bot, user):
         # 2. Daily Report
         d_time = user.daily_report_time or time(21, 0)
         scheduler.add_job(
-            send_daily_report,
+            scheduled_report,
             CronTrigger(hour=d_time.hour, minute=d_time.minute, timezone=user_tz),
             id=f"user_{user_id}_daily",
-            args=[bot, user_id],
+            args=[bot, user_id, 'daily'],
             replace_existing=True
         )
         
         # 3. Weekly Report
         w_day = user.weekly_report_day if user.weekly_report_day is not None else 6  # 6 = Sunday
         scheduler.add_job(
-            send_weekly_report,
+            scheduled_report,
             CronTrigger(day_of_week=w_day, hour=21, minute=0, timezone=user_tz),
             id=f"user_{user_id}_weekly",
-            args=[bot, user_id],
+            args=[bot, user_id, 'weekly'],
             replace_existing=True
         )
         
         # 4. Monthly Report
         m_day = user.monthly_report_day if user.monthly_report_day is not None else 1
         scheduler.add_job(
-            send_monthly_report,
+            scheduled_report,
             CronTrigger(day=m_day, hour=21, minute=0, timezone=user_tz),
             id=f"user_{user_id}_monthly",
-            args=[bot, user_id],
+            args=[bot, user_id, 'monthly'],
             replace_existing=True
         )
         

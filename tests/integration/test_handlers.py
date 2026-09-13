@@ -306,7 +306,7 @@ async def test_admin_navigation_flow(mock_state):
     await cmd_back_to_main_menu(msg_back_main, mock_state, "en", db_user)
     msg_back_main.answer.assert_called_once()
     main_markup = msg_back_main.answer.call_args[1]["reply_markup"]
-    assert "food" in main_markup.keyboard[0][0].text.lower()
+    assert main_markup.keyboard[0][0].text == '➕ Add'
 
 async def test_admin_navigation_flow_ru(mock_state):
     from src.handlers.admin import cmd_admin, cmd_admin_stats, cmd_admin_stats_back
@@ -340,7 +340,7 @@ async def test_admin_navigation_flow_ru(mock_state):
     await cmd_back_to_main_menu(msg_back_main, mock_state, "ru", db_user)
     msg_back_main.answer.assert_called_once()
     main_markup = msg_back_main.answer.call_args[1]["reply_markup"]
-    assert "еду" in main_markup.keyboard[0][0].text.lower() or "food" in main_markup.keyboard[0][0].text.lower()
+    assert main_markup.keyboard[0][0].text == '➕ Добавить'
 
 
 async def test_cmd_start_unregistered(mock_state):
@@ -369,7 +369,7 @@ async def test_cmd_start_registered(mock_state):
     message.answer.assert_called_once()
     assert "welcome" in message.answer.call_args[0][0].lower()
     markup = message.answer.call_args[1]["reply_markup"]
-    assert "food" in markup.keyboard[0][0].text.lower()
+    assert markup.keyboard[0][0].text == '➕ Add'
 
 
 async def test_process_language(mock_state):
@@ -377,12 +377,11 @@ async def test_process_language(mock_state):
     message = make_mock_message("English 🇺🇸")
     await process_language(message, mock_state, "en")
     
-    mock_state.update_data.assert_called_once_with(language="en")
-    mock_state.set_state.assert_called_once_with(ProfileStatesGroup.name)
-    assert message.answer.call_count == 2
-    calls = message.answer.call_args_list
-    assert "configure" in calls[0][0][0].lower()
-    assert "name" in calls[1][0][0].lower()
+    mock_state.update_data.assert_any_call(language='en')
+    mock_state.update_data.assert_any_call(name='Test')
+    mock_state.set_state.assert_called_once_with(ProfileStatesGroup.sex)
+    assert message.answer.call_count == 1
+    assert 'Step 2/7' in message.answer.call_args.args[0]
 
 
 async def test_weight_feedback_lose_weight_success(db_session, mock_state):
@@ -537,7 +536,6 @@ async def test_process_monthly_report_day_invalid(mock_state):
     message2 = make_mock_message("29")
     await process_monthly_report_day(message2, mock_state, "en")
     assert "Invalid day of the month" in message2.answer.call_args[0][0]
-
 
 
 

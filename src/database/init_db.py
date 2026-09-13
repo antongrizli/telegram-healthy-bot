@@ -12,6 +12,12 @@ async def init_db():
         # medication_intakes with their indexes and occurrence uniqueness constraint.
         # New tables need no ALTER on existing installations.
         await conn.run_sync(Base.metadata.create_all)
+        if conn.dialect.name == "postgresql":
+            await conn.execute(sa.text("ALTER TABLE users ADD COLUMN IF NOT EXISTS ux_preferences JSON NOT NULL DEFAULT '{}'"))
+        else:
+            columns = await conn.run_sync(lambda c: [col['name'] for col in sa.inspect(c).get_columns('users')])
+            if 'ux_preferences' not in columns:
+                await conn.execute(sa.text("ALTER TABLE users ADD COLUMN ux_preferences JSON NOT NULL DEFAULT '{}'"))
         
         # Add timezone column to existing PostgreSQL users table if it doesn't exist
         try:

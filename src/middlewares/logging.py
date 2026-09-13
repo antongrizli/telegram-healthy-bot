@@ -30,5 +30,6 @@ class InteractionLoggingMiddleware(BaseMiddleware):
             async with AsyncSessionLocal() as db:
                 # Log interaction for admin analytics
                 await crud.log_message_stat(db, user.id, message_type)
+                await crud.record_event(db, user.id, 'active')
                 
         return await handler(event, data)

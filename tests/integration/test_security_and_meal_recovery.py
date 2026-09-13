@@ -135,7 +135,7 @@ async def test_queued_report_preserves_original_day(db_session, monkeypatch):
     queue_id = await rate_limiter.add_to_queue(db_session, 123, 123, "generate_report",
         {"report_type": "daily", "report_at": yesterday.isoformat()})
     item = await db_session.get(AiRequestQueue, queue_id)
-    await rate_limiter.execute_queued_item(SimpleNamespace(id=1), MemoryStorage(), db_session, item)
+    await rate_limiter.execute_queued_item(SimpleNamespace(id=1, send_message=AsyncMock()), MemoryStorage(), db_session, item)
     assert query.call_args.args[2] == yesterday.replace(hour=0).astimezone(UTC).replace(tzinfo=None)
     assert query.call_args.args[3] == yesterday.astimezone(UTC).replace(tzinfo=None)
 
@@ -150,7 +150,7 @@ async def test_daily_report_dst_boundaries(db_session, monkeypatch, local_day):
     monkeypatch.setattr(crud, "get_weight_logs", AsyncMock(return_value=[]))
     monkeypatch.setattr(gemini, "generate_report", AsyncMock(return_value="Report"))
     monkeypatch.setattr(scheduler, "send_multipart_message", AsyncMock())
-    await scheduler.generate_and_send_report_direct(None, db_session, user, "daily", report_at)
+    await scheduler.generate_and_send_report_direct(SimpleNamespace(send_message=AsyncMock()), db_session, user, "daily", report_at)
     assert query.call_args.args[2] == local_day.replace(tzinfo=ZoneInfo("Europe/Berlin")).astimezone(UTC).replace(tzinfo=None)
     assert query.call_args.args[3] == report_at.astimezone(UTC).replace(tzinfo=None)
 
@@ -257,7 +257,7 @@ async def test_recent_users_limit_and_engagement_output(db_session):
     assert [row["telegram_id"] for row in rows] == list(range(100, 110))
     message = SimpleNamespace(answer=AsyncMock())
     await cmd_admin_stats_engagement(message, "en")
-    text = message.answer.call_args.args[0]
+    text = message.answer.call_args_list[-2].args[0]
     assert "Joined:" in text
     assert "Last meal tracked: No meals yet" in text
     assert "UTC" in text

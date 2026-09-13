@@ -57,11 +57,12 @@ def test_recent_user_activity_empty_is_localized():
     assert "нет активности" in format_recent_user_activity([], "ru")
 
 
-def test_pending_meals_are_available_from_log_food_instead_of_main_menu():
-    from src.keyboards.reply import get_main_menu
+def test_pending_meals_are_available_from_add_menu_and_recovery_explains_path():
+    from src.keyboards.reply import get_main_menu, get_section_menu
     from src.utils.i18n_locales import LOCALES, get_text
     for lang in LOCALES:
         label = get_text("btn_pending_meals", lang)
         assert label != "btn_pending_meals"
         assert label not in [button.text for row in get_main_menu(lang).keyboard for button in row]
-        assert label not in get_text("session_recovery", lang)
+        assert label in get_text("session_recovery", lang)
+        assert label in [button.text for row in get_section_menu('add', lang).keyboard for button in row]

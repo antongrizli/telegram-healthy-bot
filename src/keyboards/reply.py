@@ -6,34 +6,28 @@ def get_main_menu(lang: str = "en", is_admin: bool = False) -> ReplyKeyboardMark
     """
     Returns the main menu keyboard based on user's selected language.
     """
-    kb = [
-        [
-            KeyboardButton(text=get_text("btn_log_food", lang))
-        ],
-        [
-            KeyboardButton(text=get_text("btn_log_weight", lang)),
-            KeyboardButton(text=get_text("btn_daily_report", lang))
-        ],
-        [
-            KeyboardButton(text=get_text("btn_weekly_report", lang)),
-            KeyboardButton(text=get_text("btn_my_profile", lang))
-        ],
-        [
-            KeyboardButton(text=get_text("btn_my_meals", lang)),
-            KeyboardButton(text=get_text("btn_help", lang))
-        ]
-    ]
-    kb.append([KeyboardButton(text=get_text("btn_medications", lang))])
+    kb = [[KeyboardButton(text=get_text(key, lang)) for key in row]
+          for row in [('ux_add', 'ux_today'), ('ux_progress', 'ux_more')]]
     if is_admin:
         kb.append([KeyboardButton(text="👑 Admin Panel" if lang == "en" else "👑 Админ-панель")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+
+def get_section_menu(section, lang):
+    rows = {
+        'add': [('btn_log_food', 'btn_log_weight'), ('ux_water',), ('btn_pending_meals',)],
+        'more': [('btn_my_profile', 'btn_medications'), ('btn_help',)],
+    }[section]
+    return ReplyKeyboardMarkup(keyboard=[
+        [KeyboardButton(text=get_text(key, lang)) for key in row]
+        for row in [*rows, ('ux_back',)]], resize_keyboard=True)
 
 
 def get_food_menu(lang: str, has_pending_meals: bool) -> ReplyKeyboardMarkup:
     kb = [[KeyboardButton(text=get_text("btn_new_food", lang))]]
     if has_pending_meals:
         kb.append([KeyboardButton(text=get_text("btn_pending_meals", lang))])
-    kb.append([KeyboardButton(text="⬅️ Back to Main Menu" if lang == "en" else "⬅️ Главное меню")])
+    kb.append([KeyboardButton(text=get_text("ux_back", lang))])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_admin_menu(lang: str = "en") -> ReplyKeyboardMarkup:
@@ -47,7 +41,7 @@ def get_admin_menu(lang: str = "en") -> ReplyKeyboardMarkup:
             KeyboardButton(text="🚫 Blocked Users" if lang == "en" else "🚫 Заблокированные")
         ],
         [
-            KeyboardButton(text="⬅️ Back to Main Menu" if lang == "en" else "⬅️ Главное меню")
+            KeyboardButton(text=get_text("ux_back", lang))
         ]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
@@ -56,14 +50,14 @@ def get_cancel_keyboard(lang: str = "en", current_val: str = None) -> ReplyKeybo
     kb = []
     if current_val is not None:
         kb.append([KeyboardButton(text=get_text("btn_keep_current", lang, value=current_val))])
-    kb.append([KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")])
+    kb.append([KeyboardButton(text=get_text("btn_cancel", lang))])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_setup_profile_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
     kb = [
         [KeyboardButton(text=get_text("btn_setup_profile", lang))],
         [KeyboardButton(text=get_text("btn_delete_profile", lang))],
-        [KeyboardButton(text="⬅️ Back to Main Menu" if lang == "en" else "⬅️ Главное меню")]
+        [KeyboardButton(text=get_text("ux_back", lang))]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
@@ -82,7 +76,7 @@ def get_sex_keyboard(lang: str = "en", current_val: str = None) -> ReplyKeyboard
         KeyboardButton(text=get_text("sex_male", lang)),
         KeyboardButton(text=get_text("sex_female", lang))
     ])
-    kb.append([KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")])
+    kb.append([KeyboardButton(text=get_text("btn_cancel", lang))])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_activity_keyboard(lang: str = "en", current_val: str = None) -> ReplyKeyboardMarkup:
@@ -94,7 +88,7 @@ def get_activity_keyboard(lang: str = "en", current_val: str = None) -> ReplyKey
         [KeyboardButton(text=get_text("act_light", lang))],
         [KeyboardButton(text=get_text("act_moderate", lang))],
         [KeyboardButton(text=get_text("act_active", lang))],
-        [KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")]
+        [KeyboardButton(text=get_text("btn_cancel", lang))]
     ])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
@@ -107,7 +101,7 @@ def get_goal_keyboard(lang: str = "en", current_val: str = None) -> ReplyKeyboar
         [KeyboardButton(text=get_text("goal_maintain", lang))],
         [KeyboardButton(text=get_text("goal_gain_w", lang))],
         [KeyboardButton(text=get_text("goal_gain_m", lang))],
-        [KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")]
+        [KeyboardButton(text=get_text("btn_cancel", lang))]
     ])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
@@ -130,7 +124,7 @@ def get_lang_keyboard(lang: str = "en", current_val: str = None) -> ReplyKeyboar
     kb.append([
         KeyboardButton(text="Español 🇪🇸")
     ])
-    kb.append([KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")])
+    kb.append([KeyboardButton(text=get_text("btn_cancel", lang))])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_notifications_keyboard(lang: str = "en", current_val: str = None) -> ReplyKeyboardMarkup:
@@ -141,7 +135,7 @@ def get_notifications_keyboard(lang: str = "en", current_val: str = None) -> Rep
         KeyboardButton(text=get_text("yes", lang)),
         KeyboardButton(text=get_text("no", lang))
     ])
-    kb.append([KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")])
+    kb.append([KeyboardButton(text=get_text("btn_cancel", lang))])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_timezone_list_button_keyboard(lang: str = "en", current_val: str = None) -> ReplyKeyboardMarkup:
@@ -149,7 +143,7 @@ def get_timezone_list_button_keyboard(lang: str = "en", current_val: str = None)
     if current_val is not None:
         kb.append([KeyboardButton(text=get_text("btn_keep_current", lang, value=current_val))])
     kb.append([KeyboardButton(text=get_text("btn_timezone_list", lang))])
-    kb.append([KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")])
+    kb.append([KeyboardButton(text=get_text("btn_cancel", lang))])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 
@@ -160,8 +154,8 @@ def get_timezone_regions_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
         row = [KeyboardButton(text=r) for r in regions[i:i+3]]
         kb.append(row)
     kb.append([
-        KeyboardButton(text="🔙 Back" if lang == "en" else "🔙 Назад"),
-        KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")
+        KeyboardButton(text=get_text("ux_previous", lang)),
+        KeyboardButton(text=get_text("btn_cancel", lang))
     ])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
@@ -200,8 +194,8 @@ def get_regional_timezone_keyboard(region: str, page: int, lang: str = "en") -> 
     
     # Back to regions and cancel
     kb.append([
-        KeyboardButton(text="🔙 Back to Regions" if lang == "en" else "🔙 К регионам"),
-        KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")
+        KeyboardButton(text=get_text("ux_regions", lang)),
+        KeyboardButton(text=get_text("btn_cancel", lang))
     ])
     
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
@@ -219,7 +213,7 @@ def get_meal_type_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
         [
             KeyboardButton(text=get_text("meal_type_food", lang))
         ],
-        [KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")]
+        [KeyboardButton(text=get_text("btn_cancel", lang))]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
@@ -251,7 +245,7 @@ def get_meals_keyboard(meals: list, show_next: bool, lang: str = "en") -> ReplyK
     if show_next:
         nav_row.append(KeyboardButton(text=get_text("btn_next_day", lang)))
     kb.append(nav_row)
-    kb.append([KeyboardButton(text="⬅️ Back to Main Menu" if lang == "en" else "⬅️ Главное меню")])
+    kb.append([KeyboardButton(text=get_text("ux_back", lang))])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_meal_edit_confirm_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
@@ -285,7 +279,7 @@ def get_blocked_users_keyboard(users: list, lang: str = "en") -> ReplyKeyboardMa
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_admin_cancel_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
-    kb = [[KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")]]
+    kb = [[KeyboardButton(text=get_text("btn_cancel", lang))]]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_admin_back_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
@@ -322,7 +316,7 @@ def get_weekly_report_day_keyboard(lang: str = "en", current_val: int = None) ->
             row = []
             
     kb.append([KeyboardButton(text=get_text("weekday_6", lang))]) # Sunday (6)
-    kb.append([KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")])
+    kb.append([KeyboardButton(text=get_text("btn_cancel", lang))])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_monthly_report_day_keyboard(lang: str = "en", current_val: int = None) -> ReplyKeyboardMarkup:
@@ -336,5 +330,5 @@ def get_monthly_report_day_keyboard(lang: str = "en", current_val: int = None) -
         KeyboardButton(text="15"),
         KeyboardButton(text="28")
     ])
-    kb.append([KeyboardButton(text="❌ Cancel" if lang == "en" else "❌ Отмена")])
+    kb.append([KeyboardButton(text=get_text("btn_cancel", lang))])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)

@@ -18,6 +18,7 @@ async def cb_log_breakfast(callback: CallbackQuery, state: FSMContext, user_lang
     """
     await callback.answer()
     from src.handlers.food import FoodLoggingState
+    await state.clear()
     await state.set_state(FoodLoggingState.waiting_for_input)
     await state.update_data(meal_type="breakfast")
     
@@ -34,6 +35,10 @@ async def cb_report_range(callback: CallbackQuery, user_language: str):
     """
     await callback.answer()
     range_type = callback.data.split(":")[1]
+    if range_type not in ("daily", "weekly", "monthly"):
+        return
+    async with AsyncSessionLocal() as db:
+        await crud.record_event(db, callback.from_user.id, 'report_opened')
     
     from src.services.scheduler import send_daily_report, send_weekly_report, send_monthly_report
     if range_type == "daily":
@@ -57,21 +62,8 @@ async def cb_view_streaks(callback: CallbackQuery, user_language: str):
         from src.services import gamification
         streaks = await crud.get_user_streaks(db, user.telegram_id)
         
-        msg = f"🔥 *{i18n_locales.get_text('btn_streak_status', user_language)}*:\n\n"
-        if not streaks:
-            msg += "No active streaks yet! Start tracking today to build a streak."
-        else:
-            for s in streaks:
-                type_name = (
-                    "Food logging 🍽️" if s.streak_type == "food_logging" else
-                    "Weight logging ⚖️" if s.streak_type == "weight_logging" else
-                    "Calorie goal hit 🎯" if s.streak_type == "calorie_target_hit" else "Protein goal hit 🥩"
-                )
-                msg += f"• *{type_name}*: {s.current_count} days (Longest: {s.longest_count} days)\n"
-            
-            msg += f"\n❄️ *Streak Freezes left*: {user.streak_freezes_left}/1"
-            
-        await callback.message.answer(msg, parse_mode="Markdown")
+        from src.services.ux import streak_text
+        await callback.message.answer(streak_text(user, streaks, user_language), parse_mode=None)
 
 @router.callback_query(F.data.startswith("share_achievement:"))
 async def cb_share_achievement(callback: CallbackQuery, user_language: str):
@@ -87,13 +79,10 @@ async def cb_share_achievement(callback: CallbackQuery, user_language: str):
         name = i18n_locales.get_text(ach_def["name_key"], user_language)
         desc = i18n_locales.get_text(ach_def["desc_key"], user_language)
         
-        share_title = "I unlocked a new achievement in Healthy Bot! 🍏" if user_language == "en" else "Я открыл новое достижение в Healthy Bot! 🍏"
-        share_text = f"🏆 *{share_title}*\n\n{icon} *{name}* — {desc}\n\nJoin me on @your_healthy_body_bot! 💚"
-        
-        await callback.answer("Share text generated!" if user_language == "en" else "Текст для отправки создан!")
-        await callback.message.answer(
-            f"`{share_text}`\n\n_(Tap on the text above to copy it!)_" if user_language == "en" else f"`{share_text}`\n\n_(Нажмите на текст выше, чтобы скопировать его!)_",
-            parse_mode="Markdown"
-        )
+        share_title = i18n_locales.get_text('ux_share_title', user_language)
+        share_text = f"{share_title}\n\n{icon} {name} — {desc}\n\n@your_healthy_body_bot"
+        await callback.answer()
+        await callback.message.answer(share_text, parse_mode=None)
+        await callback.message.answer(i18n_locales.get_text('ux_share_hint', user_language))
     else:
-        await callback.answer("Achievement not found.")
+        await callback.answer(i18n_locales.get_text('ux_badge_missing', user_language))

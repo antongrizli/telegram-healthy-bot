@@ -3,12 +3,11 @@ from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
-from sqlalchemy import select
 from src.database.connection import AsyncSessionLocal
 from src.database import crud
-from src.database.models import WeightLog
 from src.utils import i18n_locales
 from src.services import gamification
+from src.keyboards import reply
 
 router = Router()
 
@@ -20,13 +19,15 @@ async def start_weight_logging(message: Message, state: FSMContext, user_languag
     await state.set_state(WeightState.waiting_for_weight)
     await message.answer(
         i18n_locales.get_text("weight_prompt", user_language),
+        reply_markup=reply.get_cancel_keyboard(user_language),
         parse_mode="Markdown"
     )
 
 @router.message(WeightState.waiting_for_weight)
 async def process_weight_input(message: Message, state: FSMContext, user_language: str):
     try:
-        weight = float(message.text.strip().replace(",", "."))
+        from src.services.ux import numeric
+        weight = numeric(message.text, 20.01, 500)
         if weight <= 20 or weight > 500:
             raise ValueError()
     except ValueError:
@@ -37,37 +38,10 @@ async def process_weight_input(message: Message, state: FSMContext, user_languag
     user_goal = None
     
     async with AsyncSessionLocal() as db:
-        # Update user's current weight and recalculate daily target macros
         user = await crud.get_user(db, user_id)
-        if user:
-            user_goal = user.goal
-            user.weight_kg = weight
-            from src.utils import formulas
-            targets = formulas.calculate_targets(
-                weight_kg=weight,
-                height_cm=user.height_cm,
-                age=user.age,
-                sex=user.sex,
-                activity_level=user.activity_level,
-                goal=user.goal
-            )
-            user.target_calories = targets["calories"]
-            user.target_protein = targets["protein"]
-            user.target_fat = targets["fat"]
-            user.target_carb = targets["carb"]
+        user_goal = user.goal if user else None
+        baseline_log = await crud.save_weight_entry(db, user_id, weight)
 
-        # Find the earliest logged weight as the baseline
-        result = await db.execute(
-            select(WeightLog)
-            .where(WeightLog.user_id == user_id)
-            .order_by(WeightLog.logged_at.asc())
-            .limit(1)
-        )
-        baseline_log = result.scalars().first()
-        
-        # Save the new weight log
-        await crud.add_weight_log(db, user_id=user_id, weight=weight)
-        
         # Process gamification
         ach_notifs = []
         if user:
@@ -136,4 +110,6 @@ async def process_weight_input(message: Message, state: FSMContext, user_languag
         response_msg += f"\n\n🏆 *{i18n_locales.get_text('achievements_unlocked_title', user_language)}*\n" + "\n".join(ach_notifs)
     
     await state.clear()
-    await message.answer(response_msg, parse_mode="Markdown")
+    from src.keyboards.reply import get_main_menu
+    from src.config import settings
+    await message.answer(response_msg, parse_mode="Markdown", reply_markup=get_main_menu(user_language, bool(user and (user.is_admin or user.telegram_id in settings.ADMIN_USER_IDS))))

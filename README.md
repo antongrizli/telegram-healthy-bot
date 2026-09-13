@@ -172,19 +172,75 @@ telegram-healthy-bot/
 ```
 
 
-### Meal confirmation and report dates
+### Daily experience
 
-After analysis, use the Accept, Correct, or Cancel buttons attached to the meal. Confirmations survive bot restarts; tap **📥 Pending meals** to recover outstanding meals (up to 20 at a time). Accepting the same meal twice does not create duplicates. Meals retain the date and time of the original Telegram entry, even if analysis or confirmation finishes after midnight.
+The main reply keyboard is **Add / Today / Progress / More**. Send a photo, album,
+or meal description directly in the idle chat, or choose Add → Log Food. There is
+no mandatory meal-type selection: the bot estimates breakfast/lunch/dinner/snack
+from the original message time in the profile timezone, displays it and lets you
+change it on the draft. A second meal can be submitted while another awaits review.
+Accept/Correct/Cancel remain attached to the specific durable draft.
+
+Correct offers portion scaling, adding a food via AI, removing an individual food,
+and manual calories or calories/protein/fat/carbs. Scaling and manual changes do
+not call AI. Calorie-only edits preserve the existing macro estimates; review them
+separately if needed. After saving, a local-day summary shows calories, macros,
+water and one personalized next action. Hints use calorie/protein progress, the
+selected goal and completeness of the records; period hints use averages over
+logged days. They do not need another AI request. Pending meals are under Add,
+Today, and the dashboard. Streak screens, sharing and profile cancellation are
+localized in all seven languages.
+
+New profiles need seven inputs: language, sex used by the calorie formula, age,
+height, weight, activity and goal. The Telegram first name is reused. Notifications
+start disabled and timezone starts at UTC, explicitly explained after setup.
+More → Notifications & timezone opens a separate WebApp settings form; selecting
+the device timezone requires tapping a button and Save. The full profile wizard
+remains available for editing measurements and advanced report schedules.
+
+WebApp Today supports manual meal creation/editing, queued AI analysis of a meal
+description with review before saving, weight, water, pending confirmations and
+today's due medication marks. Chat photo/album input remains available. Requests
+require signed Telegram initData and check the active owner. Queue status refreshes
+while the dashboard is visible. Errors retain form input; browser zoom is enabled.
+
+Coaching can be off, daily or weekly. Quiet hours apply to nutrition/coaching only;
+medication schedules retain their specified times. The general notifications switch
+also controls medication reminders. Daily mode uses an evening prompt and a report;
+weekly mode uses the weekly report. Existing accounts retain their legacy morning
+schedule until they save the new preferences. Missing food entries are treated as
+missing data, not zero intake. Reports start with a short numerical summary and one
+next action; Details opens the saved AI text without a new AI request. As before,
+reports are dated snapshots, not live messages.
+
+Admin → Statistics → Engagement includes 30-day UX metrics: onboarding completion,
+median time from onboarding start to first saved meal, confirmed/created AI drafts,
+D1/D7 return counts with mature-cohort denominators, and active days with saved
+meals. Analytics uses UTC calendar days and begins collecting with this update;
+it is not backfilled. Events contain only user ID, event name and timestamp, expire
+after 90 days when new events are recorded, and are deleted with the profile.
+Manual meals count for first-meal and active-day metrics, but not AI confirmation
+conversion. New `water_logs` and `product_events` tables and the `users.ux_preferences`
+column are migrated at startup. No deployment is performed by editing this repository.
+
+Validation: `PYTHONPATH=. ./venv/bin/pytest`; browser fixture checks are in
+`tests/browser/ux-smoke.cjs` and require Playwright (`NODE_PATH` if installed outside
+the project, optional `UX_BROWSER_PATH`). The browser test intercepts all requests
+and uses no production account or Telegram messages.
+
+### Durable confirmations and snapshots
+
+After analysis, use the Accept, Correct, or Cancel buttons attached to the meal. Confirmations survive bot restarts; tap **Add → 📥 Pending meals** to recover outstanding meals (up to 20 at a time). Accepting the same meal twice does not create duplicates. Meals retain the date and time of the original Telegram entry, even if analysis or confirmation finishes after midnight.
 
 Daily reports are snapshots through the time they were requested, using your profile timezone. Queued reports retain that cutoff instead of switching to the next day after midnight. Meals confirmed after a report was generated require a new report; existing Telegram report messages do not update automatically.
 
 Admin Statistics → Engagement shows the 10 newest registrations in the last 30 days, with profile registration and latest saved meal-entry timestamps in UTC. Users with no saved meals are listed explicitly.
 
-If an old reply keyboard remains after a restart, tap any old keyboard button to restore the main menu. Unmatched messages without an active session also restore the menu and point to the **📥 Pending meals** button; they never automatically accept a meal. Recovery commands preserve saved meal drafts.
+If an old reply keyboard remains after a restart, recognized stale buttons restore navigation; they never automatically accept a meal. Recovery preserves saved drafts. New photos and ordinary text without an active session start a new meal analysis.
 
 ### 💊 Medications and intake reminders
 
-Open **💊 Medications** from the bot's main menu. Select medicine, vitamin, or other, then
+Open **More → 💊 Medications** from the bot's main menu. Select medicine, vitamin, or other, then
 enter its name or send a photo of the package. Photos are processed through the shared AI queue;
 review the recognized text and tap Save. The medication stays in your personal library, and you
 can create multiple schedules for it, such as morning and evening.

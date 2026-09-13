@@ -15,6 +15,7 @@ from src.keyboards import reply
 from src.services import gemini, rate_limiter
 from src.config import settings
 from src.services import gamification
+from src.services.ux import is_food_entry
 
 router = Router()
 
@@ -38,6 +39,15 @@ class MealEditingState(StatesGroup):
 class MealViewingState(StatesGroup):
     viewing = State()
 
+class LocalCorrectionState(StatesGroup):
+    value = State()
+
+
+def correction_keyboard(draft_id, lang):
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=i18n_locales.get_text(key, lang), callback_data=f'uxdraft:{action}:{draft_id}')]
+        for action, key in [('portion', 'ux_portion'), ('add', 'ux_add_item'), ('remove', 'ux_remove_item'), ('manual', 'ux_manual')]])
+
 
 async def show_pending_meals(message: Message, user_language: str, drafts=None):
     if drafts is None:
@@ -51,6 +61,8 @@ async def show_pending_meals(message: Message, user_language: str, drafts=None):
         text = i18n_locales.get_text("food_analysis_result", user_language, items=items,
             calories=data["total_calories"], protein=data["total_protein"],
             fat=data["total_fat"], carb=data["total_carb"])
+        text += '\n' + i18n_locales.get_text('meal_type_' + draft.payload.get('meal_type', 'food'), user_language)
+        text += '\n' + i18n_locales.get_text('ux_estimate', user_language)
         await message.answer(text, reply_markup=get_draft_keyboard(draft.id, user_language), parse_mode=None)
 
 
@@ -63,21 +75,17 @@ async def show_pending_meals_from_legacy_button(message: Message, user_language:
 @router.message(F.text.in_(i18n_locales.get_all_translations("btn_log_food")))
 async def start_food_logging(message: Message, state: FSMContext, user_language: str):
     async with AsyncSessionLocal() as db:
-        drafts = await crud.get_pending_meals(db, message.from_user.id)
+        await crud.record_event(db, message.from_user.id, 'meal_opened')
     await state.clear()
+    await state.set_state(FoodLoggingState.waiting_for_input)
     await message.answer(
-        i18n_locales.get_text("food_menu_prompt", user_language),
-        reply_markup=reply.get_food_menu(user_language, has_pending_meals=bool(drafts)))
+        i18n_locales.get_text('ux_quick_food', user_language),
+        reply_markup=reply.get_cancel_keyboard(user_language))
 
 
 @router.message(F.text.in_(i18n_locales.get_all_translations("btn_new_food")))
 async def start_new_food_entry(message: Message, state: FSMContext, user_language: str):
-    await state.set_state(FoodLoggingState.waiting_for_meal_type)
-    await message.answer(
-        i18n_locales.get_text("meal_type_prompt", user_language),
-        reply_markup=reply.get_meal_type_keyboard(user_language),
-        parse_mode="Markdown"
-    )
+    await start_food_logging(message, state, user_language)
 
 @router.message(StateFilter(FoodLoggingState), F.text.in_(["❌ Cancel", "❌ Отмена"]))
 async def cancel_food_logging(message: Message, state: FSMContext, user_language: str, db_user):
@@ -143,6 +151,13 @@ async def process_food_input(
     album: Optional[List[Message]] = None
 ):
     logged_at = message.date.astimezone(UTC).isoformat()
+    from src.services.ux import infer_meal_type
+    async with AsyncSessionLocal() as db:
+        user = await crud.get_user(db, message.from_user.id)
+        current = await state.get_data()
+        if user and (not current.get('meal_type') or current.get('logged_at')):
+            await state.update_data(meal_type=infer_meal_type(user, message.date))
+        await crud.record_event(db, message.from_user.id, 'meal_submitted')
     await state.update_data(logged_at=logged_at)
     image_bytes = None
     images_bytes = None
@@ -286,12 +301,21 @@ async def process_food_input(
         carb=analysis.total_carb
     )
     
+    result_text += '\n' + i18n_locales.get_text('meal_type_' + state_data.get('meal_type', 'food'), user_language)
+    result_text += '\n' + i18n_locales.get_text('ux_estimate', user_language)
     await state.set_state(FoodLoggingState.waiting_for_confirm)
     await message.answer(
         result_text,
         reply_markup=get_draft_keyboard(draft_id, user_language),
         parse_mode="Markdown"
     )
+
+@router.message(FoodLoggingState.waiting_for_confirm, is_food_entry)
+async def another_meal(message: Message, state: FSMContext, user_language: str, album=None):
+    await state.clear()
+    await state.set_state(FoodLoggingState.waiting_for_input)
+    await process_food_input(message, state, user_language, album=album)
+
 
 @router.message(FoodLoggingState.waiting_for_confirm)
 async def process_food_confirm(message: Message, state: FSMContext, user_language: str, db_user):
@@ -348,7 +372,11 @@ async def process_food_confirm(message: Message, state: FSMContext, user_languag
                     desc = i18n_locales.get_text(ach_def["desc_key"], user_language)
                     ach_notifs.append(f"{icon} *{name}* — {desc}")
             
-        msg_parts = [i18n_locales.get_text("food_logged", user_language)]
+        from src.services.ux import today_data
+        from src.utils.escape import escape_markdown
+        async with AsyncSessionLocal() as db:
+            summary = await today_data(db, db_user_obj)
+        msg_parts = [i18n_locales.get_text("food_logged", user_language), escape_markdown(summary['summary'])]
         msg_parts.append(f"\n🔥 *{i18n_locales.get_text('streak_count', user_language, count=streak_val)}*")
         
         if freeze_used:
@@ -402,6 +430,8 @@ async def process_food_correction(message: Message, state: FSMContext, user_lang
     state_data = await state.get_data()
     original_analysis = state_data["analysis"]
     correction_text = message.text.strip()
+    if state_data.get('correction_action') == 'add':
+        correction_text = 'Add the following food, keeping existing items: ' + correction_text
     
     async with AsyncSessionLocal() as db:
         is_limited, _ = await rate_limiter.check_rate_limit(db)
@@ -472,7 +502,7 @@ async def process_food_correction(message: Message, state: FSMContext, user_lang
                 return
             await crud.save_meal_draft(db, message.from_user.id,
                 {**draft.payload, "analysis": analysis_dict}, draft_id=draft_id)
-    await state.update_data(analysis=analysis_dict)
+    await state.update_data(analysis=analysis_dict, correction_action=None)
     
     items_str = ""
     for item in adjusted_analysis.food_items:
@@ -856,12 +886,77 @@ async def process_meal_edit_confirm(message: Message, state: FSMContext, user_la
         )
 
 
+@router.callback_query(F.data.startswith('uxdraft:'))
+async def quick_correction(callback: CallbackQuery, state: FSMContext, user_language: str):
+    from src.services.ux import adjust_locally
+    try:
+        parts = callback.data.split(':')
+        if len(parts) not in (3, 4):
+            raise ValueError()
+        _, action, raw_id, *extra = parts
+        draft_id = int(raw_id)
+        if action not in ('type', 'portion', 'add', 'remove', 'manual'):
+            raise ValueError()
+        async with AsyncSessionLocal() as db:
+            draft = await crud.get_meal_draft(db, draft_id, callback.from_user.id)
+            if not draft:
+                await callback.answer(i18n_locales.get_text('draft_unavailable', user_language), show_alert=True)
+                return
+            if action == 'type' and extra:
+                if extra[0] not in ('breakfast', 'lunch', 'dinner', 'snack', 'food'):
+                    raise ValueError()
+                await crud.save_meal_draft(db, callback.from_user.id, {**draft.payload, 'meal_type': extra[0]}, draft_id)
+                await callback.answer(i18n_locales.get_text('ux_saved', user_language))
+                await show_pending_meals(callback.message, user_language, [await crud.get_meal_draft(db, draft_id, callback.from_user.id)])
+                return
+            if action == 'remove' and extra:
+                analysis = adjust_locally(draft.payload['analysis'], 'remove', extra[0])
+                await crud.save_meal_draft(db, callback.from_user.id, {**draft.payload, 'analysis': analysis}, draft_id)
+                await callback.answer(i18n_locales.get_text('ux_saved', user_language))
+                await show_pending_meals(callback.message, user_language, [await crud.get_meal_draft(db, draft_id, callback.from_user.id)])
+                return
+        await callback.answer()
+        if action in ('type', 'remove'):
+            choices = [(k, i18n_locales.get_text('meal_type_' + k, user_language)) for k in ('breakfast', 'lunch', 'dinner', 'snack', 'food')] if action == 'type' else [(str(i), item['name'][:60]) for i, item in enumerate(draft.payload['analysis']['food_items'])]
+            await callback.message.answer(i18n_locales.get_text('ux_type' if action == 'type' else 'ux_remove_item', user_language), reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=label, callback_data=f'uxdraft:{action}:{draft_id}:{key}')] for key, label in choices]))
+            return
+        await state.update_data(**draft.payload, draft_id=draft_id, correction_action=action)
+        await state.set_state(FoodLoggingState.waiting_for_correction if action == 'add' else LocalCorrectionState.value)
+        key = 'ux_add_item' if action == 'add' else f'ux_{action}_prompt'
+        await callback.message.answer(i18n_locales.get_text(key, user_language), reply_markup=reply.get_cancel_keyboard(user_language))
+    except (ValueError, TypeError, IndexError):
+        await callback.answer(i18n_locales.get_text('ux_invalid', user_language), show_alert=True)
+
+
+@router.message(LocalCorrectionState.value)
+async def local_correction(message: Message, state: FSMContext, user_language: str):
+    from src.services.ux import adjust_locally
+    data = await state.get_data()
+    async with AsyncSessionLocal() as db:
+        draft = await crud.get_meal_draft(db, data.get('draft_id'), message.from_user.id)
+        if not draft:
+            await state.clear()
+            await message.answer(i18n_locales.get_text('draft_unavailable', user_language))
+            return
+        try:
+            analysis = adjust_locally(draft.payload['analysis'], data.get('correction_action'), message.text)
+        except (ValueError, TypeError):
+            await message.answer(i18n_locales.get_text('ux_invalid', user_language))
+            return
+        await crud.save_meal_draft(db, message.from_user.id, {**draft.payload, 'analysis': analysis}, draft.id)
+        fresh = await crud.get_meal_draft(db, draft.id, message.from_user.id)
+        await state.update_data(analysis=analysis, correction_action=None)
+        await state.set_state(FoodLoggingState.waiting_for_confirm)
+        await show_pending_meals(message, user_language, [fresh])
+
+
 def get_draft_keyboard(draft_id, language):
     return InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text=i18n_locales.get_text(key, language),
                              callback_data=f"meal_draft:{action}:{draft_id}")
         for action, key in [("accept", "btn_accept"), ("correct", "btn_correct"), ("cancel", "btn_cancel")]
-    ]])
+    ], [InlineKeyboardButton(text=i18n_locales.get_text('ux_type', language), callback_data=f'uxdraft:type:{draft_id}')]])
 
 
 @router.callback_query(F.data.startswith("meal_draft:"))
@@ -893,7 +988,7 @@ async def handle_meal_draft(callback: CallbackQuery, state: FSMContext, user_lan
     await callback.answer()
     if action == "correct":
         await callback.message.answer(i18n_locales.get_text("food_correction_prompt", user_language),
-                                      reply_markup=reply.get_cancel_keyboard(user_language))
+                                      reply_markup=correction_keyboard(draft_id, user_language))
         return
     data = await state.get_data()
     if data.get("draft_id") == draft_id:
@@ -901,3 +996,9 @@ async def handle_meal_draft(callback: CallbackQuery, state: FSMContext, user_lan
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(i18n_locales.get_text("food_logged" if action == "accept" else "food_cancelled", user_language),
         reply_markup=reply.get_main_menu(user_language, is_admin=db_user.is_admin or db_user.telegram_id in settings.ADMIN_USER_IDS))
+    if action == 'accept':
+        from src.services.ux import today_data
+        from src.handlers.ux import today_keyboard
+        async with AsyncSessionLocal() as db:
+            summary = await today_data(db, current_user)
+        await callback.message.answer(summary['summary'] + '\n' + i18n_locales.get_text('ux_keep_going', user_language), reply_markup=today_keyboard(user_language))

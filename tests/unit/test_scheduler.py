@@ -25,17 +25,20 @@ async def test_generate_and_send_report_direct_weekly_name_error_fix(mocker):
 
     mocker.patch("src.database.crud.list_medication_reminders", new_callable=AsyncMock, return_value=[])
     # Mock DB functions
-    mocker.patch("src.database.crud.get_food_logs", new_callable=AsyncMock, return_value=[])
+    from datetime import datetime
+    from types import SimpleNamespace
+    mocker.patch("src.database.crud.get_food_logs", new_callable=AsyncMock, return_value=[SimpleNamespace(calories=400, proteins=30, logged_at=datetime.now())])
     mocker.patch("src.database.crud.get_weight_logs", new_callable=AsyncMock, return_value=[])
     mocker.patch("src.services.gemini.generate_report", new_callable=AsyncMock, return_value="AI Weekly Report")
     mocker.patch("src.services.rate_limiter.log_ai_request", new_callable=AsyncMock)
     mocker.patch("src.services.scheduler.send_multipart_message", new_callable=AsyncMock)
+    mocker.patch('src.database.crud.save_report_snapshot', new_callable=AsyncMock, return_value=1)
 
     # Call the function for weekly report, which references settings.WEBAPP_URL
     await generate_and_send_report_direct(bot, db, user, "weekly")
 
     # Verify that the bot was called to send the inline keyboard message with WebAppInfo
-    bot.send_message.assert_called_once()
+    assert bot.send_message.await_count == 2  # Compact summary and chart link.
     kwargs = bot.send_message.call_args[1]
     assert "reply_markup" in kwargs
     # Check that settings.WEBAPP_URL is in the URL of the WebAppInfo button

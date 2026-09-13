@@ -51,7 +51,7 @@ def get_achievement_inline(lang: str = "en", ach_key: str = "") -> InlineKeyboar
     if ach_key:
         kb.append([
             InlineKeyboardButton(
-                text="🎉 Share / Поделиться" if lang == "ru" else "🎉 Share",
+                text=get_text('ux_share', lang),
                 callback_data=f"share_achievement:{ach_key}"
             )
         ])
@@ -75,7 +75,7 @@ def get_streak_inline(lang: str = "en") -> InlineKeyboardMarkup:
             ),
             InlineKeyboardButton(
                 text=get_text("btn_log_food", lang),
-                callback_data="log_breakfast"
+                callback_data="ux:food"
             )
         ]
     ]
@@ -87,9 +87,9 @@ def get_report_range_inline(lang: str = "en") -> InlineKeyboardMarkup:
     """
     kb = [
         [
-            InlineKeyboardButton(text="📅 Daily / День" if lang == "ru" else "📅 Daily", callback_data="report_range:daily"),
-            InlineKeyboardButton(text="🗓️ Weekly / Неделя" if lang == "ru" else "🗓️ Weekly", callback_data="report_range:weekly"),
-            InlineKeyboardButton(text="🗓️ Monthly / Месяц" if lang == "ru" else "🗓️ Monthly", callback_data="report_range:monthly")
+            InlineKeyboardButton(text=get_text('ux_daily', lang), callback_data="report_range:daily"),
+            InlineKeyboardButton(text=get_text('ux_weekly', lang), callback_data="report_range:weekly"),
+            InlineKeyboardButton(text=get_text('ux_monthly', lang), callback_data="report_range:monthly")
         ]
     ]
     return InlineKeyboardMarkup(inline_keyboard=kb)

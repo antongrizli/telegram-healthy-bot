@@ -23,6 +23,17 @@ def get_section_menu(section, lang):
         for row in [*rows, ('ux_back',)]], resize_keyboard=True)
 
 
+def get_today_keyboard(lang: str) -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(keyboard=[
+        [KeyboardButton(text=get_text('btn_log_food', lang))],
+        [KeyboardButton(text=get_text('btn_daily_report', lang)),
+         KeyboardButton(text=get_text('btn_my_meals', lang),
+                        web_app=WebAppInfo(url=settings.WEBAPP_URL))],
+        [KeyboardButton(text=get_text('btn_pending_meals', lang))],
+        [KeyboardButton(text=get_text('ux_back', lang))],
+    ], resize_keyboard=True)
+
+
 def get_food_menu(lang: str, has_pending_meals: bool) -> ReplyKeyboardMarkup:
     kb = [[KeyboardButton(text=get_text("btn_new_food", lang))]]
     if has_pending_meals:

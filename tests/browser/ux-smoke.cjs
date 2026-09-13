@@ -58,7 +58,9 @@ const dictionaries = JSON.parse(execFileSync(path.join(root, 'venv/bin/python'),
                 const type = filename.endsWith('.js') ? 'application/javascript' : filename.endsWith('.css') ? 'text/css' : 'text/html';
                 return route.fulfill({contentType: type, body: fs.readFileSync(asset)});
             });
-            await page.goto('http://healthy.test/webapp/');
+            // Telegram can reopen the last dashboard hash or a dashboard deep link.
+            const entry = language === 'ru' ? '#/dashboard' : language === 'de' ? '?tab=dashboard' : '';
+            await page.goto('http://healthy.test/webapp/' + entry);
             await page.locator('#today-actions button').first().waitFor();
             await page.locator('#loading-overlay').waitFor({state: 'hidden'});
             assert.equal(await page.locator('#error-card').isVisible(), false);

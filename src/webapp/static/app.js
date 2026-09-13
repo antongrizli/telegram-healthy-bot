@@ -141,7 +141,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 // Tab Switcher Logic
 const switchTab = (tabName) => {
-    if (state.currentTab === tabName) return;
+    // A reopened dashboard deep link still needs its initial data load.
+    if (state.currentTab === tabName) return loadTab(tabName);
 
     // Update hash for deep linking
     window.location.hash = `#/${tabName}`;

@@ -9,10 +9,12 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
-from aiogram.types import Message, Update, Chat, User as TelegramUser
+from aiogram.types import Message, Update, Chat, User as TelegramUser, ReplyKeyboardMarkup
 from sqlalchemy import select
 
 from src.database import crud
+from src.config import settings
+from src.keyboards import reply
 from src.database.models import FoodLog, ProductEvent, WaterLog
 from src.services import ux, scheduler, gemini
 from src.webapp import server
@@ -243,6 +245,20 @@ async def test_dispatcher_quick_input_menus_cancel_and_help_in_all_languages(db_
             chat=Chat(id=123, type='private'), from_user=TelegramUser(id=123, is_bot=False, first_name='Test'), text=text)))
     try:
         for language in LOCALES:
+            await send(get_text('ux_today', language))
+            keyboard = bot.session.call_args.args[1].reply_markup
+            assert isinstance(keyboard, ReplyKeyboardMarkup)
+            assert keyboard.resize_keyboard is True
+            assert [[button.text for button in row] for row in keyboard.keyboard] == [
+                [get_text('btn_log_food', language)],
+                [get_text('btn_daily_report', language), get_text('btn_my_meals', language)],
+                [get_text('btn_pending_meals', language)],
+                [get_text('ux_back', language)],
+            ]
+            assert keyboard.keyboard[1][1].web_app.url == settings.WEBAPP_URL
+            await send(get_text('ux_back', language))
+            assert bot.session.call_args.args[1].reply_markup == reply.get_main_menu(
+                language, user.is_admin or user.telegram_id in settings.ADMIN_USER_IDS)
             await send(get_text('ux_add', language))
             await send(get_text('btn_help', language))
             assert bot.session.call_args.args[1].text == get_text('help_text', language)

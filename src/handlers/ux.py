@@ -42,7 +42,7 @@ async def today(message: Message, state: FSMContext, user_language: str, db_user
     await state.clear()
     async with AsyncSessionLocal() as db:
         data = await ux.today_data(db, db_user)
-    await message.answer(data['summary'], reply_markup=today_keyboard(user_language))
+    await message.answer(data['summary'], reply_markup=reply.get_today_keyboard(user_language))
 
 @router.message(F.text.in_(get_all_translations('ux_progress')))
 async def progress(message: Message, state: FSMContext, user_language: str):

@@ -155,7 +155,7 @@ async def generate_and_send_report_direct(bot: Bot, db: AsyncSession, user, repo
         header = f"{i18n_locales.get_text('monthly_report_header', user.language)}\n\n"
         
     report_id = await crud.save_report_snapshot(db, user_id, report)
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    from src.keyboards import reply
     if report_type == 'daily':
         summary = (await ux.today_data(db, user, report_at or datetime.now(UTC)))['summary']
     else:
@@ -169,8 +169,7 @@ async def generate_and_send_report_direct(bot: Bot, db: AsyncSession, user, repo
             cal=sum(log.calories for log in food_logs) / max(1, logged_days),
             protein=sum(log.proteins for log in food_logs) / max(1, logged_days)),
             days=7 if report_type == 'weekly' else 30)
-    await bot.send_message(user_id, summary, reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text=i18n_locales.get_text('ux_details', user.language), callback_data=f'ux:report:{report_id}')]]))
+    await bot.send_message(user_id, summary, reply_markup=reply.get_report_keyboard(user.language, report_id))
 
     if report_type == "weekly":
         from src.keyboards import inline

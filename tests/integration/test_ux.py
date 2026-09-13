@@ -18,7 +18,7 @@ from src.keyboards import reply
 from src.database.models import FoodLog, ProductEvent, WaterLog
 from src.services import ux, scheduler, gemini
 from src.webapp import server
-from src.handlers import food, profile
+from src.handlers import common, food, profile
 from src.utils.i18n_locales import get_text, LOCALES
 from tests.integration.test_security_and_meal_recovery import make_user, signed_data, ANALYSIS
 from tests.integration.test_handlers import make_mock_message
@@ -196,8 +196,9 @@ async def test_report_summary_is_short_details_are_owned_and_empty_report_skips_
     await scheduler.generate_and_send_report_direct(bot, db_session, user, 'daily')
     text = bot.send_message.call_args.args[1]
     assert len(text) < 600 and '100/2000' in text
-    button = bot.send_message.call_args.kwargs['reply_markup'].inline_keyboard[0][0]
-    report_id = int(button.callback_data.rsplit(':', 1)[1])
+    button = bot.send_message.call_args.kwargs['reply_markup'].keyboard[0][0]
+    report_id = common.report_details_id(button.text)
+    assert report_id is not None
     assert await crud.get_saved_report(db_session, 456, report_id) is None
     assert (await crud.get_saved_report(db_session, 123, report_id)).payload['text'] == generate.return_value
 
@@ -245,6 +246,17 @@ async def test_dispatcher_quick_input_menus_cancel_and_help_in_all_languages(db_
             chat=Chat(id=123, type='private'), from_user=TelegramUser(id=123, is_bot=False, first_name='Test'), text=text)))
     try:
         for language in LOCALES:
+            progress_keyboard = reply.get_progress_keyboard(language)
+            assert isinstance(progress_keyboard, ReplyKeyboardMarkup)
+            assert [[button.text for button in row] for row in progress_keyboard.keyboard] == [
+                [get_text('ux_progress', language)],
+                [get_text('btn_all_achievements', language), get_text('btn_view_card', language)],
+                [get_text('btn_weekly_report', language)],
+                [get_text('ux_back', language)],
+            ]
+            assert progress_keyboard.keyboard[0][0].web_app.url == f'{settings.WEBAPP_URL}?tab=charts'
+            await send(get_text('ux_progress', language))
+            assert isinstance(bot.session.call_args.args[1].reply_markup, ReplyKeyboardMarkup)
             await send(get_text('ux_today', language))
             keyboard = bot.session.call_args.args[1].reply_markup
             assert isinstance(keyboard, ReplyKeyboardMarkup)

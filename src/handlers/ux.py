@@ -47,10 +47,7 @@ async def today(message: Message, state: FSMContext, user_language: str, db_user
 @router.message(F.text.in_(get_all_translations('ux_progress')))
 async def progress(message: Message, state: FSMContext, user_language: str):
     await state.clear()
-    await message.answer(tr('ux_progress', user_language), reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-        [web_button('ux_progress', user_language, '?tab=charts')],
-        [web_button('btn_all_achievements', user_language, '?tab=achievements'), web_button('btn_view_card', user_language, '?tab=health-card')],
-        [InlineKeyboardButton(text=tr('btn_weekly_report', user_language), callback_data='report_range:weekly')]]))
+    await message.answer(tr('ux_progress', user_language), reply_markup=reply.get_progress_keyboard(user_language))
 
 @router.message(F.text.in_(get_all_translations('ux_water')))
 async def start_water(message: Message, state: FSMContext, user_language: str):

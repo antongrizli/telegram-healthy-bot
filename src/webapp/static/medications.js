@@ -26,7 +26,7 @@ const medError = () => {
     el.textContent = mt('error');
 };
 const medApi = async (path = '', method = 'GET', data) => {
-    const res = await fetch('/api/medications' + path, {
+    const res = await apiFetch('/api/medications' + path, {
         method, headers: getHeaders(), body: data === undefined ? undefined : JSON.stringify(data)
     });
     if (!res.ok) throw new Error('Medication request failed');

@@ -100,6 +100,31 @@ async def trigger_weekly_report(message: Message, state: FSMContext, user_langua
         await crud.record_event(db, message.from_user.id, 'report_opened')
     await send_weekly_report(message.bot, message.from_user.id)
 
+
+def report_details_id(text: str | None) -> int | None:
+    """Read the durable snapshot ID carried by a reply-keyboard details button."""
+    if not text:
+        return None
+    for label in i18n_locales.get_all_translations('ux_details'):
+        prefix = f'{label} · '
+        if text.startswith(prefix):
+            try:
+                return int(text.removeprefix(prefix))
+            except ValueError:
+                return None
+    return None
+
+
+@recovery_router.message(F.text.func(lambda text: report_details_id(text) is not None))
+async def view_report_details(message: Message, user_language: str, db_user):
+    report_id = report_details_id(message.text)
+    async with AsyncSessionLocal() as db:
+        report = await crud.get_saved_report(db, db_user.telegram_id, report_id)
+    if not report:
+        await message.answer(i18n_locales.get_text('ux_invalid', user_language))
+        return
+    await message.answer(report.payload['text'], parse_mode=None)
+
 @recovery_router.message(F.text.in_(i18n_locales.get_all_translations("btn_my_progress")))
 @router.message(Command("streaks"))
 @router.message(Command("achievements"))

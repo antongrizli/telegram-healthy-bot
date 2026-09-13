@@ -34,6 +34,26 @@ def get_today_keyboard(lang: str) -> ReplyKeyboardMarkup:
     ], resize_keyboard=True)
 
 
+def get_progress_keyboard(lang: str) -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(keyboard=[
+        [KeyboardButton(text=get_text('ux_progress', lang),
+                        web_app=WebAppInfo(url=f'{settings.WEBAPP_URL}?tab=charts'))],
+        [KeyboardButton(text=get_text('btn_all_achievements', lang),
+                        web_app=WebAppInfo(url=f'{settings.WEBAPP_URL}?tab=achievements')),
+         KeyboardButton(text=get_text('btn_view_card', lang),
+                        web_app=WebAppInfo(url=f'{settings.WEBAPP_URL}?tab=health-card'))],
+        [KeyboardButton(text=get_text('btn_weekly_report', lang))],
+        [KeyboardButton(text=get_text('ux_back', lang))],
+    ], resize_keyboard=True)
+
+
+def get_report_keyboard(lang: str, report_id: int) -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(keyboard=[
+        [KeyboardButton(text=f"{get_text('ux_details', lang)} · {report_id}")],
+        [KeyboardButton(text=get_text('ux_back', lang))],
+    ], resize_keyboard=True)
+
+
 def get_food_menu(lang: str, has_pending_meals: bool) -> ReplyKeyboardMarkup:
     kb = [[KeyboardButton(text=get_text("btn_new_food", lang))]]
     if has_pending_meals:

@@ -15,7 +15,7 @@ const uxButton = (key, action) => {
     return button;
 };
 async function uxRequest(path, data, method = 'POST') {
-    const response = await fetch(path, {method, headers: getHeaders(), ...(data === undefined ? {} : {body: JSON.stringify(data)})});
+    const response = await apiFetch(path, {method, headers: getHeaders(), ...(data === undefined ? {} : {body: JSON.stringify(data)})});
     if (!response.ok) throw new Error(uxText('ux_invalid'));
     return response.json();
 }

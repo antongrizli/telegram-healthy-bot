@@ -33,6 +33,21 @@ const getHeaders = () => {
     };
 };
 
+// Telegram's in-app browser can leave a request pending when a tunnel or a
+// mobile network connection drops. Do not leave the user behind the loader.
+const apiFetch = async (url, options = {}) => {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 12_000);
+    try {
+        return await fetch(url, {...options, signal: controller.signal});
+    } catch (error) {
+        if (error.name === 'AbortError') throw new Error('Request timed out');
+        throw error;
+    } finally {
+        window.clearTimeout(timeout);
+    }
+};
+
 // UI Elements
 const els = {
     userName: document.getElementById("user-name"),
@@ -75,7 +90,7 @@ const initLocalization = async () => {
     state.userLanguage = clientLang;
 
     try {
-        const res = await fetch("/api/user/settings", { headers: getHeaders() });
+        const res = await apiFetch("/api/user/settings", { headers: getHeaders() });
         if (res.ok) {
             const data = await res.json();
             if (data.language) {
@@ -224,7 +239,7 @@ const hideError = () => {
 // Load Streaks Header Info
 const loadStreaksData = async () => {
     try {
-        const res = await fetch("/api/gamification/streaks", { headers: getHeaders() });
+        const res = await apiFetch("/api/gamification/streaks", { headers: getHeaders() });
         if (!res.ok) throw new Error("Unauthorized access");
         const data = await res.json();
 
@@ -247,7 +262,7 @@ const loadStreaksData = async () => {
 
 // Dashboard Loader (Donut and Macros)
 const loadDashboardData = async () => {
-    const res = await fetch("/api/charts/nutrition?range=7d", { headers: getHeaders() });
+    const res = await apiFetch("/api/charts/nutrition?range=7d", { headers: getHeaders() });
     if (!res.ok) throw new Error("Failed to load today's nutrition");
     const data = await res.json();
 
@@ -318,7 +333,7 @@ const renderDonutChart = (current, target) => {
 
 const loadRecentAchievement = async () => {
     try {
-        const res = await fetch("/api/gamification/achievements", { headers: getHeaders() });
+        const res = await apiFetch("/api/gamification/achievements", { headers: getHeaders() });
         const data = await res.json();
         const unlocked = data.filter(a => a.unlocked).sort((a, b) => new Date(b.unlocked_at) - new Date(a.unlocked_at));
 
@@ -335,14 +350,14 @@ const loadRecentAchievement = async () => {
 // Trends Charts Loader
 const loadTrendsCharts = async () => {
     // 1. Load nutrition chart data
-    const nutRes = await fetch(`/api/charts/nutrition?range=${state.currentRange}`, { headers: getHeaders() });
+    const nutRes = await apiFetch(`/api/charts/nutrition?range=${state.currentRange}`, { headers: getHeaders() });
     const nutData = await nutRes.json();
 
     renderNutritionHistoryChart(nutData);
     renderMacroHistoryChart(nutData);
 
     // 2. Load weight chart data
-    const weightRes = await fetch(`/api/charts/weight?range=${state.currentRange === '7d' ? '30d' : state.currentRange}`, { headers: getHeaders() });
+    const weightRes = await apiFetch(`/api/charts/weight?range=${state.currentRange === '7d' ? '30d' : state.currentRange}`, { headers: getHeaders() });
     const weightData = await weightRes.json();
 
     renderWeightHistoryChart(weightData);
@@ -509,7 +524,7 @@ const renderWeightHistoryChart = (data) => {
 
 // Achievements Grid Loader
 const loadAchievementsGrid = async () => {
-    const res = await fetch("/api/gamification/achievements", { headers: getHeaders() });
+    const res = await apiFetch("/api/gamification/achievements", { headers: getHeaders() });
     const data = await res.json();
 
     const grid = document.getElementById("badges-grid");
@@ -531,7 +546,7 @@ const loadAchievementsGrid = async () => {
 // Health Card Loader
 const loadHealthCard = async () => {
     try {
-        const res = await fetch("/api/gamification/health-card", { headers: getHeaders() });
+        const res = await apiFetch("/api/gamification/health-card", { headers: getHeaders() });
         if (res.status === 404) {
             document.getElementById("no-card-placeholder").classList.remove("hidden");
             document.getElementById("health-card-container").classList.add("hidden");

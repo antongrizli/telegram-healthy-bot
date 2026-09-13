@@ -174,6 +174,12 @@ telegram-healthy-bot/
 
 ### Daily experience
 
+Progress, All Achievements and Health Card remain ordinary reply-keyboard choices.
+Selecting one sets the menu button next to the message field to that section;
+tap that menu button to open the authenticated WebApp. Telegram reply-keyboard
+WebApp launches do not supply initData, so they cannot access personal APIs.
+My Meals in the Today keyboard opens the chat history.
+
 The main reply keyboard is **Add / Today / Progress / More**. Send a photo, album,
 or meal description directly in the idle chat, or choose Add → Log Food. There is
 no mandatory meal-type selection: the bot estimates breakfast/lunch/dinner/snack

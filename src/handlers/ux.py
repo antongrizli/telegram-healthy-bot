@@ -1,6 +1,7 @@
 from datetime import datetime, UTC
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo, MenuButtonWebApp
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from src.database.connection import AsyncSessionLocal
@@ -45,9 +46,28 @@ async def today(message: Message, state: FSMContext, user_language: str, db_user
     await message.answer(data['summary'], reply_markup=reply.get_today_keyboard(user_language))
 
 @router.message(F.text.in_(get_all_translations('ux_progress')))
+@router.message(F.text.in_(get_all_translations('btn_all_achievements')))
+@router.message(F.text.in_(get_all_translations('btn_view_card')))
 async def progress(message: Message, state: FSMContext, user_language: str):
     await state.clear()
-    await message.answer(tr('ux_progress', user_language), reply_markup=reply.get_progress_keyboard(user_language))
+    key, tab = 'ux_progress', 'charts'
+    for candidate, target in [('btn_all_achievements', 'achievements'), ('btn_view_card', 'health-card')]:
+        if message.text in get_all_translations(candidate):
+            key, tab = candidate, target
+            break
+    parts = urlsplit(settings.WEBAPP_URL)
+    query = dict(parse_qsl(parts.query))
+    query.pop('panel', None)
+    query['tab'] = tab
+    url = urlunsplit(parts._replace(query=urlencode(query), fragment=''))
+    label = tr(key, user_language)
+    # Menu-button launches carry signed initData; reply WebApp launches do not.
+    await message.bot.set_chat_menu_button(chat_id=message.chat.id,
+        menu_button=MenuButtonWebApp(text=label, web_app=WebAppInfo(url=url)))
+    from src.middlewares.i18n import _user_menu_button_cache
+    _user_menu_button_cache.pop(message.chat.id, None)
+    await message.answer(tr('ux_open_menu', user_language, section=label),
+                         reply_markup=reply.get_progress_keyboard(user_language))
 
 @router.message(F.text.in_(get_all_translations('ux_water')))
 async def start_water(message: Message, state: FSMContext, user_language: str):

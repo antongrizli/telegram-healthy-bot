@@ -1,6 +1,7 @@
 """Shared bot and dashboard copy. Column order: en, ru, uk, pl, de, tr, es."""
 LANGUAGES = ('en', 'ru', 'uk', 'pl', 'de', 'tr', 'es')
 COPY = {
+    'ux_open_menu': ('To open {section}, tap the menu button to the left of the message field.', 'Чтобы открыть «{section}», нажмите кнопку меню слева от поля ввода сообщения.', 'Щоб відкрити «{section}», натисніть кнопку меню ліворуч від поля повідомлення.', 'Aby otworzyć {section}, naciśnij przycisk menu po lewej stronie pola wiadomości.', 'Um {section} zu öffnen, tippe auf die Menütaste links neben dem Nachrichtenfeld.', '{section} bölümünü açmak için mesaj alanının solundaki menü düğmesine dokunun.', 'Para abrir {section}, toca el botón de menú a la izquierda del campo de mensaje.'),
     'ux_share': ('🎉 Share', '🎉 Поделиться', '🎉 Поділитися', '🎉 Udostępnij', '🎉 Teilen', '🎉 Paylaş', '🎉 Compartir'),
     'ux_monthly': ('Monthly', 'За месяц', 'За місяць', 'Miesięcznie', 'Monatlich', 'Aylık', 'Mensual'),
     'ux_previous': ('🔙 Back', '🔙 Назад', '🔙 Назад', '🔙 Wstecz', '🔙 Zurück', '🔙 Geri', '🔙 Atrás'),

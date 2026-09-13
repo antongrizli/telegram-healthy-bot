@@ -1,5 +1,4 @@
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
-from src.config import settings
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from src.utils.i18n_locales import get_text
 
 def get_main_menu(lang: str = "en", is_admin: bool = False) -> ReplyKeyboardMarkup:
@@ -27,8 +26,7 @@ def get_today_keyboard(lang: str) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(keyboard=[
         [KeyboardButton(text=get_text('btn_log_food', lang))],
         [KeyboardButton(text=get_text('btn_daily_report', lang)),
-         KeyboardButton(text=get_text('btn_my_meals', lang),
-                        web_app=WebAppInfo(url=settings.WEBAPP_URL))],
+         KeyboardButton(text=get_text('btn_my_meals', lang))],
         [KeyboardButton(text=get_text('btn_pending_meals', lang))],
         [KeyboardButton(text=get_text('ux_back', lang))],
     ], resize_keyboard=True)
@@ -36,12 +34,9 @@ def get_today_keyboard(lang: str) -> ReplyKeyboardMarkup:
 
 def get_progress_keyboard(lang: str) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(keyboard=[
-        [KeyboardButton(text=get_text('ux_progress', lang),
-                        web_app=WebAppInfo(url=f'{settings.WEBAPP_URL}?tab=charts'))],
-        [KeyboardButton(text=get_text('btn_all_achievements', lang),
-                        web_app=WebAppInfo(url=f'{settings.WEBAPP_URL}?tab=achievements')),
-         KeyboardButton(text=get_text('btn_view_card', lang),
-                        web_app=WebAppInfo(url=f'{settings.WEBAPP_URL}?tab=health-card'))],
+        [KeyboardButton(text=get_text('ux_progress', lang))],
+        [KeyboardButton(text=get_text('btn_all_achievements', lang)),
+         KeyboardButton(text=get_text('btn_view_card', lang))],
         [KeyboardButton(text=get_text('btn_weekly_report', lang))],
         [KeyboardButton(text=get_text('ux_back', lang))],
     ], resize_keyboard=True)

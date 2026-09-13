@@ -254,9 +254,15 @@ async def test_dispatcher_quick_input_menus_cancel_and_help_in_all_languages(db_
                 [get_text('btn_weekly_report', language)],
                 [get_text('ux_back', language)],
             ]
-            assert progress_keyboard.keyboard[0][0].web_app.url == f'{settings.WEBAPP_URL}?tab=charts'
-            await send(get_text('ux_progress', language))
-            assert isinstance(bot.session.call_args.args[1].reply_markup, ReplyKeyboardMarkup)
+            assert all(button.web_app is None for row in progress_keyboard.keyboard for button in row)
+            for key, tab in [('ux_progress', 'charts'), ('btn_all_achievements', 'achievements'), ('btn_view_card', 'health-card')]:
+                await send(get_text(key, language))
+                methods = [call.args[1] for call in bot.session.call_args_list]
+                menu = next(method.menu_button for method in methods if method.__api_method__ == 'setChatMenuButton')
+                assert menu.web_app.url == f'{settings.WEBAPP_URL}?tab={tab}'
+                assert menu.text == get_text(key, language)
+                assert isinstance(methods[-1].reply_markup, ReplyKeyboardMarkup)
+                assert methods[-1].text == get_text('ux_open_menu', language, section=get_text(key, language))
             await send(get_text('ux_today', language))
             keyboard = bot.session.call_args.args[1].reply_markup
             assert isinstance(keyboard, ReplyKeyboardMarkup)
@@ -267,7 +273,7 @@ async def test_dispatcher_quick_input_menus_cancel_and_help_in_all_languages(db_
                 [get_text('btn_pending_meals', language)],
                 [get_text('ux_back', language)],
             ]
-            assert keyboard.keyboard[1][1].web_app.url == settings.WEBAPP_URL
+            assert keyboard.keyboard[1][1].web_app is None
             await send(get_text('ux_back', language))
             assert bot.session.call_args.args[1].reply_markup == reply.get_main_menu(
                 language, user.is_admin or user.telegram_id in settings.ADMIN_USER_IDS)

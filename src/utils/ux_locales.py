@@ -1,6 +1,16 @@
 """Shared bot and dashboard copy. Column order: en, ru, uk, pl, de, tr, es."""
 LANGUAGES = ('en', 'ru', 'uk', 'pl', 'de', 'tr', 'es')
 COPY = {
+    'admin_users_name': ('Name / username', 'Имя / ник', 'Ім’я / нік', 'Imię / nick', 'Name / Nutzername', 'Ad / kullanıcı adı', 'Nombre / usuario'),
+    'admin_users_id': ('ID', 'ID', 'ID', 'ID', 'ID', 'ID', 'ID'),
+    'admin_users_joined': ('Registered', 'Регистрация', 'Реєстрація', 'Rejestracja', 'Registrierung', 'Kayıt', 'Registro'),
+    'admin_users_activity': ('Last activity', 'Последняя активность', 'Остання активність', 'Ostatnia aktywność', 'Letzte Aktivität', 'Son etkinlik', 'Última actividad'),
+    'admin_users_active': ('Users — not blocked', 'Пользователи — незаблокированные', 'Користувачі — незаблоковані', 'Użytkownicy — niezablokowani', 'Nutzer — nicht gesperrt', 'Kullanıcılar — engellenmemiş', 'Usuarios — no bloqueados'),
+    'admin_users_blocked': ('Blocked users', 'Заблокированные пользователи', 'Заблоковані користувачі', 'Zablokowani użytkownicy', 'Gesperrte Nutzer', 'Engellenen kullanıcılar', 'Usuarios bloqueados'),
+    'admin_users_block': ('🚫 Block {user_id}', '🚫 Заблокировать {user_id}', '🚫 Заблокувати {user_id}', '🚫 Zablokuj {user_id}', '🚫 Sperren {user_id}', '🚫 Engelle {user_id}', '🚫 Bloquear {user_id}'),
+    'admin_users_unblock': ('✅ Unblock {user_id}', '✅ Разблокировать {user_id}', '✅ Розблокувати {user_id}', '✅ Odblokuj {user_id}', '✅ Entsperren {user_id}', '✅ Engeli kaldır {user_id}', '✅ Desbloquear {user_id}'),
+    'admin_users_back': ('⬅️ Admin menu', '⬅️ Меню администратора', '⬅️ Меню адміністратора', '⬅️ Menu administratora', '⬅️ Adminmenü', '⬅️ Yönetici menüsü', '⬅️ Menú de administrador'),
+    'admin_users_protected': ('Administrators cannot be blocked here.', 'Администраторов нельзя заблокировать здесь.', 'Адміністраторів не можна заблокувати тут.', 'Nie można tu blokować administratorów.', 'Administratoren können hier nicht gesperrt werden.', 'Yöneticiler burada engellenemez.', 'Aquí no se puede bloquear a los administradores.'),
     'ux_open_menu': ('To open {section}, tap the menu button to the left of the message field.', 'Чтобы открыть «{section}», нажмите кнопку меню слева от поля ввода сообщения.', 'Щоб відкрити «{section}», натисніть кнопку меню ліворуч від поля повідомлення.', 'Aby otworzyć {section}, naciśnij przycisk menu po lewej stronie pola wiadomości.', 'Um {section} zu öffnen, tippe auf die Menütaste links neben dem Nachrichtenfeld.', '{section} bölümünü açmak için mesaj alanının solundaki menü düğmesine dokunun.', 'Para abrir {section}, toca el botón de menú a la izquierda del campo de mensaje.'),
     'ux_share': ('🎉 Share', '🎉 Поделиться', '🎉 Поділитися', '🎉 Udostępnij', '🎉 Teilen', '🎉 Paylaş', '🎉 Compartir'),
     'ux_monthly': ('Monthly', 'За месяц', 'За місяць', 'Miesięcznie', 'Monatlich', 'Aylık', 'Mensual'),

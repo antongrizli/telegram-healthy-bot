@@ -174,6 +174,11 @@ telegram-healthy-bot/
 
 ### Daily experience
 
+Keyboard graphs, exact button rows and callback contracts are maintained in
+[the keyboard architecture](docs/architecture/keyboards.md). Admin user lists
+show a paginated table (name/username, ID, registration and last recorded activity
+in UTC), with inline Block/Unblock and pagination buttons.
+
 Progress, All Achievements and Health Card remain ordinary reply-keyboard choices.
 Selecting one sets the menu button next to the message field to that section;
 tap that menu button to open the authenticated WebApp. Telegram reply-keyboard

@@ -2,6 +2,28 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from src.config import settings
 from src.utils.i18n_locales import get_text
 
+
+def get_admin_users_inline(data, lang, blocked=False, actor_id=None):
+    mode = 'blocked' if blocked else 'active'
+    action = 'unblock' if blocked else 'block'
+    rows = []
+    for user in data['users']:
+        if user['is_admin'] or user['telegram_id'] in settings.ADMIN_USER_IDS or user['telegram_id'] == actor_id:
+            continue
+        label = get_text('admin_users_' + action, lang, user_id=user['telegram_id'])
+        rows.append([InlineKeyboardButton(text=label,
+            callback_data=f"adminusers:{action}:{user['telegram_id']}:{data['page']}")])
+    nav = []
+    if data['page']:
+        nav.append(InlineKeyboardButton(text='◀', callback_data=f"adminusers:page:{mode}:{data['page']-1}"))
+    nav.append(InlineKeyboardButton(text=f"{data['page']+1}/{data['pages']}",
+                                   callback_data=f"adminusers:page:{mode}:{data['page']}"))
+    if data['page'] + 1 < data['pages']:
+        nav.append(InlineKeyboardButton(text='▶', callback_data=f"adminusers:page:{mode}:{data['page']+1}"))
+    rows.append(nav)
+    rows.append([InlineKeyboardButton(text=get_text('admin_users_back', lang), callback_data='adminusers:back')])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
 def get_morning_actions_inline(lang: str = "en") -> InlineKeyboardMarkup:
     """
     Inline keyboard for morning briefings: Link to dashboard and Quick log breakfast.

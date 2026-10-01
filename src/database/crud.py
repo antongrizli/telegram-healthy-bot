@@ -641,6 +641,25 @@ async def get_recent_user_activity(db: AsyncSession) -> list[dict]:
     return [dict(row) for row in result.mappings()]
 
 
+async def get_admin_users_page(db, blocked=False, page=0, page_size=5):
+    """All registered users, with the latest recorded chat or WebApp activity."""
+    from sqlalchemy import case
+    from src.database.models import ProductEvent
+    total = await db.scalar(select(func.count(User.telegram_id)).where(User.is_blocked == blocked))
+    pages = max(1, (total + page_size - 1) // page_size)
+    page = min(max(0, page), pages - 1)
+    messages = select(func.max(MessageStat.sent_at)).where(MessageStat.user_id == User.telegram_id).correlate(User).scalar_subquery()
+    events = select(func.max(ProductEvent.occurred_at)).where(
+        ProductEvent.user_id == User.telegram_id, ProductEvent.name == 'active').correlate(User).scalar_subquery()
+    last_active = case((messages.is_(None), events), (events.is_(None), messages),
+                       (messages >= events, messages), else_=events)
+    rows = await db.execute(select(User.telegram_id, User.name, User.username,
+        User.created_at.label('joined_at'), last_active.label('last_active_at'), User.is_admin)
+        .where(User.is_blocked == blocked).order_by(User.created_at.desc(), User.telegram_id.desc())
+        .offset(page * page_size).limit(page_size))
+    return dict(users=[dict(row) for row in rows.mappings()], total=total, page=page, pages=pages)
+
+
 # Medication access always includes the authenticated owner's ID.
 from src.database.models import Medication, MedicationReminder, MedicationIntake
 from sqlalchemy.orm import selectinload

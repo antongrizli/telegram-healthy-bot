@@ -1,17 +1,15 @@
-import re
+import unicodedata
 from html import escape
 from datetime import UTC
 from aiogram import Router, F
 from aiogram.filters import Command, StateFilter
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from sqlalchemy import select
 from src.database.connection import AsyncSessionLocal
 from src.database import crud
-from src.database.models import User
 from src.utils import i18n_locales
-from src.keyboards import reply
+from src.keyboards import reply, inline
 from src.config import settings
 
 router = Router()
@@ -316,175 +314,109 @@ async def process_admin_broadcast(message: Message, state: FSMContext, user_lang
         parse_mode="Markdown"
     )
 
+def format_users_table(data, language, blocked=False):
+    """Telegram has no HTML tables; render a bounded, escaped monospace table."""
+    def clean(value, size):
+        value = ''.join(c for c in str(value or '—') if not unicodedata.category(c).startswith('C'))
+        return ' '.join(value.split())[:size]
+
+    def stamp(value):
+        if value is None:
+            return '—'
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=UTC)
+        return value.astimezone(UTC).strftime('%Y-%m-%d %H:%M')
+
+    header = i18n_locales.get_text('admin_users_blocked' if blocked else 'admin_users_active', language)
+    columns = [i18n_locales.get_text('admin_users_name', language),
+               i18n_locales.get_text('admin_users_id', language),
+               i18n_locales.get_text('admin_users_joined', language),
+               i18n_locales.get_text('admin_users_activity', language)]
+    rows = []
+    for user in data['users']:
+        identity = clean(user['name'], 24)
+        if user['username']:
+            identity += ' / @' + clean(user['username'], 32)
+        rows.append([identity, str(user['telegram_id']), stamp(user['joined_at']), stamp(user['last_active_at'])])
+    widths = [max(len(row[i]) for row in [columns, *rows]) for i in range(4)]
+    line = lambda row: ' | '.join(value.ljust(width) for value, width in zip(row, widths))
+    table = '\n'.join([line(columns), '-+-'.join('-' * width for width in widths), *map(line, rows)])
+    if not rows:
+        table += '\n' + i18n_locales.get_text('admin_no_blocked_users' if blocked else 'admin_no_active_users', language)
+    return f"<b>{escape(header)}</b> · {data['total']} · UTC\n<pre>{escape(table)}</pre>"
+
+
+async def show_users_page(message, language, actor_id, blocked=False, page=0, edit=False):
+    async with AsyncSessionLocal() as db:
+        data = await crud.get_admin_users_page(db, blocked, page)
+    text = format_users_table(data, language, blocked)
+    markup = inline.get_admin_users_inline(data, language, blocked, actor_id)
+    if edit:
+        from aiogram.exceptions import TelegramBadRequest
+        try:
+            await message.edit_text(text, reply_markup=markup, parse_mode='HTML')
+        except TelegramBadRequest as exc:
+            if 'message is not modified' not in str(exc).lower():
+                raise
+    else:
+        await message.answer(text, reply_markup=markup, parse_mode='HTML')
+
+
 @router.message(F.text.in_(["👥 Active Users", "👥 Активные пользователи"]))
 async def cmd_admin_active_users(message: Message, state: FSMContext, user_language: str):
-    await state.set_state(AdminStatesGroup.viewing_active)
-    async with AsyncSessionLocal() as db:
-        users = await crud.get_all_users(db, include_blocked=False)
-    
-    if not users:
-        empty_msg = i18n_locales.get_text("admin_no_active_users", user_language)
-        await state.clear()
-        await message.answer(empty_msg, reply_markup=reply.get_admin_menu(user_language))
-        return
-        
-    prompt = (
-        "👥 **Active Users**:\nClick a button to block the user:"
-        if user_language == "en" else
-        "👥 **Активные пользователи**:\nНажмите на кнопку, чтобы заблокировать пользователя:"
-    )
-    await message.answer(
-        prompt,
-        reply_markup=reply.get_active_users_keyboard(users, user_language),
-        parse_mode="Markdown"
-    )
+    await state.clear()
+    await show_users_page(message, user_language, message.from_user.id)
 
-@router.message(
-    AdminStatesGroup.viewing_active,
-    lambda msg: not (msg.text and (msg.text.startswith("/") or msg.text in ["⬅️ Back to Main Menu", "⬅️ Главное меню"]))
-)
-async def process_active_users_view(message: Message, state: FSMContext, user_language: str):
-    text = message.text.strip()
-    
-    if text in ["⬅️ Back to Menu", "⬅️ Назад в меню", "❌ Cancel", "❌ Отмена"]:
-        await state.clear()
-        await message.answer(
-            i18n_locales.get_text("admin_welcome", user_language),
-            reply_markup=reply.get_admin_menu(user_language),
-            parse_mode="Markdown"
-        )
-        return
-        
-    match = re.search(r"ID:\s*(\d+)", text)
-    if match:
-        target_id = int(match.group(1))
-        async with AsyncSessionLocal() as db:
-            success = await crud.block_user(db, target_id, block=True)
-            users = await crud.get_all_users(db, include_blocked=False)
-            
-        if success:
-            await message.answer(
-                i18n_locales.get_text("admin_user_blocked", user_language)
-            )
-        else:
-            await message.answer(
-                i18n_locales.get_text("admin_user_not_found", user_language)
-            )
-            
-        if not users:
-            empty_msg = i18n_locales.get_text("admin_no_active_users", user_language)
-            await state.clear()
-            await message.answer(empty_msg, reply_markup=reply.get_admin_menu(user_language))
-        else:
-            prompt = (
-                "👥 **Active Users**:\nClick a button to block the user:"
-                if user_language == "en" else
-                "👥 **Активные пользователи**:\nНажмите на кнопку, чтобы заблокировать пользователя:"
-            )
-            await message.answer(
-                prompt,
-                reply_markup=reply.get_active_users_keyboard(users, user_language),
-                parse_mode="Markdown"
-            )
-    else:
-        async with AsyncSessionLocal() as db:
-            users = await crud.get_all_users(db, include_blocked=False)
-        if not users:
-            await state.clear()
-            await message.answer(
-                i18n_locales.get_text("admin_no_active_users", user_language),
-                reply_markup=reply.get_admin_menu(user_language)
-            )
-        else:
-            await message.answer(
-                i18n_locales.get_text("admin_select_user", user_language),
-                reply_markup=reply.get_active_users_keyboard(users, user_language)
-            )
 
 @router.message(F.text.in_(["🚫 Blocked Users", "🚫 Заблокированные"]))
 async def cmd_admin_blocked_users(message: Message, state: FSMContext, user_language: str):
-    await state.set_state(AdminStatesGroup.viewing_blocked)
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(select(User).where(User.is_blocked == True))
-        users = list(result.scalars().all())
-        
-    if not users:
-        empty_msg = i18n_locales.get_text("admin_no_blocked_users", user_language)
-        await state.clear()
-        await message.answer(empty_msg, reply_markup=reply.get_admin_menu(user_language))
-        return
-        
-    prompt = (
-        "🚫 **Blocked Users**:\nClick a button to unblock the user:"
-        if user_language == "en" else
-        "🚫 **Заблокированные пользователи**:\nНажмите на кнопку, чтобы разблокировать пользователя:"
-    )
-    await message.answer(
-        prompt,
-        reply_markup=reply.get_blocked_users_keyboard(users, user_language),
-        parse_mode="Markdown"
-    )
+    await state.clear()
+    await show_users_page(message, user_language, message.from_user.id, blocked=True)
 
-@router.message(
-    AdminStatesGroup.viewing_blocked,
-    lambda msg: not (msg.text and (msg.text.startswith("/") or msg.text in ["⬅️ Back to Main Menu", "⬅️ Главное меню"]))
-)
-async def process_blocked_users_view(message: Message, state: FSMContext, user_language: str):
-    text = message.text.strip()
-    
-    if text in ["⬅️ Back to Menu", "⬅️ Назад в меню", "❌ Cancel", "❌ Отмена"]:
-        await state.clear()
-        await message.answer(
-            i18n_locales.get_text("admin_welcome", user_language),
-            reply_markup=reply.get_admin_menu(user_language),
-            parse_mode="Markdown"
-        )
-        return
-        
-    match = re.search(r"ID:\s*(\d+)", text)
-    if match:
-        target_id = int(match.group(1))
-        async with AsyncSessionLocal() as db:
-            success = await crud.block_user(db, target_id, block=False)
-            result = await db.execute(select(User).where(User.is_blocked == True))
-            users = list(result.scalars().all())
-            
-        if success:
-            await message.answer(
-                i18n_locales.get_text("admin_user_unblocked", user_language)
-            )
-        else:
-            await message.answer(
-                i18n_locales.get_text("admin_user_not_found", user_language)
-            )
-            
-        if not users:
-            empty_msg = i18n_locales.get_text("admin_no_blocked_users", user_language)
+
+@router.callback_query(F.data.startswith('adminusers:'))
+async def admin_users_callback(callback: CallbackQuery, state: FSMContext, user_language: str):
+    actor_id = callback.from_user.id
+    async with AsyncSessionLocal() as db:
+        actor = await crud.get_user(db, actor_id)
+        if not (actor_id in settings.ADMIN_USER_IDS or (actor and actor.is_admin and not actor.is_blocked)):
+            await callback.answer(i18n_locales.get_text('admin_only', user_language), show_alert=True)
+            return
+        if not isinstance(callback.message, Message) or callback.message.chat.id != actor_id:
+            await callback.answer(i18n_locales.get_text('ux_invalid', user_language), show_alert=True)
+            return
+        parts = callback.data.split(':')
+        if parts == ['adminusers', 'back']:
             await state.clear()
-            await message.answer(empty_msg, reply_markup=reply.get_admin_menu(user_language))
-        else:
-            prompt = (
-                "🚫 **Blocked Users**:\nClick a button to unblock the user:"
-                if user_language == "en" else
-                "🚫 **Заблокированные пользователи**:\nНажмите на кнопку, чтобы разблокировать пользователя:"
-            )
-            await message.answer(
-                prompt,
-                reply_markup=reply.get_blocked_users_keyboard(users, user_language),
-                parse_mode="Markdown"
-            )
-    else:
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(select(User).where(User.is_blocked == True))
-            users = list(result.scalars().all())
-        if not users:
-            await state.clear()
-            await message.answer(
-                i18n_locales.get_text("admin_no_blocked_users", user_language),
-                reply_markup=reply.get_admin_menu(user_language)
-            )
-        else:
-            await message.answer(
-                i18n_locales.get_text("admin_select_user", user_language),
-                reply_markup=reply.get_blocked_users_keyboard(users, user_language)
-            )
+            await callback.answer()
+            await callback.message.edit_reply_markup(reply_markup=None)
+            await callback.message.answer(i18n_locales.get_text('admin_welcome', user_language),
+                                          reply_markup=reply.get_admin_menu(user_language))
+            return
+        if len(parts) != 4 or parts[1] not in ('page', 'block', 'unblock'):
+            await callback.answer(i18n_locales.get_text('ux_invalid', user_language), show_alert=True)
+            return
+        try:
+            page = int(parts[3])
+            if not 0 <= page <= 1_000_000:
+                raise ValueError()
+            if parts[1] == 'page':
+                if parts[2] not in ('active', 'blocked'):
+                    raise ValueError()
+                blocked = parts[2] == 'blocked'
+            else:
+                target_id = int(parts[2])
+                target = await crud.get_user(db, target_id)
+                if not target:
+                    await callback.answer(i18n_locales.get_text('admin_user_not_found', user_language), show_alert=True)
+                    return
+                if target_id == actor_id or target.is_admin or target_id in settings.ADMIN_USER_IDS:
+                    await callback.answer(i18n_locales.get_text('admin_users_protected', user_language), show_alert=True)
+                    return
+                blocked = parts[1] == 'unblock'
+                await crud.block_user(db, target_id, block=not blocked)
+        except ValueError:
+            await callback.answer(i18n_locales.get_text('ux_invalid', user_language), show_alert=True)
+            return
+    await callback.answer()
+    await show_users_page(callback.message, user_language, actor_id, blocked, page, edit=True)

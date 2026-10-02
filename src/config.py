@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     WEBAPP_URL: str
     FORCE_IPV6: bool = False
+    AI_REQUESTS_PER_MINUTE: int = Field(default=15, gt=0)
+    AI_REQUESTS_PER_DAY: int = Field(default=1500, gt=0)
+    AI_USER_REQUESTS_PER_MINUTE: int = Field(default=5, gt=0)
+    AI_QUEUE_MAX_RETRIES: int = Field(default=8, ge=1, le=20)
 
     @field_validator("ADMIN_USER_IDS", mode="before")
     @classmethod

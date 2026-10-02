@@ -334,7 +334,8 @@ async def test_execute_queued_analyze_food_input_with_photo_and_caption(db_sessi
         text_description="A fresh Greek salad with olive oil",
         image_bytes=b"queued_photo_bytes",
         images_bytes=None,
-        language="en"
+        language="en",
+        user_id=55555,
     )
 
     # FSM state should change to waiting_for_confirm
@@ -409,7 +410,8 @@ async def test_execute_queued_analyze_food_input_multiple_images(db_session: Asy
         text_description="A fresh Greek salad with olive oil",
         image_bytes=None,
         images_bytes=[b"queued_photo_bytes", b"queued_photo_bytes"],
-        language="en"
+        language="en",
+        user_id=55555,
     )
 
     state = await fsm_ctx.get_state()
@@ -448,6 +450,5 @@ async def test_execute_queued_report_generation(db_session: AsyncSession, setup_
     assert item_after.status == "completed"
     assert item_after.processed_at is not None
     assert item_after.last_error is None
-
 
 

@@ -77,7 +77,7 @@ const translatePage = (lang) => {
 // Fetch user settings and apply localization
 const initLocalization = async () => {
     // Default fallback from Telegram client, or English
-    let clientLang = "en";
+    let clientLang = (navigator.language || 'en').split('-')[0];
     if (state.user && state.user.language_code) {
         clientLang = state.user.language_code;
     }
@@ -90,6 +90,11 @@ const initLocalization = async () => {
     state.userLanguage = clientLang;
 
     try {
+        if (!state.initData) {
+            translatePage(state.userLanguage);
+            els.userName.innerText = (LOCALES[state.userLanguage] || LOCALES.en).webapp_open_telegram;
+            return;
+        }
         const res = await apiFetch("/api/user/settings", { headers: getHeaders() });
         if (res.ok) {
             const data = await res.json();
@@ -108,10 +113,6 @@ const initLocalization = async () => {
     translatePage(state.userLanguage);
     if (typeof mt === "function") document.getElementById("med-nav-label").textContent = mt("title");
 
-    if (!state.user) {
-        const dict = LOCALES[state.userLanguage] || LOCALES["en"];
-        els.userName.innerText = dict.webapp_dev_mode;
-    }
 };
 
 // Initialize App
@@ -194,6 +195,11 @@ const loadTab = async (tabName) => {
     showLoading(true);
     hideError();
     try {
+        if (!state.initData) {
+            const dict = LOCALES[state.userLanguage] || LOCALES.en;
+            showError(dict.webapp_open_telegram);
+            return;
+        }
         // Load streaks data on every tab to keep header updated
         await loadStreaksData();
 
@@ -552,40 +558,57 @@ const loadHealthCard = async () => {
             document.getElementById("health-card-container").classList.add("hidden");
             return;
         }
+        if (!res.ok) throw new Error('Could not load progress card');
 
         const data = await res.json();
 
         document.getElementById("no-card-placeholder").classList.add("hidden");
         document.getElementById("health-card-container").classList.remove("hidden");
 
-        document.getElementById("health-score-num").innerText = data.card_data.overall_score;
-        document.getElementById("coach-message").innerText = data.card_data.coach_message;
+        const dict = LOCALES[state.userLanguage] || LOCALES.en;
+        const currentCalculation = data.card_data.calculation_version === 2;
+        const score = currentCalculation ? data.card_data.overall_score : null;
+        document.getElementById("health-score-num").innerText = Number.isFinite(score) ? score : '—';
+        document.querySelector('.score-denominator').classList.toggle('hidden', !Number.isFinite(score));
+        document.getElementById("coach-message").innerText = currentCalculation ? data.card_data.coach_message : dict.webapp_card_legacy;
+        let coverage = document.getElementById('card-coverage');
+        if (!coverage) {
+            coverage = document.createElement('p');
+            coverage.id = 'card-coverage';
+            document.getElementById('coach-message').before(coverage);
+        }
+        coverage.textContent = currentCalculation && data.card_data.coverage
+            ? dict.webapp_card_coverage.replace('{days}', data.card_data.coverage.logged_days)
+            : '';
+        coverage.classList.toggle('hidden', !currentCalculation || !data.card_data.coverage);
 
         // Populate Categories mini-cards
         const catsGrid = document.getElementById("card-categories");
         catsGrid.innerHTML = "";
 
-        const dict = LOCALES[state.userLanguage] || LOCALES["en"];
-
         for (const [key, cat] of Object.entries(data.card_data.categories)) {
+            const categoryScore = currentCalculation ? cat.score : null;
             const minicard = document.createElement("div");
             minicard.className = "card-mini";
 
-            const trendIcon = cat.trend === "up" ? '<i class="fa-solid fa-arrow-trend-up text-green"></i>' :
+            const trendIcon = !Number.isFinite(categoryScore) ? '<i class="fa-solid fa-minus text-secondary"></i>' :
+                cat.trend === "up" ? '<i class="fa-solid fa-arrow-trend-up text-green"></i>' :
                 cat.trend === "down" ? '<i class="fa-solid fa-arrow-trend-down text-red"></i>' :
                     '<i class="fa-solid fa-right-long text-secondary"></i>';
 
-            const translatedLabel = dict[key] || key.toUpperCase();
+            const translatedLabel = dict[key === 'weight_progress' ? 'weight_goal' : key] || key.toUpperCase();
             minicard.innerHTML = `
-                <div class="mini-score">${cat.score}%</div>
+                <div class="mini-score">${Number.isFinite(categoryScore) ? categoryScore + '%' : '—'}</div>
                 <div class="mini-label">${translatedLabel}</div>
                 <div class="mini-trend">${trendIcon}</div>
             `;
+            if (!Number.isFinite(categoryScore)) minicard.title = dict.webapp_insufficient;
             catsGrid.appendChild(minicard);
         }
     } catch (e) {
         console.error("Health card load error:", e);
-        document.getElementById("no-card-placeholder").classList.remove("hidden");
+        document.getElementById("no-card-placeholder").classList.add("hidden");
         document.getElementById("health-card-container").classList.add("hidden");
+        throw e;
     }
 };

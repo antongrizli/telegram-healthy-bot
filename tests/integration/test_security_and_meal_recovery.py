@@ -216,7 +216,8 @@ async def test_queued_correction_updates_original_draft_after_restart(db_session
     await make_user(db_session)
     draft_id = await crud.save_meal_draft(db_session, 123,
         {"analysis": ANALYSIS, "logged_at": "2026-09-06T23:58:00+02:00"})
-    corrected = {**ANALYSIS, "total_calories": 200}
+    corrected = {**ANALYSIS, "total_calories": 200,
+                 "food_items": [{**ANALYSIS["food_items"][0], "calories": 200}]}
     monkeypatch.setattr(gemini, "adjust_food_analysis", AsyncMock(return_value=gemini.FoodAnalysisResponse(**corrected)))
     bot = SimpleNamespace(id=1, send_message=AsyncMock(), delete_message=AsyncMock())
     queue_id = await rate_limiter.add_to_queue(db_session, 123, 123, "adjust_food_analysis",

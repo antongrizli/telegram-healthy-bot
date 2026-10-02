@@ -179,6 +179,15 @@ Keyboard graphs, exact button rows and callback contracts are maintained in
 show paginated mobile-readable user blocks (name/username, ID, registration and last recorded activity
 in UTC), with inline Block/Unblock and pagination buttons.
 
+### Reliability and progress
+
+See [reliability architecture](docs/architecture/reliability.md) for AI quota,
+bounded retries, shutdown and progress-card calculation contracts. Startup preserves
+chosen report weekdays. Cards show diary coverage and unknown scores explicitly;
+averages use logged days and do not treat missing entries as zero intake.
+CI checks SQLite, isolated PostgreSQL migrations/quota concurrency and the mobile
+WebApp in all seven languages before publishing an image.
+
 Progress, All Achievements and Health Card remain ordinary reply-keyboard choices.
 Selecting one sets the menu button next to the message field to that section;
 tap that menu button to open the authenticated WebApp. Telegram reply-keyboard

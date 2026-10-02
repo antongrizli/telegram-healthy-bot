@@ -7,6 +7,7 @@ from src.webapp.auth import validate_init_data
 from src.database.connection import AsyncSessionLocal
 from src.database import crud
 from src.services import medications as meds, rate_limiter
+from src.utils.i18n_locales import get_text
 
 
 def serialize_reminder(r):
@@ -87,7 +88,7 @@ async def medication_api(request):
                 raise web.HTTPNotFound()
             return web.json_response({'id': item.id}, status=200 if item_id else 201)
         except (ValueError, TypeError, KeyError, binascii.Error) as exc:
-            raise web.HTTPBadRequest(text=str(exc)) from exc
+            raise web.HTTPBadRequest(text=get_text('ux_invalid', user.language)) from exc
 
 
 def register_routes(app):

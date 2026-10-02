@@ -234,7 +234,8 @@ async def process_food_input(
             text_description=text_desc,
             image_bytes=image_bytes,
             images_bytes=images_bytes,
-            language=user_language
+            language=user_language,
+            user_id=message.from_user.id,
         )
     except Exception as e:
         await wait_msg.delete()
@@ -460,7 +461,8 @@ async def process_food_correction(message: Message, state: FSMContext, user_lang
         adjusted_analysis = await gemini.adjust_food_analysis(
             original_data=original_analysis,
             correction_text=correction_text,
-            language=user_language
+            language=user_language,
+            user_id=message.from_user.id,
         )
     except Exception as e:
         await wait_msg.delete()
@@ -777,7 +779,8 @@ async def process_meal_edit_text(message: Message, state: FSMContext, user_langu
         adjusted_analysis = await gemini.adjust_food_analysis(
             original_data=original_data,
             correction_text=correction_text,
-            language=user_language
+            language=user_language,
+            user_id=message.from_user.id,
         )
     except Exception as e:
         await wait_msg.delete()

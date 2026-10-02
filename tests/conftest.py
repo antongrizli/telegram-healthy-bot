@@ -71,6 +71,7 @@ def patch_async_session_local(monkeypatch, db_session):
         "src.handlers.admin",
         "src.services.scheduler",
         "src.services.rate_limiter",
+        "src.services.ai_quota",
         "src.services.gamification",
         "src.services.briefing",
         "src.handlers.ux", "src.webapp.ux", "src.middlewares.logging"

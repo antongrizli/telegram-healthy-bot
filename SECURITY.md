@@ -49,6 +49,7 @@ If you discover a security vulnerability in this project, please **do not open a
 - Every private dashboard endpoint requires Telegram-signed `initData` with a valid timestamp. Plain user IDs are never credentials.
 - Blocked accounts are denied dashboard access and queued AI work.
 - Public health checks return generic failure status; database exception details stay in server logs.
+- Unexpected WebApp server failures return generic JSON and a random request ID; exception details and stack traces remain in server logs. Medication validation errors use controlled localized messages, never exception strings.
 
 ### 6. Durable Meal Confirmation
 - Meal drafts live in `ai_request_queue` with status `awaiting_confirm`. Confirmation and cancellation check ownership and atomically consume the draft. Meal insertion and draft consumption commit together.
@@ -70,6 +71,13 @@ removed on profile deletion. Water entries cascade with the profile. Saved detai
 reports use owned completed queue rows and are removed with the profile as well.
 The browser smoke test intercepts all network requests using synthetic data; it does
 not install any authentication bypass in the application.
+
+AI quota reservations are committed before every provider call, including retries.
+PostgreSQL serializes reservation transactions, and configurable per-user limits
+bound individual consumption. Attempt and success ledgers retain quota usage for
+24 hours; profile deletion anonymizes their user IDs without resetting global
+quota. Raw model responses are not printed. AI nutrition must be finite,
+non-negative and bounded; meal totals are recomputed from ingredients.
 
 ### Medication data
 

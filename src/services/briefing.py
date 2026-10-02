@@ -104,6 +104,7 @@ async def generate_morning_briefing(db: AsyncSession, user_id: int) -> str:
 
     try:
         response = await gemini.call_gemini_with_retry(
+            user_id=user_id, request_type="morning_briefing",
             contents=[prompt],
             config=gemini.types.GenerateContentConfig(temperature=0.3)
         )

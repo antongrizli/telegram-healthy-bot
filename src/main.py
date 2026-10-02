@@ -105,17 +105,26 @@ async def main():
             try:
                 if not menu_button_set:
                     await try_set_menu_button()
-                await dp.start_polling(bot)
+                await dp.start_polling(bot, close_bot_session=False)
                 break  # Normal exit (e.g. shutdown signal received)
             except (TelegramNetworkError, asyncio.TimeoutError) as e:
                 logger.error(f"Telegram connection timed out or failed: {e}. Retrying in {retry_delay} seconds...")
                 await asyncio.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, 60)
     finally:
-        await bot.session.close()
-        scheduler.scheduler.shutdown()
-        await stop_queue_worker()
-        await webapp_runner.cleanup()
+        try:
+            try:
+                scheduler.scheduler.shutdown(wait=False)
+            finally:
+                try:
+                    await webapp_runner.cleanup()
+                finally:
+                    await stop_queue_worker(queue_worker_task)
+        finally:
+            try:
+                await dp.storage.close()
+            finally:
+                await bot.session.close()
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -6,7 +6,8 @@ const os = require('node:os');
 const {execFileSync} = require('node:child_process');
 const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '../..');
-const dictionaries = JSON.parse(execFileSync(path.join(root, 'venv/bin/python'), ['-c',
+const localPython = path.join(root, 'venv/bin/python');
+const dictionaries = JSON.parse(execFileSync(process.env.UX_PYTHON_PATH || (fs.existsSync(localPython) ? localPython : 'python'), ['-c',
     'import json; from src.utils.i18n_locales import LOCALES; print(json.dumps(LOCALES))'], {cwd: root, encoding: 'utf8'}));
 (async () => {
     const output = fs.mkdtempSync(path.join(os.tmpdir(), 'healthy-ux-'));
@@ -15,9 +16,17 @@ const dictionaries = JSON.parse(execFileSync(path.join(root, 'venv/bin/python'),
         for (const language of Object.keys(dictionaries)) {
             const labels = dictionaries[language];
             const page = await browser.newPage({viewport: {width: language === 'de' ? 320 : 390, height: 844}});
+            await page.addInitScript(lang => {
+                window.Telegram = {WebApp: {initData: 'synthetic-test-signature',
+                    initDataUnsafe: {user: {id: 991, language_code: lang}}, ready(){}, expand(){}}};
+            }, language);
             const errors = [];
             page.on('pageerror', error => errors.push(error.message));
             const mutations = [];
+            const card = {calculation_version: 2, overall_score: null,
+                coverage: {logged_days: 0, total_days: 7}, coach_message: labels.ux_card_insufficient,
+                categories: {nutrition: {score: null, trend: 'unknown'}, consistency: {score: 0, trend: 'down'}, weight_progress: {score: null, trend: 'unknown'}}};
+            let apiRequests = 0;
             let failNextEdit = true;
             const dose = {id: 10, name: 'Test preparation', scheduled_at: '2026-09-12T07:00:00Z', status: 'unmarked'};
             const settings = {timezone: 'Europe/Berlin', notifications_enabled: true, frequency: 'daily', quiet_start: '22:00', quiet_end: '08:00'};
@@ -28,6 +37,7 @@ const dictionaries = JSON.parse(execFileSync(path.join(root, 'venv/bin/python'),
                     .replace('{protein_target}', '120').replace('{fat}', '50').replace('{carb}', '140').replace('{water}', '750')};
             await page.route('**/*', async route => {
                 const request = route.request(); const url = new URL(request.url());
+                if (url.pathname.startsWith('/api/')) apiRequests++;
                 if (url.hostname !== 'healthy.test') {
                     if (url.pathname.includes('chart.js')) return route.fulfill({contentType: 'application/javascript', body: 'window.Chart = class {destroy(){}};'});
                     return route.fulfill({body: ''});
@@ -49,6 +59,7 @@ const dictionaries = JSON.parse(execFileSync(path.join(root, 'venv/bin/python'),
                     '/api/user/settings': {language, name: 'Анна', timezone: 'Europe/Berlin'},
                     '/api/gamification/streaks': {streaks: [], freezes_left: 1},
                     '/api/gamification/achievements': [],
+                    '/api/gamification/health-card': {card_data: card},
                     '/api/medications': {intakes: [dose]},
                     '/api/charts/nutrition': {dates: ['2026-09-12'], calories: [1340], protein: [78], fat: [50], carb: [140], targets: {calories: 1900, protein: 120, fat: 60, carb: 210}},
                 };
@@ -118,6 +129,26 @@ const dictionaries = JSON.parse(execFileSync(path.join(root, 'venv/bin/python'),
             assert(mutations.some(m => m.path.endsWith('/drafts/22') && m.body.action === 'accept'));
             await page.locator('#loading-overlay').waitFor({state: 'hidden'});
             if (language === 'ru') await page.screenshot({path: path.join(output, 'today-ru.png'), fullPage: true});
+            await page.evaluate(() => switchTab('health-card'));
+            await page.locator('#health-card-container').waitFor({state: 'visible'});
+            assert.equal(await page.locator('#health-score-num').textContent(), '—');
+            assert.equal(await page.locator('.score-denominator').isVisible(), false);
+            assert.deepEqual(await page.locator('#card-categories .mini-score').allTextContents(), ['—', '0%', '—']);
+            card.overall_score = 71; card.coverage.logged_days = 3;
+            card.categories.nutrition.score = 100; card.categories.consistency.score = 42;
+            await page.evaluate(() => loadHealthCard());
+            assert.equal(await page.locator('#health-score-num').textContent(), '71');
+            assert.equal(await page.locator('.score-denominator').isVisible(), true);
+            delete card.calculation_version;
+            await page.evaluate(() => loadHealthCard());
+            assert.equal(await page.locator('#health-score-num').textContent(), '—');
+            assert.deepEqual(await page.locator('#card-categories .mini-score').allTextContents(), ['—', '—', '—']);
+            if (language === 'ru') await page.screenshot({path: path.join(output, 'progress-ru.png'), fullPage: true});
+            const beforeUnauthenticated = apiRequests;
+            await page.evaluate(async () => { state.initData = ''; await loadTab('dashboard'); });
+            assert.equal(await page.locator('#error-card').isVisible(), true);
+            assert.equal(await page.locator('#loading-overlay').isVisible(), false);
+            assert.equal(apiRequests, beforeUnauthenticated, 'Unauthenticated navigation must show guidance without API calls');
             assert.deepEqual(errors, []);
             await page.close();
         }

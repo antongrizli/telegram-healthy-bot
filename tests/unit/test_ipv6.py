@@ -26,6 +26,7 @@ async def test_bot_initialization_with_ipv6(monkeypatch):
     
     # Mock dispatcher start_polling to raise StopTestException
     mock_dispatcher_instance = MagicMock()
+    mock_dispatcher_instance.storage.close = AsyncMock()
     mock_dispatcher_instance.start_polling = AsyncMock(side_effect=StopTestException("stop"))
     mock_dispatcher_class.return_value = mock_dispatcher_instance
 
@@ -88,6 +89,7 @@ async def test_bot_initialization_without_ipv6(monkeypatch):
     
     # Mock dispatcher start_polling to raise StopTestException
     mock_dispatcher_instance = MagicMock()
+    mock_dispatcher_instance.storage.close = AsyncMock()
     mock_dispatcher_instance.start_polling = AsyncMock(side_effect=StopTestException("stop"))
     mock_dispatcher_class.return_value = mock_dispatcher_instance
 

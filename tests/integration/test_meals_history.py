@@ -427,7 +427,8 @@ async def test_process_food_input_photo_and_caption(mock_state, monkeypatch):
         text_description="This is a delicious breakfast of oatmeal and berries",
         image_bytes=b"dummy_photo_bytes",
         images_bytes=None,
-        language="en"
+        language="en",
+        user_id=12345,
     )
     
     # State should be updated with the analysis results and the image/raw text info

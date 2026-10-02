@@ -403,7 +403,7 @@ async def check_new_achievements(db: AsyncSession, user_id: int) -> list[str]:
     
     return newly_unlocked
 
-async def generate_weekly_health_card(db: AsyncSession, user_id: int) -> HealthCard:
+async def generate_weekly_health_card(db: AsyncSession, user_id: int, now: datetime | None = None) -> HealthCard:
     """
     Generates the weekly Personalized Health Card.
     Calculates consistency, nutrition, and weight progress scores, unlocks card achievement,
@@ -418,7 +418,7 @@ async def generate_weekly_health_card(db: AsyncSession, user_id: int) -> HealthC
     except Exception:
         user_tz = ZoneInfo("UTC")
         
-    local_now = datetime.now(user_tz)
+    local_now = (now or datetime.now(UTC)).astimezone(user_tz)
     # Start of current week (Monday)
     days_since_monday = local_now.weekday()
     week_start_local = local_now - timedelta(days=days_since_monday)
@@ -431,17 +431,20 @@ async def generate_weekly_health_card(db: AsyncSession, user_id: int) -> HealthC
     
     # 1. Nutrition Score
     food_logs = await crud.get_food_logs(db, user_id, start_date, end_date)
+    food_logs = [log for log in food_logs if start_date <= log.logged_at < end_date]
     # Calculate average daily calories, protein, carbs, fat
-    days_logged = len(set(log.logged_at.date() for log in food_logs))
+    days_logged = len({log.logged_at.replace(tzinfo=UTC).astimezone(user_tz).date() for log in food_logs})
     
     total_cal = sum(log.calories for log in food_logs)
     total_prot = sum(log.proteins for log in food_logs)
-    avg_cal = total_cal / 7.0
-    avg_prot = total_prot / 7.0
+    avg_cal = total_cal / days_logged if days_logged else None
+    avg_prot = total_prot / days_logged if days_logged else None
     
     # Score out of 100 based on macro goal alignment
-    cal_deviation = abs(avg_cal - user.target_calories) / user.target_calories if user.target_calories else 1.0
-    nutrition_score = max(0, int(100 * (1.0 - cal_deviation)))
+    nutrition_score = None
+    if avg_cal is not None and user.target_calories:
+        cal_deviation = abs(avg_cal - user.target_calories) / user.target_calories
+        nutrition_score = max(0, min(100, int(100 * (1.0 - cal_deviation))))
     
     # 2. Consistency Score
     # Number of days they logged something out of 7
@@ -449,11 +452,13 @@ async def generate_weekly_health_card(db: AsyncSession, user_id: int) -> HealthC
     
     # 3. Weight Progress Score
     weight_logs = await crud.get_weight_logs(db, user_id, start_date, end_date)
+    weight_logs = [log for log in weight_logs if start_date <= log.logged_at < end_date]
     # Check weight trend vs goal
-    weight_score = 100 # default if no logs
-    weight_trend = "stable"
+    weight_score = None
+    weight_trend = "unknown"
+    weight_days = {log.logged_at.replace(tzinfo=UTC).astimezone(user_tz).date() for log in weight_logs}
     
-    if len(weight_logs) >= 2:
+    if len(weight_days) >= 2:
         sorted_weights = sorted(weight_logs, key=lambda w: w.logged_at)
         w_diff = sorted_weights[-1].weight - sorted_weights[0].weight
         
@@ -466,19 +471,24 @@ async def generate_weekly_health_card(db: AsyncSession, user_id: int) -> HealthC
         else:
             weight_trend = "down"
             weight_score = 100 if user.goal == "lose_weight" else 50
-    elif len(weight_logs) == 1:
-        weight_score = 80
-        
-    overall_score = int(0.4 * nutrition_score + 0.4 * consistency_score + 0.2 * weight_score)
+    # Three logged days is a coverage threshold, not proof of a complete diet.
+    scores = [(nutrition_score, 4), (consistency_score, 4), (weight_score, 2)]
+    available = [(score, weight) for score, weight in scores if score is not None]
+    overall_score = (int(sum(score * weight for score, weight in available) / sum(weight for _, weight in available))
+                     if days_logged >= 3 and nutrition_score is not None else None)
     
     # Calculate trends relative to target or historic averages
     card_data = {
         "overall_score": overall_score,
+        "calculation_version": 2,
+        "coverage": {"logged_days": days_logged, "total_days": 7, "weight_days": len(weight_days)},
+        "averages": {"calories": avg_cal, "protein": avg_prot},
+        "data_status": "insufficient" if days_logged < 3 else "partial" if days_logged < 7 else "available",
         "categories": {
             "nutrition": {
                 "score": nutrition_score,
-                "trend": "up" if avg_prot >= user.target_protein * 0.9 else "down",
-                "detail": f"Average daily calories: {int(avg_cal)} / {user.target_calories} kcal."
+                "trend": "unknown" if avg_prot is None else "up" if avg_prot >= user.target_protein * 0.9 else "down",
+                "detail": f"Average on logged days: {round(avg_cal) if avg_cal is not None else 'unknown'} / {user.target_calories} kcal."
             },
             "consistency": {
                 "score": consistency_score,
@@ -502,6 +512,7 @@ async def generate_weekly_health_card(db: AsyncSession, user_id: int) -> HealthC
             
     # Generate Coach Message via Gemini
     profile_dict = {
+        "telegram_id": user_id,
         "name": user.name,
         "sex": user.sex,
         "age": user.age,
@@ -512,7 +523,8 @@ async def generate_weekly_health_card(db: AsyncSession, user_id: int) -> HealthC
     
     from src.services.medications import report_context
     profile_dict["medications"] = await report_context(db, user_id)
-    coach_message = await gemini_generate_card_note(profile_dict, card_data, user.language)
+    coach_message = (await gemini_generate_card_note(profile_dict, card_data, user.language)
+                     if days_logged >= 3 else i18n_locales.get_text('ux_card_insufficient', user.language))
     card_data["coach_message"] = coach_message
     
     card = await crud.save_health_card(db, user_id, week_start_utc, card_data)
@@ -527,7 +539,9 @@ async def gemini_generate_card_note(profile: dict, card_data: dict, language: st
         f"User Profile: {profile}\n"
         f"Weekly Performance: {card_data}\n\n"
         f"INSTRUCTIONS:\n"
-        f"1. Acknowledge their scores (Overall: {card_data['overall_score']}/100, Nutrition: {card_data['categories']['nutrition']['score']}, Consistency: {card_data['categories']['consistency']['score']}, Weight Progress: {card_data['categories']['weight_progress']['score']}).\n"
+        f"1. Describe recorded habits, not medical health. Scores refer only to available categories. "
+        f"Null scores mean insufficient data, never success. Missing meals are not zero intake. "
+        f"Averages cover logged days only and may represent incomplete days. Do not infer causal explanations.\n"
         f"2. Write in a warm, encouraging, supportive style (mental health coach persona).\n"
         f"3. Provide exactly two actionable recommendations for the upcoming week based on where they scored lowest.\n"
         f"4. Keep the message concise (max 700 characters) and ready for Telegram. Do not include titles or headings, start directly with the coach message.\n"
@@ -539,6 +553,7 @@ async def gemini_generate_card_note(profile: dict, card_data: dict, language: st
 
     try:
         response = await gemini.call_gemini_with_retry(
+            user_id=profile.get('telegram_id'), request_type="weekly_card",
             contents=[prompt],
             config=gemini.types.GenerateContentConfig(temperature=0.3)
         )
@@ -546,10 +561,10 @@ async def gemini_generate_card_note(profile: dict, card_data: dict, language: st
         if note:
             from src.utils.escape import clean_telegram_markdown
             note = clean_telegram_markdown(note)
-        return note or "Excellent work this week! Keep staying consistent, tracking your meals daily, and moving closer to your goals."
+        return note or i18n_locales.get_text('ux_card_fallback', language)
     except Exception as e:
         logger.error(f"Error generating weekly card note: {e}")
-        return "Excellent work this week! Keep staying consistent, tracking your meals daily, and moving closer to your goals."
+        return i18n_locales.get_text('ux_card_fallback', language)
 
 async def reset_weekly_freezes(db: AsyncSession):
     """

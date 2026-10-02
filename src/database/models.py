@@ -110,6 +110,17 @@ class AiRequestLog(Base):
     request_type = Column(String(50), nullable=True)
     executed_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
 
+class AiRequestAttempt(Base):
+    """Quota reservations, including failed provider calls and individual retries."""
+    __tablename__ = "ai_request_attempts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, nullable=True, index=True)
+    request_type = Column(String(50), nullable=False)
+    executed_at = Column(DateTime, nullable=False, index=True,
+                         default=lambda: datetime.now(UTC).replace(tzinfo=None))
+
+
 class AiRequestQueue(Base):
     __tablename__ = "ai_request_queue"
 

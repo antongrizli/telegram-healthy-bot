@@ -11,7 +11,7 @@ from src.database.models import FoodLog, WeightLog, Streak, Achievement, HealthC
 from src.webapp.auth import validate_init_data
 from src.services.gamification import ACHIEVEMENTS
 from src.utils import i18n_locales
-from src.webapp.middlewares import block_scanners_middleware
+from src.webapp.middlewares import block_scanners_middleware, safe_errors_middleware
 
 logger = logging.getLogger(__name__)
 
@@ -244,7 +244,7 @@ async def health_check(request: web.Request) -> web.Response:
 # Web App Routing Setup
 
 def create_app(bot) -> web.Application:
-    app = web.Application(middlewares=[block_scanners_middleware], client_max_size=6 * 1024 * 1024)
+    app = web.Application(middlewares=[safe_errors_middleware, block_scanners_middleware], client_max_size=6 * 1024 * 1024)
     from src.webapp.medications import register_routes
     register_routes(app)
     from src.webapp.ux import register_routes as register_ux_routes, BOT_KEY

@@ -1,8 +1,55 @@
 from datetime import datetime, UTC, timedelta
-from sqlalchemy import select, update, delete, func, desc, and_
+from sqlalchemy import select, update, delete, func, desc, and_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.models import User, FoodLog, WeightLog, MessageStat, AiRequestLog, AiRequestQueue, Streak, Achievement, HealthCard
 from src.config import settings
+
+
+async def ai_quota_usage(db, since, user_id=None):
+    """Include pre-upgrade successful calls without double-counting new attempts."""
+    from src.database.models import AiRequestAttempt
+    first_attempt = select(func.min(AiRequestAttempt.executed_at)).scalar_subquery()
+    counts, oldest = 0, None
+    for model in (AiRequestAttempt, AiRequestLog):
+        query = select(func.count(model.id), func.min(model.executed_at)).where(model.executed_at >= since)
+        if model is AiRequestLog:
+            query = query.where(model.executed_at < func.coalesce(first_attempt, datetime.now(UTC).replace(tzinfo=None)))
+        if user_id is not None:
+            query = query.where(model.user_id == user_id)
+        count, start = (await db.execute(query)).one()
+        counts += count
+        if start is not None:
+            oldest = min(oldest, start) if oldest else start
+    return counts, oldest
+
+
+async def ai_quota_exhausted(db, user_id=None, now=None):
+    import math
+    now = now or datetime.now(UTC).replace(tzinfo=None)
+    windows = [("minute", 60, settings.AI_REQUESTS_PER_MINUTE, None),
+               ("day", 86400, settings.AI_REQUESTS_PER_DAY, None)]
+    if user_id is not None:
+        windows.append(("user", 60, settings.AI_USER_REQUESTS_PER_MINUTE, user_id))
+    for scope, seconds, limit, owner in windows:
+        count, oldest = await ai_quota_usage(db, now - timedelta(seconds=seconds), owner)
+        if count >= limit:
+            return scope, max(1, math.ceil((oldest + timedelta(seconds=seconds) - now).total_seconds()) + 1)
+    return None
+
+
+async def reserve_ai_attempt(db, user_id, request_type):
+    from src.database.models import AiRequestAttempt
+    if db.bind.dialect.name == "postgresql":
+        await db.execute(text("SELECT pg_advisory_xact_lock(72139403)"))
+    now = datetime.now(UTC).replace(tzinfo=None)
+    exhausted = await ai_quota_exhausted(db, user_id, now)
+    if not exhausted:
+        cutoff = now - timedelta(days=1)
+        await db.execute(delete(AiRequestAttempt).where(AiRequestAttempt.executed_at < cutoff))
+        await db.execute(delete(AiRequestLog).where(AiRequestLog.executed_at < cutoff))
+        db.add(AiRequestAttempt(user_id=user_id, request_type=request_type, executed_at=now))
+    await db.commit()  # Release the advisory lock before network I/O, including denial.
+    return exhausted
 
 async def record_event(db, user_id, name):
     from src.database.models import ProductEvent
@@ -425,8 +472,11 @@ async def get_admin_stats(db: AsyncSession) -> dict:
     }
 
 async def delete_user(db: AsyncSession, telegram_id: int) -> bool:
-    from src.database.models import ProductEvent
+    from src.database.models import ProductEvent, AiRequestAttempt
     await db.execute(delete(ProductEvent).where(ProductEvent.user_id == telegram_id))
+    # Retain anonymous 24-hour quota usage without retaining a deleted identity.
+    for model in (AiRequestAttempt, AiRequestLog):
+        await db.execute(update(model).where(model.user_id == telegram_id).values(user_id=None))
     user = await get_user(db, telegram_id)
     if user:
         await db.delete(user)

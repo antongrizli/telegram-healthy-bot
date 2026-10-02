@@ -2,7 +2,7 @@ import json
 import asyncio
 import logging
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 from google import genai
 from google.genai import types
 from src.config import settings
@@ -20,19 +20,31 @@ def extract_json(text: str) -> str:
 
 # 1. Pydantic Models for Structured Outputs
 class FoodItem(BaseModel):
-    name: str = Field(description="Name of the food item in the selected language")
-    portion: str = Field(description="Estimated weight or portion description, e.g., '150g' or '1 cup'")
-    calories: int = Field(description="Calories in kcal")
-    protein: float = Field(description="Protein in grams")
-    fat: float = Field(description="Fat in grams")
-    carb: float = Field(description="Carbohydrates in grams")
+    model_config = ConfigDict(allow_inf_nan=False)
+    name: str = Field(min_length=1, max_length=500, description="Name of the food item in the selected language")
+    portion: str = Field(max_length=500, description="Estimated weight or portion description, e.g., '150g' or '1 cup'")
+    calories: int = Field(ge=0, le=20000, description="Calories in kcal")
+    protein: float = Field(ge=0, le=2000, description="Protein in grams")
+    fat: float = Field(ge=0, le=2000, description="Fat in grams")
+    carb: float = Field(ge=0, le=2000, description="Carbohydrates in grams")
 
 class FoodAnalysisResponse(BaseModel):
-    food_items: List[FoodItem] = Field(description="List of all identified food items in the input")
-    total_calories: int = Field(description="Sum of all calories in kcal")
-    total_protein: float = Field(description="Sum of all protein in grams")
-    total_fat: float = Field(description="Sum of all fat in grams")
-    total_carb: float = Field(description="Sum of all carbohydrates in grams")
+    model_config = ConfigDict(allow_inf_nan=False)
+    food_items: List[FoodItem] = Field(min_length=1, max_length=100, description="List of all identified food items in the input")
+    total_calories: int = Field(ge=0, le=20000, description="Sum of all calories in kcal")
+    total_protein: float = Field(ge=0, le=2000, description="Sum of all protein in grams")
+    total_fat: float = Field(ge=0, le=2000, description="Sum of all fat in grams")
+    total_carb: float = Field(ge=0, le=2000, description="Sum of all carbohydrates in grams")
+
+    @model_validator(mode="after")
+    def recompute_totals(self):
+        for total, field, limit in [('total_calories', 'calories', 20000), ('total_protein', 'protein', 2000),
+                                    ('total_fat', 'fat', 2000), ('total_carb', 'carb', 2000)]:
+            value = sum(getattr(item, field) for item in self.food_items)
+            if value > limit:
+                raise ValueError("Meal totals exceed supported bounds")
+            setattr(self, total, value if field == 'calories' else round(value, 3))
+        return self
 
 # Initialize the Gemini Client
 import httpx
@@ -58,7 +70,9 @@ async def call_gemini_with_retry(
     model: Optional[str] = None,
     max_retries=4,
     initial_delay=0.1,
-    backoff_factor=2.0
+    backoff_factor=2.0,
+    user_id=None,
+    request_type="ai",
 ):
     """
     Calls Gemini generate_content in a non-blocking thread,
@@ -68,6 +82,8 @@ async def call_gemini_with_retry(
         model = settings.GEMINI_MODEL
     delay = initial_delay
     for attempt in range(max_retries):
+        from src.services.ai_quota import reserve_attempt
+        await reserve_attempt(user_id, request_type)
         try:
             response = await asyncio.to_thread(
                 client.models.generate_content,
@@ -102,7 +118,8 @@ async def analyze_food_input(
     text_description: Optional[str] = None,
     image_bytes: Optional[bytes] = None,
     images_bytes: Optional[List[bytes]] = None,
-    language: str = "en"
+    language: str = "en",
+    user_id=None,
 ) -> Optional[FoodAnalysisResponse]:
     """
     Sends text or image food input to Gemini 2.5 Flash and returns structured nutritional facts.
@@ -145,6 +162,7 @@ async def analyze_food_input(
     contents.append(prompt)
     
     response = await call_gemini_with_retry(
+        user_id=user_id, request_type="analyze_food_input",
         contents=contents,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
@@ -152,7 +170,6 @@ async def analyze_food_input(
             temperature=0.2
         )
     )
-    print(f"AI raw response: {response.text}")
     raw_json = extract_json(response.text)
     data = json.loads(raw_json)
     return FoodAnalysisResponse(**data)
@@ -160,7 +177,8 @@ async def analyze_food_input(
 async def adjust_food_analysis(
     original_data: dict,
     correction_text: str,
-    language: str = "en"
+    language: str = "en",
+    user_id=None,
 ) -> Optional[FoodAnalysisResponse]:
     """
     Re-evaluates a food analysis based on the user's text corrections.
@@ -185,6 +203,7 @@ async def adjust_food_analysis(
     )
     
     response = await call_gemini_with_retry(
+        user_id=user_id, request_type="adjust_food_analysis",
         contents=[prompt],
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
@@ -192,7 +211,6 @@ async def adjust_food_analysis(
             temperature=0.2
         )
     )
-    print(f"AI raw response (correction): {response.text}")
     raw_json = extract_json(response.text)
     data = json.loads(raw_json)
     return FoodAnalysisResponse(**data)
@@ -202,7 +220,8 @@ async def generate_report(
     food_logs: list,
     weight_logs: list,
     report_type: str, # "daily", "weekly", "monthly"
-    language: str = "en"
+    language: str = "en",
+    user_id=None,
 ) -> str:
     """
     Generates a personalized text report using Gemma.
@@ -312,6 +331,7 @@ async def generate_report(
     prompt += report_instructions(profile.get("medications"))
 
     response = await call_gemini_with_retry(
+        user_id=user_id, request_type="generate_report",
         contents=[prompt],
         config=types.GenerateContentConfig(
             temperature=0.3
@@ -324,8 +344,9 @@ async def generate_report(
     return report_text
 
 
-async def recognize_medication(image_bytes: bytes, mime_type: str) -> dict:
+async def recognize_medication(image_bytes: bytes, mime_type: str, user_id=None) -> dict:
     response = await call_gemini_with_retry(
+        user_id=user_id, request_type="medication_photo",
         contents=[types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
             "Transcribe the product name and active ingredients/strength visible on this medicine or vitamin package. "
             "Return JSON with string fields name and details. Use empty strings if unreadable. "

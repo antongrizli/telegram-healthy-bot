@@ -181,7 +181,7 @@ async def generate_and_send_report_direct(bot: Bot, db: AsyncSession, user, repo
     
     from src.services.medications import report_context
     profile_dict["medications"] = await report_context(db, user_id, start_date, end_date)
-    report = await gemini.generate_report(profile_dict, food_logs, weight_logs, report_type, user.language)
+    report = await gemini.generate_report(profile_dict, food_logs, weight_logs, report_type, user.language, user_id=user_id)
     await rate_limiter.log_ai_request(db, user_id=user_id, request_type="generate_report")
 
     if report_type == "daily":
@@ -444,9 +444,11 @@ async def send_weekly_health_card_job(bot: Bot, user_id: int):
             return  # The card stays in WebApp; configured coaching sends one weekly report.
         
         # Send a summary message and an inline keyboard to view full details
+        score = card.card_data['overall_score']
+        score_text = f"{score}/100" if score is not None else i18n_locales.get_text('ux_insufficient', user.language)
         msg = (
             f"🃏 *{i18n_locales.get_text('health_card_title', user.language)}*\n\n"
-            f"📊 *{i18n_locales.get_text('overall_score', user.language)}*: {card.card_data['overall_score']}/100\n\n"
+            f"📊 *{i18n_locales.get_text('overall_score', user.language)}*: {score_text}\n\n"
             f"💬 *{i18n_locales.get_text('ux_details', user.language)}*:\n{card.card_data['coach_message']}"
         )
         

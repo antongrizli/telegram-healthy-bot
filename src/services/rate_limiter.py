@@ -16,11 +16,14 @@ from src.database import crud
 from src.database.models import AiRequestLog, AiRequestQueue
 from src.services import gemini
 from src.utils import i18n_locales
+from src.config import settings
+from src.services.ai_quota import AIQuotaExceeded
 
 logger = logging.getLogger(__name__)
 
 _worker_running = False
 _worker_task = None
+_worker_stop_event = None
 
 def clean_md(text: str) -> str:
     if not text:
@@ -34,36 +37,8 @@ async def check_rate_limit(db: AsyncSession) -> Tuple[bool, str]:
     Checks if global rate limits are exceeded.
     Returns (is_limited, limit_type) where limit_type is 'minute' or 'day'.
     """
-    now = datetime.now(UTC).replace(tzinfo=None)
-    one_minute_ago = now - timedelta(minutes=1)
-    one_day_ago = now - timedelta(days=1)
-
-    # Clean up old logs to keep database small
-    try:
-        await db.execute(
-            delete(AiRequestLog).where(AiRequestLog.executed_at < one_day_ago)
-        )
-        await db.commit()
-    except Exception as e:
-        logger.warning(f"Failed to clean up old AI request logs: {e}")
-
-    # Count in last 60 seconds
-    min_count_res = await db.execute(
-        select(func.count(AiRequestLog.id)).where(AiRequestLog.executed_at >= one_minute_ago)
-    )
-    min_count = min_count_res.scalar() or 0
-    if min_count >= 15:
-        return True, "minute"
-
-    # Count in last 24 hours
-    day_count_res = await db.execute(
-        select(func.count(AiRequestLog.id)).where(AiRequestLog.executed_at >= one_day_ago)
-    )
-    day_count = day_count_res.scalar() or 0
-    if day_count >= 1500:
-        return True, "day"
-
-    return False, ""
+    exhausted = await crud.ai_quota_exhausted(db)
+    return (True, exhausted[0]) if exhausted else (False, "")
 
 async def log_ai_request(db: AsyncSession, user_id: Optional[int], request_type: str) -> AiRequestLog:
     """Logs a successful AI request."""
@@ -140,7 +115,7 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
     if req_type == "medication_photo":
         import base64
         if "result" not in payload:
-            result = await gemini.recognize_medication(base64.b64decode(payload["image"]), payload["mime_type"])
+            result = await gemini.recognize_medication(base64.b64decode(payload["image"]), payload["mime_type"], user_id=user_id)
             await log_ai_request(db, user_id=user_id, request_type=req_type)
             item.payload = {"result": result, **({"bot_category": payload["bot_category"]} if payload.get("bot_category") else {})}
             await db.commit()
@@ -186,7 +161,8 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
                 text_description=text_desc,
                 image_bytes=image_bytes,
                 images_bytes=images_bytes,
-                language=user_language
+                language=user_language,
+                user_id=user_id,
             )
         finally:
             try:
@@ -248,7 +224,8 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
             adjusted_analysis = await gemini.adjust_food_analysis(
                 original_data=original_data,
                 correction_text=correction_text,
-                language=user_language
+                language=user_language,
+                user_id=user_id,
             )
         finally:
             try:
@@ -324,7 +301,8 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
             adjusted_analysis = await gemini.adjust_food_analysis(
                 original_data=original_data,
                 correction_text=correction_text,
-                language=user_language
+                language=user_language,
+                user_id=user_id,
             )
         finally:
             try:
@@ -393,13 +371,14 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
 async def process_next_queue_item(bot: Bot, storage):
     """Checks rate limits and processes the next pending item in the queue."""
     async with AsyncSessionLocal() as db:
-        is_limited, _ = await check_rate_limit(db)
-        if is_limited:
-            return
-
         item = await get_next_pending_queue_item(db)
         if not item:
             return
+        cached = item.payload.get('result_draft_id') or (item.request_type == 'medication_photo' and 'result' in item.payload)
+        if not cached:
+            is_limited, _ = await check_rate_limit(db)
+            if is_limited:
+                return
 
         item.status = "processing"
         await db.commit()
@@ -414,6 +393,10 @@ async def process_next_queue_item(bot: Bot, storage):
             else:
                 item.status = "failed"
                 item.error_message = "Execution returned failure"
+        except AIQuotaExceeded as exc:
+            item.status = "pending"
+            item.next_retry_at = datetime.now(UTC).replace(tzinfo=None) + timedelta(seconds=exc.retry_after)
+            item.error_message = "Waiting for AI quota"
         except TelegramForbiddenError:
             item.status = "failed"
             item.error_message = "Telegram delivery forbidden"
@@ -423,32 +406,62 @@ async def process_next_queue_item(bot: Bot, storage):
         except Exception as e:
             logger.error(f"Error executing queued item {item.id}: {e}", exc_info=True)
             item.retry_count += 1
-            delay = min(240, 5 * (2 ** (item.retry_count - 1)))
-            item.next_retry_at = datetime.now(UTC).replace(tzinfo=None) + timedelta(seconds=delay)
-            item.status = "pending"
             item.last_error = str(e)
-            item.error_message = f"Failed at attempt {item.retry_count}, retrying in {delay}s"
+            if item.retry_count >= settings.AI_QUEUE_MAX_RETRIES:
+                item.status = "failed"
+                item.next_retry_at = None
+                item.processed_at = datetime.now(UTC).replace(tzinfo=None)
+                item.error_message = f"Retry limit reached after {item.retry_count} failures"
+            else:
+                delay = min(240, 5 * (2 ** (item.retry_count - 1)))
+                item.next_retry_at = datetime.now(UTC).replace(tzinfo=None) + timedelta(seconds=delay)
+                item.status = "pending"
+                item.error_message = f"Failed at attempt {item.retry_count}, retrying in {delay}s"
 
         await db.commit()
 
 async def start_queue_worker(bot: Bot, storage):
     """Background loop that processes the AI request queue."""
-    global _worker_running, _worker_task
+    global _worker_running, _worker_task, _worker_stop_event
+    _worker_task = asyncio.current_task()
+    _worker_stop_event = asyncio.Event()
     _worker_running = True
     logger.info("AI Request Queue worker starting...")
-    # This application has one queue worker. Resume work interrupted by a restart.
-    async with AsyncSessionLocal() as db:
-        await db.execute(update(AiRequestQueue).where(AiRequestQueue.status == "processing").values(status="pending"))
-        await db.commit()
-    while _worker_running:
-        try:
-            await process_next_queue_item(bot, storage)
-        except Exception as e:
-            logger.error(f"Error in queue worker iteration: {e}", exc_info=True)
-        await asyncio.sleep(2.0)
+    try:
+        # Single-worker deployment: resume interrupted claims on startup.
+        async with AsyncSessionLocal() as db:
+            await db.execute(update(AiRequestQueue).where(AiRequestQueue.status == "processing").values(status="pending"))
+            await db.commit()
+        while _worker_running:
+            try:
+                await process_next_queue_item(bot, storage)
+            except Exception as e:
+                logger.error(f"Error in queue worker iteration: {e}", exc_info=True)
+            try:
+                await asyncio.wait_for(_worker_stop_event.wait(), timeout=2.0)
+            except asyncio.TimeoutError:
+                pass
+    finally:
+        _worker_running = False
+        _worker_task = None
 
-async def stop_queue_worker():
-    """Stops the background queue worker."""
+async def stop_queue_worker(task=None, timeout=35):
+    """Finish in-flight work while Telegram is open, or leave a recoverable claim."""
     global _worker_running
     _worker_running = False
+    task = task or _worker_task
+    if _worker_stop_event is not None:
+        _worker_stop_event.set()
     logger.info("AI Request Queue worker stopping...")
+    if task is not None and task is not asyncio.current_task():
+        if task is not _worker_task and not task.done():
+            task.cancel()  # Stop a task that has not entered its startup yet.
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
+        except asyncio.TimeoutError:
+            logger.warning("Queue shutdown timed out; interrupted work will resume on restart")
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        except asyncio.CancelledError:
+            if not task.cancelled():
+                raise

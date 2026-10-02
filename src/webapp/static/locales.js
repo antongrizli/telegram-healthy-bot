@@ -322,3 +322,19 @@ const LOCALES = {
         weight_goal: "Meta de Peso"
     }
 };
+
+// Progress describes recorded habits; it is not a medical health score.
+const CARD_COPY = {
+    en: ['Progress card', 'Weekly review of your diary and progress.', 'Not enough data', 'Meals logged: {days}/7 days. Averages use logged days only; entries may be incomplete.', 'This archived card uses the previous calculation. Updated scores will appear in a new weekly card.', 'Open this app from the menu in the Telegram bot.'],
+    ru: ['Карта прогресса', 'Еженедельный обзор записей и прогресса.', 'Недостаточно данных', 'Еда записана: {days}/7 дней. Средние рассчитаны по дням с записями; дневник может быть неполным.', 'Архивная карта использует прежний расчёт. Новые оценки появятся в следующей недельной карте.', 'Откройте приложение через меню бота в Telegram.'],
+    uk: ['Карта прогресу', 'Щотижневий огляд записів і прогресу.', 'Недостатньо даних', 'Їжу записано: {days}/7 днів. Середні враховують дні із записами; щоденник може бути неповним.', 'Архівна карта використовує попередній розрахунок. Нові оцінки з’являться в наступній тижневій карті.', 'Відкрийте застосунок через меню бота в Telegram.'],
+    pl: ['Karta postępów', 'Tygodniowy przegląd dziennika i postępów.', 'Za mało danych', 'Posiłki zapisane: {days}/7 dni. Średnie dotyczą dni z wpisami; zapisy mogą być niepełne.', 'Archiwalna karta używa poprzednich obliczeń. Nowe oceny pojawią się w kolejnej karcie tygodniowej.', 'Otwórz aplikację z menu bota w Telegramie.'],
+    de: ['Fortschrittskarte', 'Wöchentlicher Überblick über deine Einträge und Fortschritte.', 'Nicht genügend Daten', 'Mahlzeiten erfasst: {days}/7 Tage. Mittelwerte berücksichtigen Tage mit Einträgen; diese können unvollständig sein.', 'Diese archivierte Karte verwendet die bisherige Berechnung. Aktualisierte Werte erscheinen in einer neuen Wochenkarte.', 'Öffne diese App über das Bot-Menü in Telegram.'],
+    tr: ['İlerleme kartı', 'Kayıtlarınız ve ilerlemenizin haftalık özeti.', 'Yeterli veri yok', 'Öğün kaydı: {days}/7 gün. Ortalamalar kayıtlı günleri kullanır; kayıtlar eksik olabilir.', 'Bu arşiv kartı önceki hesaplamayı kullanır. Yeni puanlar sonraki haftalık kartta görünecek.', 'Uygulamayı Telegram botunun menüsünden açın.'],
+    es: ['Tarjeta de progreso', 'Resumen semanal de tus registros y progreso.', 'Datos insuficientes', 'Comidas registradas: {days}/7 días. Los promedios usan días registrados; los datos pueden estar incompletos.', 'Esta tarjeta archivada usa el cálculo anterior. Los nuevos valores aparecerán en la próxima tarjeta semanal.', 'Abre esta aplicación desde el menú del bot en Telegram.']
+};
+for (const [lang, [title, description, insufficient, coverage, legacy, open]] of Object.entries(CARD_COPY)) {
+    Object.assign(LOCALES[lang], {webapp_health_card_title: title, webapp_health_card_desc: description,
+        webapp_insufficient: insufficient, webapp_card_coverage: coverage,
+        webapp_card_legacy: legacy, webapp_open_telegram: open});
+}

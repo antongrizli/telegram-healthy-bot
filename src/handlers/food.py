@@ -998,7 +998,6 @@ async def handle_meal_draft(callback: CallbackQuery, state: FSMContext, user_lan
         reply_markup=reply.get_main_menu(user_language, is_admin=db_user.is_admin or db_user.telegram_id in settings.ADMIN_USER_IDS))
     if action == 'accept':
         from src.services.ux import today_data
-        from src.handlers.ux import today_keyboard
         async with AsyncSessionLocal() as db:
             summary = await today_data(db, current_user)
-        await callback.message.answer(summary['summary'] + '\n' + i18n_locales.get_text('ux_keep_going', user_language), reply_markup=today_keyboard(user_language))
+        await callback.message.answer(summary['summary'] + '\n' + i18n_locales.get_text('ux_keep_going', user_language))

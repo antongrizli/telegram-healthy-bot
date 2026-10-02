@@ -33,7 +33,7 @@ flowchart TD
   R_MAIN -->|Администратор| R_ADMIN["R_ADMIN · Статистика | Рассылка<br/>Активные пользователи | Заблокированные; Главное меню"]
   R_ADMIN --> R_ADMIN_STATS["R_ADMIN_STATS · Демография | Активность<br/>ИИ | Очередь; Назад"]
   R_ADMIN -->|Рассылка| R_CANCEL
-  R_ADMIN -->|Активные / заблокированные| I_ADMIN_USERS["I_ADMIN_USERS · Таблица, 5 строк<br/>Заблокировать / Разблокировать ID<br/>Назад | Страница | Далее; Меню администратора"]
+  R_ADMIN -->|Активные / заблокированные| I_ADMIN_USERS["I_ADMIN_USERS · 5 блоков пользователей<br/>Заблокировать / Разблокировать ID<br/>Назад | Страница | Далее; Меню администратора"]
   I_ADMIN_USERS -->|Действие / страница| I_ADMIN_USERS
   I_ADMIN_USERS -->|Назад| R_ADMIN
   R_ADMIN_STATS -->|Назад| R_ADMIN
@@ -94,7 +94,7 @@ flowchart TD
   I_REMOVE --> I_DRAFT
   I_DRAFT -->|Тип еды| I_TYPE["I_TYPE · Завтрак; Обед; Ужин; Перекус; Другое"]
   I_TYPE --> I_DRAFT
-  I_DRAFT -->|Принять| I_TODAY_CONTEXT["I_TODAY_CONTEXT · Еда; Дневной отчёт | WebApp еды; Черновики"]
+  I_DRAFT -->|Принять| SAVED["Еда записана; сводка без inline-кнопок; reply главное меню"]
   I_DRAFT -->|Отменить| R_MAIN["R_MAIN"]
   R_MEALS["R_MEALS · Изменить / Удалить N; Дни; Главное меню"] -->|Изменить| R_EDIT_CONFIRM["R_EDIT_CONFIRM · Принять | Исправить; Отмена"]
   R_EDIT_CONFIRM -->|Исправить| R_CANCEL
@@ -103,7 +103,7 @@ flowchart TD
   FOOD_LEGACY --> R_FOOD_CONFIRM["R_FOOD_CONFIRM · Принять | Исправить; Отмена"]
   MORNING["Утренний брифинг"] --> I_MORNING["I_MORNING · Dashboard WebApp; Записать завтрак"]
   I_MORNING -->|Завтрак| R_CANCEL
-  EVENING["Напоминание / отчёт без еды"] --> I_TODAY_CONTEXT
+  EVENING["Напоминание / отчёт без еды"] --> I_TODAY_CONTEXT["I_TODAY_CONTEXT · Еда; Дневной отчёт | WebApp еды; Черновики"]
   STREAK["Серии / прежний прогресс"] --> I_STREAK["I_STREAK · Dashboard; Серии | Записать еду"]
   I_STREAK -->|Еда| R_CANCEL
   BADGE["Новое достижение"] --> I_ACHIEVEMENT["I_ACHIEVEMENT · Все достижения WebApp; опционально Поделиться"]
@@ -176,12 +176,14 @@ flowchart LR
 
 Старые callbacks `report_range:*`, `ux:report:*` и сообщения лекарств со скрытым `med:*` ещё обрабатываются для ранее отправленных сообщений. Это совместимость, а не новые клавиатуры.
 
-## Контракт таблицы пользователей
+## Контракт списка пользователей
+
+Имя каждого пользователя — кликабельная ссылка на Telegram-профиль: `https://t.me/{username}`, либо `tg://user?id={id}` при отсутствии корректного ника. Для ссылки по ID действуют ограничения приватности Telegram. Предпросмотр ссылок отключён, чтобы список оставался компактным.
 
 - Входы: существующие «Активные пользователи» (все незаблокированные, не только недавно активные) и «Заблокированные» в админ-меню.
-- Таблица в сообщении: имя / @username, Telegram ID, регистрация, последняя записанная активность. Формат HTML `<pre>`, даты UTC с точностью до минуты; отсутствие даты — `—`. Полные ID не сокращаются. Длинные имена/ники ограничиваются по длине, HTML и управляющие символы обезвреживаются.
+- Пользователи отображаются отдельными блоками с пустой строкой между ними: жирное имя; @username; ID в `<code>`; регистрация; последняя записанная активность. Каждое поле на отдельной строке, без широкой таблицы `<pre>`. Даты UTC с точностью до минуты; отсутствие даты — `—`. Полные ID не сокращаются. Имена до 64 символов и ники до 32; HTML и управляющие символы обезвреживаются.
 - Последняя активность — максимум `MessageStat.sent_at` и `ProductEvent.occurred_at` для `active`; это сообщения/кнопки и WebApp. Телеметрия ProductEvent хранится 90 дней, поэтому более старые WebApp-события могут отсутствовать. Дата регистрации — завершение создания профиля.
-- 5 строк на страницу; сортировка: регистрация по убыванию, затем ID. После блокировки/разблокировки список перечитывается, устаревший номер страницы ограничивается последней существующей.
+- 5 пользователей на страницу; сортировка: регистрация по убыванию, затем ID. После блокировки/разблокировки список перечитывается, устаревший номер страницы ограничивается последней существующей.
 - Inline: блокировка/разблокировка конкретного ID, навигация и возврат в админ-меню. Только текущий администратор в собственном приватном чате. Собственная учётная запись и администраторы защищены от блокировки.
 - Callback задаёт конечное состояние: повторное нажатие Block оставляет пользователя заблокированным. Состояние FSM для списка не требуется; после перезапуска старые inline-сообщения продолжают работать.
 
@@ -260,7 +262,7 @@ This is the complete current keyboard inventory. A pipe (`|`) separates buttons 
 
 | Screen | Rows and actions |
 | --- | --- |
-| Contextual Today summaries (reminders/post-save only, not tapping Today) | `btn_log_food` → `ux:food`; `btn_daily_report` → `report_range:daily` / `btn_my_meals` → WebApp root; `btn_pending_meals` → `ux:pending` |
+| Contextual Today reminders (not tapping Today) | `btn_log_food` → `ux:food`; `btn_daily_report` → `report_range:daily` / `btn_my_meals` → WebApp root; `btn_pending_meals` → `ux:pending`. Post-save summaries have no inline buttons; the main reply keyboard remains available. |
 | More settings | `ux_settings` → WebApp `?panel=settings` |
 | Progress | Uses plain reply buttons in `get_progress_keyboard`. Selected WebApp tabs launch through the chat menu button, with localized `ux_open_menu` instructions. |
 | Short report | Uses `get_report_keyboard`, not inline. `ux_details · {snapshot_id}` is validated against an owned saved snapshot. |

@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_ERROR, EVENT_JOB_MISSED
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramForbiddenError
 from src.database.connection import AsyncSessionLocal
@@ -15,6 +16,53 @@ from src.config import settings
 
 logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
+
+
+class SchedulerLogSummary:
+    """Aggregate execution outcomes without exposing per-user job identifiers."""
+
+    job_id = "scheduler_log_summary"
+
+    def __init__(self):
+        self.successful = 0
+        self.failed = 0
+        self.missed = 0
+
+    def record(self, event):
+        if event.job_id == self.job_id:
+            return
+        if event.code == EVENT_JOB_EXECUTED:
+            self.successful += 1
+        elif event.code == EVENT_JOB_ERROR:
+            self.failed += 1
+        elif event.code == EVENT_JOB_MISSED:
+            self.missed += 1
+
+    async def emit(self):
+        logger.info(
+            "Scheduler hourly summary: successful=%d, failed=%d, missed=%d",
+            self.successful, self.failed, self.missed,
+        )
+        self.successful = self.failed = self.missed = 0
+
+
+scheduler_log_summary = SchedulerLogSummary()
+
+
+def configure_scheduler_logging():
+    # Keep failures and missed-run warnings immediate; suppress routine INFO noise.
+    logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
+    logging.getLogger("apscheduler.executors").setLevel(logging.WARNING)
+    scheduler.remove_listener(scheduler_log_summary.record)
+    scheduler.add_listener(
+        scheduler_log_summary.record,
+        EVENT_JOB_EXECUTED | EVENT_JOB_ERROR | EVENT_JOB_MISSED,
+    )
+    scheduler.add_job(
+        scheduler_log_summary.emit, "interval", hours=1,
+        id=scheduler_log_summary.job_id, replace_existing=True,
+        max_instances=1, coalesce=True,
+    )
 
 async def send_multipart_message(bot: Bot, chat_id: int, text: str, parse_mode: str = "Markdown"):
     """
@@ -519,6 +567,7 @@ def remove_user_jobs(user_id: int):
             scheduler.remove_job(job_id)
 
 async def init_scheduler(bot: Bot):
+    configure_scheduler_logging()
     from src.services.medications import send_medication_reminders
     scheduler.add_job(send_medication_reminders, "interval", seconds=30,
                       args=[bot], id="medication_reminders", replace_existing=True,

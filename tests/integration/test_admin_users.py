@@ -39,8 +39,15 @@ async def test_users_page_has_latest_activity_pagination_and_escaped_table(db_se
         text = admin.format_users_table(data, lang)
         assert '&lt;b&gt;' in text and '@anna' in text and 'UTC' in text
         assert '<b>Анна</b>' not in text and len(text) < 4096
+        assert '<pre>' not in text and ' | ' not in text
+        assert '<a href="https://t.me/anna">' in text
+        assert '\n@anna\nID: <code>123</code>\n' in text
         keyboard = get_admin_users_inline(data, lang, actor_id=42)
         assert keyboard.inline_keyboard[0][0].callback_data == 'adminusers:block:123:0'
+    assert '<a href="tg://user?id=456">' in admin.format_users_table(second, 'ru')
+    data['users'][0]['username'] = 'bad"/><script>'
+    text = admin.format_users_table(data, 'ru')
+    assert '<a href="tg://user?id=123">' in text and '<script>' not in text
     db_session.add(MessageStat(user_id=123, message_type='text', sent_at=now + timedelta(minutes=1)))
     await db_session.commit()
     assert (await crud.get_admin_users_page(db_session))['users'][0]['last_active_at'] == now + timedelta(minutes=1)

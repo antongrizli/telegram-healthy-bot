@@ -185,6 +185,9 @@ async def test_confirmation_callback_after_restart(db_session):
     await handle_meal_draft(callback, state, "en", user)
     assert len((await db_session.execute(select(FoodLog))).scalars().all()) == 1
     assert "logged" in callback.message.answer.call_args.args[0].lower()
+    assert callback.message.answer.call_args.kwargs.get('reply_markup') is None
+    from aiogram.types import ReplyKeyboardMarkup
+    assert isinstance(callback.message.answer.call_args_list[0].kwargs['reply_markup'], ReplyKeyboardMarkup)
     await handle_meal_draft(callback, state, "en", user)
     assert len((await db_session.execute(select(FoodLog))).scalars().all()) == 1
     assert callback.answer.call_args.kwargs["show_alert"]

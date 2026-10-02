@@ -176,7 +176,7 @@ telegram-healthy-bot/
 
 Keyboard graphs, exact button rows and callback contracts are maintained in
 [the keyboard architecture](docs/architecture/keyboards.md). Admin user lists
-show a paginated table (name/username, ID, registration and last recorded activity
+show paginated mobile-readable user blocks (name/username, ID, registration and last recorded activity
 in UTC), with inline Block/Unblock and pagination buttons.
 
 Progress, All Achievements and Health Card remain ordinary reply-keyboard choices.

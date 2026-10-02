@@ -2,6 +2,46 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 from src.services.scheduler import generate_and_send_report_direct
 
+
+@pytest.mark.asyncio
+async def test_scheduler_hourly_summary(caplog):
+    import logging
+    from apscheduler.events import JobExecutionEvent, EVENT_JOB_EXECUTED, EVENT_JOB_ERROR, EVENT_JOB_MISSED
+    from src.services.scheduler import SchedulerLogSummary
+    summary = SchedulerLogSummary()
+    for code, job_id in [(EVENT_JOB_EXECUTED, "medication_reminders")] * 120 + [
+        (EVENT_JOB_ERROR, "report"), (EVENT_JOB_MISSED, "reminder"),
+        (EVENT_JOB_EXECUTED, summary.job_id),
+    ]:
+        summary.record(JobExecutionEvent(code, job_id, "default", None))
+    with caplog.at_level(logging.INFO, logger="src.services.scheduler"):
+        await summary.emit()
+        await summary.emit()
+    assert "successful=120, failed=1, missed=1" in caplog.records[-2].message
+    assert "successful=0, failed=0, missed=0" in caplog.records[-1].message
+
+
+def test_scheduler_logging_keeps_warnings_and_errors(mocker, caplog):
+    import logging
+    from src.services import scheduler
+    fake_scheduler = mocker.patch.object(scheduler, "scheduler")
+    executor = logging.getLogger("apscheduler.executors.default")
+    previous_level = executor.level
+    parent = logging.getLogger("apscheduler.executors")
+    previous_parent_level = parent.level
+    try:
+        scheduler.configure_scheduler_logging()
+        executor.info("Running job")
+        executor.info("Job executed successfully")
+        executor.warning("Run missed")
+        executor.error("Job failed")
+        assert [record.message for record in caplog.records] == ["Run missed", "Job failed"]
+        assert fake_scheduler.add_job.call_args.kwargs["hours"] == 1
+        fake_scheduler.add_listener.assert_called_once()
+    finally:
+        executor.setLevel(previous_level)
+        parent.setLevel(previous_parent_level)
+
 @pytest.mark.asyncio
 async def test_generate_and_send_report_direct_weekly_name_error_fix(mocker):
     # Mock bot, db, user

@@ -1,9 +1,10 @@
 import unicodedata
+import re
 from html import escape
 from datetime import UTC
 from aiogram import Router, F
 from aiogram.filters import Command, StateFilter
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, LinkPreviewOptions
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from src.database.connection import AsyncSessionLocal
@@ -315,7 +316,7 @@ async def process_admin_broadcast(message: Message, state: FSMContext, user_lang
     )
 
 def format_users_table(data, language, blocked=False):
-    """Telegram has no HTML tables; render a bounded, escaped monospace table."""
+    """Render mobile-readable user blocks without fixed-width columns."""
     def clean(value, size):
         value = ''.join(c for c in str(value or '—') if not unicodedata.category(c).startswith('C'))
         return ' '.join(value.split())[:size]
@@ -328,22 +329,21 @@ def format_users_table(data, language, blocked=False):
         return value.astimezone(UTC).strftime('%Y-%m-%d %H:%M')
 
     header = i18n_locales.get_text('admin_users_blocked' if blocked else 'admin_users_active', language)
-    columns = [i18n_locales.get_text('admin_users_name', language),
-               i18n_locales.get_text('admin_users_id', language),
-               i18n_locales.get_text('admin_users_joined', language),
-               i18n_locales.get_text('admin_users_activity', language)]
-    rows = []
+    blocks = [f"<b>{escape(header)}</b> · {data['total']} · UTC"]
     for user in data['users']:
-        identity = clean(user['name'], 24)
+        username = user['username'] or ''
+        url = (f'https://t.me/{username}' if re.fullmatch(r'[A-Za-z0-9_]{1,32}', username)
+               else f"tg://user?id={int(user['telegram_id'])}")
+        lines = [f'<b><a href="{escape(url, quote=True)}">{escape(clean(user["name"], 64))}</a></b>']
         if user['username']:
-            identity += ' / @' + clean(user['username'], 32)
-        rows.append([identity, str(user['telegram_id']), stamp(user['joined_at']), stamp(user['last_active_at'])])
-    widths = [max(len(row[i]) for row in [columns, *rows]) for i in range(4)]
-    line = lambda row: ' | '.join(value.ljust(width) for value, width in zip(row, widths))
-    table = '\n'.join([line(columns), '-+-'.join('-' * width for width in widths), *map(line, rows)])
-    if not rows:
-        table += '\n' + i18n_locales.get_text('admin_no_blocked_users' if blocked else 'admin_no_active_users', language)
-    return f"<b>{escape(header)}</b> · {data['total']} · UTC\n<pre>{escape(table)}</pre>"
+            lines.append('@' + escape(clean(user['username'], 32)))
+        lines.append(f"ID: <code>{user['telegram_id']}</code>")
+        for key, value in [('admin_users_joined', user['joined_at']), ('admin_users_activity', user['last_active_at'])]:
+            lines.append(f"{escape(i18n_locales.get_text(key, language))}: {stamp(value)}")
+        blocks.append('\n'.join(lines))
+    if not data['users']:
+        blocks.append(escape(i18n_locales.get_text('admin_no_blocked_users' if blocked else 'admin_no_active_users', language)))
+    return '\n\n'.join(blocks)
 
 
 async def show_users_page(message, language, actor_id, blocked=False, page=0, edit=False):
@@ -354,12 +354,14 @@ async def show_users_page(message, language, actor_id, blocked=False, page=0, ed
     if edit:
         from aiogram.exceptions import TelegramBadRequest
         try:
-            await message.edit_text(text, reply_markup=markup, parse_mode='HTML')
+            await message.edit_text(text, reply_markup=markup, parse_mode='HTML',
+                                    link_preview_options=LinkPreviewOptions(is_disabled=True))
         except TelegramBadRequest as exc:
             if 'message is not modified' not in str(exc).lower():
                 raise
     else:
-        await message.answer(text, reply_markup=markup, parse_mode='HTML')
+        await message.answer(text, reply_markup=markup, parse_mode='HTML',
+                             link_preview_options=LinkPreviewOptions(is_disabled=True))
 
 
 @router.message(F.text.in_(["👥 Active Users", "👥 Активные пользователи"]))

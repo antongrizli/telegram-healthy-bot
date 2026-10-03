@@ -4,6 +4,11 @@
 
 Обозначения: **R** — reply-клавиатура; **I** — inline-клавиатура; **M** — кнопка меню Telegram; **W** — кнопки WebApp; **L** — сохранённый legacy-builder без текущего вызова. ID узлов стабильны: например, `R_PROGRESS`, `I_ADMIN_USERS`, `R_TZ_REGIONS`. Текст в узлах — русские смысловые названия; точный порядок строк, ключи переводов и callbacks приведены в реестре ниже.
 
+Кнопка `ux_back` («Главное меню») из любого состояния очищает навигационное FSM,
+сохраняет черновики еды и показывает `return_to_main_menu` с `R_MAIN`.
+Открытие `R_ADD` показывает заголовок `ux_add`; приглашение прислать еду появляется
+только после выбора записи еды, а не при возврате в меню.
+
 ## Основные меню и администрирование
 
 ```mermaid
@@ -13,8 +18,8 @@ flowchart TD
   REGISTERED -->|Да| R_MAIN["R_MAIN · Добавить | Сегодня<br/>Прогресс | Ещё<br/>Админ-панель — только администратору"]
   R_MAIN --> R_ADD["R_ADD · Еда | Вес<br/>Вода; Неподтверждённая еда; Главное меню"]
   R_MAIN --> R_TODAY["R_TODAY · Еда<br/>Дневной отчёт | Моя еда<br/>Неподтверждённая еда; Главное меню"]
-  R_MAIN --> R_PROGRESS["R_PROGRESS · Прогресс<br/>Все достижения | Карта здоровья<br/>Недельный отчёт; Главное меню"]
-  R_MAIN --> R_MORE["R_MORE · Профиль | Лекарства<br/>Помощь; Главное меню"]
+  R_MAIN --> R_PROGRESS["R_PROGRESS · Графики | Все достижения<br/>Карта здоровья | Недельный отчёт<br/>Главное меню"]
+  R_MAIN --> R_MORE["R_MORE · Профиль | Настройки<br/>Лекарства | Помощь<br/>Главное меню"]
   R_ADD -->|Еда| R_CANCEL["R_CANCEL · Отмена / опционально Оставить текущее"]
   R_ADD -->|Вес или вода| R_CANCEL
   R_ADD -->|Неподтверждённая еда| I_DRAFT["I_DRAFT · Принять | Исправить | Отменить; Тип еды"]
@@ -23,12 +28,12 @@ flowchart TD
   R_TODAY -->|Дневной отчёт| R_REPORT["R_REPORT · Подробнее · ID; Главное меню"]
   R_PROGRESS -->|Недельный отчёт| R_REPORT
   R_REPORT -->|Подробнее| REPORT_TEXT["Полный сохранённый отчёт с проверкой владельца"]
-  R_PROGRESS -->|Прогресс / достижения / карта| M_SELECTED["M_SELECTED · Меню Telegram выбранного раздела"]
+  R_PROGRESS -->|Графики / достижения / карта| M_SELECTED["M_SELECTED · Меню Telegram выбранного раздела"]
   M_SELECTED --> W_NAV["W_NAV · WebApp: Сегодня | Графики | Достижения | Карта | Лекарства"]
   R_MORE -->|Профиль| R_PROFILE["R_PROFILE · Настроить профиль; Удалить профиль; Главное меню"]
   R_MORE -->|Лекарства| I_MED_LIBRARY["I_MED_LIBRARY · Добавить; препараты и расписания; навигация; статистика"]
-  R_MORE -->|Настройки| I_SETTINGS["I_SETTINGS · Уведомления и часовой пояс"]
-  I_SETTINGS --> W_SETTINGS["W_SETTINGS · Настройки WebApp"]
+  R_MORE -->|Настройки| M_SETTINGS["M_SETTINGS · Меню Telegram настроек и запуск WebApp"]
+  M_SETTINGS --> W_SETTINGS["W_SETTINGS · Настройки WebApp"]
   R_MORE -->|Помощь| HELP["Текст помощи; клавиатура главного меню"]
   R_MAIN -->|Администратор| R_ADMIN["R_ADMIN · Статистика | Рассылка<br/>Активные пользователи | Заблокированные; Главное меню"]
   R_ADMIN --> R_ADMIN_STATS["R_ADMIN_STATS · Демография | Активность<br/>ИИ | Очередь; Назад"]
@@ -204,7 +209,7 @@ This is the complete current keyboard inventory. A pipe (`|`) separates buttons 
 | `get_main_menu(lang, is_admin=False)` | `ux_add` \| `ux_today`; `ux_progress` \| `ux_more`. |
 | `get_food_menu(lang, has_pending_meals)` | Legacy builder only: `btn_new_food`; optional `btn_pending_meals`; `ux_back`. The current `btn_log_food`/`btn_new_food` routes prompt directly for a photo or description with Cancel. |
 | `get_main_menu(..., is_admin=True)` | Standard main menu, then `👑 Admin Panel` for English or `👑 Админ-панель` for every other language |
-| `get_admin_menu(lang)` | English/Russian legacy labels: `📊 Stats` \| `📢 Broadcast`; `👥 Active Users` \| `🚫 Blocked Users`; localized `ux_back` |
+| `get_admin_menu(lang)` | English/Russian legacy labels: `📊 Stats` \| `📢 Broadcast`; `👥 Active Users` \| `🚫 Blocked Users`; `⚠️ Failed Queue` / `⚠️ Сбои очереди`; localized `ux_back` |
 | `get_cancel_keyboard(lang, current_val=None)` | `btn_cancel` (all seven languages) |
 | `get_cancel_keyboard(..., current_val={value})` | `btn_keep_current(value={value})`; then Cancel |
 | `get_setup_profile_keyboard(lang)` | `btn_setup_profile`; `btn_delete_profile`; `ux_back` |
@@ -244,7 +249,8 @@ This is the complete current keyboard inventory. A pipe (`|`) separates buttons 
 | `get_streak_inline(lang)` | `btn_view_dashboard` → WebApp `WEBAPP_URL`; `btn_streak_status` → `view_streaks` \| `btn_log_food` → `ux:food` |
 | `get_report_range_inline(lang)` | `ux_daily` \| `ux_weekly` \| `ux_monthly`; callbacks: `report_range:daily`, `report_range:weekly`, `report_range:monthly` |
 | `get_admin_users_inline(data, lang, blocked, actor_id)` | One `admin_users_block(user_id)` → `adminusers:block:{id}:{page}` (or `admin_users_unblock` → `adminusers:unblock:{id}:{page}`) per eligible user; Previous \| page/total (refresh) \| Next → `adminusers:page:{active,blocked}:{page}`; `admin_users_back` → `adminusers:back`. 5 table rows per page, zero-based callbacks; administrator/self rows have no mutation button. |
-| `get_draft_keyboard(draft_id, language)` | `btn_accept` → `meal_draft:accept:{id}` \| `btn_correct` → `meal_draft:correct:{id}` \| `btn_cancel` → `meal_draft:cancel:{id}`; `ux_type` → `uxdraft:type:{id}` |
+| `get_draft_keyboard(draft_id, language, page=1)` | `btn_accept` → `meal_draft:accept:{id}` \| `btn_correct` → `meal_draft:correct:{id}` \| `btn_cancel` → `meal_draft:cancel:{id}`; `ux_type` → `uxdraft:type:{id}`; `food_drafts_back_to_list` → `uxdraft:list:{page}` |
+| `get_drafts_list_keyboard(drafts, page, total_pages, language)` | `1` \| `2` … (up to 5 per page) → `uxdraft:view:{id}:{page}`; optional pagination `⬅️` (`uxdraft:list:{prev}` or `noop`) \| `page/total` (`uxdraft:noop`) \| `➡️` (`uxdraft:list:{next}` or `noop`); `food_drafts_close` → `uxdraft:close` |
 | Weekly report chart | WebApp `WEBAPP_URL?tab=charts` |
 | Dose reminder | `med_taken` → `medtake:{intake_id}:taken` \| `med_skipped` → `medtake:{intake_id}:skipped`. The first valid choice is final: its localized status is appended to the message and the inline keyboard is removed. |
 | Medication labels | `med_{suffix}` via `tr(suffix, lang)`; weekday selectors use `weekday_{0..6}` |

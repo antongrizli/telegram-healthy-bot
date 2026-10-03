@@ -4,7 +4,7 @@ from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, CallbackQuery
-from aiogram.filters import StateFilter
+from aiogram.filters import StateFilter, Command
 from src.database.connection import AsyncSessionLocal
 from src.database import crud
 from src.utils import i18n_locales, formulas
@@ -61,6 +61,7 @@ async def process_confirm_delete(message: Message, state: FSMContext, user_langu
         parse_mode="Markdown"
     )
 
+@router.message(ProfileStatesGroup.confirm_delete, Command("cancel"))
 @router.message(ProfileStatesGroup.confirm_delete, F.text.in_(i18n_locales.get_all_translations("btn_cancel")))
 async def cancel_profile_deletion(message: Message, state: FSMContext, user_language: str, db_user):
     await state.clear()
@@ -79,6 +80,7 @@ async def process_invalid_delete_confirm(message: Message, user_language: str):
         parse_mode="Markdown"
     )
 
+@router.message(StateFilter(ProfileStatesGroup), Command("cancel"))
 @router.message(StateFilter(ProfileStatesGroup), F.text.in_(i18n_locales.get_all_translations("btn_cancel")))
 async def cancel_profile_setup(message: Message, state: FSMContext, user_language: str, db_user):
     await state.clear()

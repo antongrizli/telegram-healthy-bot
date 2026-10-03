@@ -44,7 +44,7 @@ def coaching_allowed(user, kind='daily', now=None):
     quiet = start <= current < end if start < end else (current >= start or current < end) if start > end else False
     return not quiet
 
-async def today_data(db, user, now=None):
+async def today_data(db, user, now=None, include_tip=False):
     now = now or datetime.now(UTC)
     local = now.astimezone(zone(user))
     start = local.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(UTC).replace(tzinfo=None)
@@ -55,10 +55,10 @@ async def today_data(db, user, now=None):
         protein=round(sum(m.proteins for m in meals)), protein_target=user.target_protein,
         fat=round(sum(m.fats for m in meals)), carb=round(sum(m.carbs for m in meals)),
         water=await crud.water_total(db, user.telegram_id, start, end))
-    text = get_text('ux_summary', user.language, **values)
-    text += '\n' + get_text('ux_remaining', user.language, remaining=max(0, values['target'] - values['cal']))
-    text += '\n\n' + next_action(user, values)
-    return dict(summary=text, values=values, meals=[dict(id=m.id, name=' · '.join(i.get('name', '') for i in m.items_json),
+    facts = get_text('ux_summary', user.language, **values) + '\n' + get_text('ux_remaining', user.language, remaining=max(0, values['target'] - values['cal']))
+    tip = next_action(user, values)
+    text = facts + ('\n\n' + tip if include_tip else '')
+    return dict(summary=text, facts=facts, tip=tip, values=values, meals=[dict(id=m.id, name=' · '.join(i.get('name', '') for i in m.items_json),
         calories=m.calories, protein=m.proteins, fat=m.fats, carb=m.carbs, meal_type=m.meal_type,
         time=m.logged_at.replace(tzinfo=UTC).astimezone(zone(user)).strftime('%H:%M')) for m in meals])
 

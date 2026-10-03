@@ -43,9 +43,25 @@ async def test_startup_preserves_monday_and_upgrades_legacy_schema(monkeypatch):
             assert (await conn.execute(sa.text("SELECT weekly_report_day, monthly_report_day, timezone FROM users"))).one() == (0, 1, "UTC")
             tables = await conn.run_sync(lambda c: sa.inspect(c).get_table_names())
             assert "ai_request_attempts" in tables
-        monkeypatch.setattr(init_db, "STARTUP_COLUMNS", {"users": {"broken": "INTEGER DEFAULT ("}})
-        with pytest.raises(sa.exc.SQLAlchemyError):
+            assert (await conn.execute(sa.text("SELECT version_num FROM alembic_version"))).scalar() == "0001_baseline"
+        # A database stamped with a revision this build does not know must refuse to start.
+        async with engine.begin() as conn:
+            await conn.execute(sa.text("UPDATE alembic_version SET version_num = 'from_the_future'"))
+        with pytest.raises(Exception):
             await init_db.init_db()
+    finally:
+        await engine.dispose()
+
+
+async def test_startup_creates_fresh_database_at_head(monkeypatch):
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    monkeypatch.setattr(init_db, "engine", engine)
+    try:
+        await init_db.init_db()
+        async with engine.connect() as conn:
+            tables = await conn.run_sync(lambda c: set(sa.inspect(c).get_table_names()))
+            assert {"users", "food_logs", "ai_request_queue", "alembic_version"} <= tables
+            assert (await conn.execute(sa.text("SELECT version_num FROM alembic_version"))).scalar() == "0001_baseline"
     finally:
         await engine.dispose()
 
@@ -112,7 +128,7 @@ async def test_queue_retry_limit_and_quota_wait_are_distinct(db_session, monkeyp
     monkeypatch.setattr(settings, "AI_QUEUE_MAX_RETRIES", 2)
     execute = AsyncMock(side_effect=ai_quota.AIQuotaExceeded("minute", 60))
     monkeypatch.setattr(rate_limiter, "execute_queued_item", execute)
-    qid = await rate_limiter.add_to_queue(db_session, user.telegram_id, user.telegram_id, "test", {})
+    qid = await rate_limiter.add_to_queue(db_session, user.telegram_id, user.telegram_id, "generate_report", {})
     await rate_limiter.process_next_queue_item(mock_bot, None)
     row = await db_session.get(AiRequestQueue, qid)
     assert row.status == "pending" and row.retry_count == 0 and row.next_retry_at

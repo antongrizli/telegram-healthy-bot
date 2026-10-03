@@ -18,12 +18,113 @@ from src.services import gemini
 from src.utils import i18n_locales
 from src.config import settings
 from src.services.ai_quota import AIQuotaExceeded
+from src.utils.telegram_edit import try_edit
 
 logger = logging.getLogger(__name__)
+
+
+async def remove_status_message(bot, chat_id, message_id):
+    from aiogram.exceptions import TelegramAPIError
+    if isinstance(message_id, int):
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=message_id)
+        except TelegramAPIError:
+            logger.info('Could not remove queued edit status message')
 
 _worker_running = False
 _worker_task = None
 _worker_stop_event = None
+_worker_started_at = None
+_worker_stopped_at = None
+_worker_last_heartbeat = None
+_worker_last_error = None
+_bot = None
+_storage = None
+
+
+def record_worker_heartbeat():
+    """Update worker heartbeat timestamp."""
+    global _worker_last_heartbeat
+    _worker_last_heartbeat = datetime.now(UTC)
+
+
+def get_worker_health(stall_threshold_seconds: float = 60.0) -> dict:
+    """
+    Returns worker health status dictionary:
+    - status: 'running', 'stalled', 'crashed', or 'stopped'
+    - healthy: bool
+    - running: bool
+    - error: Optional[str]
+    - started_at: Optional[str]
+    - stopped_at: Optional[str]
+    - last_heartbeat_at: Optional[str]
+    - heartbeat_age_seconds: Optional[float]
+    """
+    global _worker_running, _worker_task, _worker_started_at, _worker_stopped_at, _worker_last_heartbeat, _worker_last_error
+    now = datetime.now(UTC)
+
+    if _worker_last_error:
+        heartbeat_age = round((now - _worker_last_heartbeat).total_seconds(), 2) if _worker_last_heartbeat else None
+        return {
+            "status": "crashed",
+            "healthy": False,
+            "running": False,
+            "error": _worker_last_error,
+            "started_at": _worker_started_at.isoformat() if _worker_started_at else None,
+            "stopped_at": _worker_stopped_at.isoformat() if _worker_stopped_at else None,
+            "last_heartbeat_at": _worker_last_heartbeat.isoformat() if _worker_last_heartbeat else None,
+            "heartbeat_age_seconds": heartbeat_age,
+        }
+
+    if _worker_task is not None and _worker_task.done():
+        exc = None
+        try:
+            exc = _worker_task.exception()
+        except asyncio.CancelledError:
+            pass
+        heartbeat_age = round((now - _worker_last_heartbeat).total_seconds(), 2) if _worker_last_heartbeat else None
+        return {
+            "status": "crashed" if exc else "stopped",
+            "healthy": False,
+            "running": False,
+            "error": str(exc) if exc else None,
+            "started_at": _worker_started_at.isoformat() if _worker_started_at else None,
+            "stopped_at": _worker_stopped_at.isoformat() if _worker_stopped_at else None,
+            "last_heartbeat_at": _worker_last_heartbeat.isoformat() if _worker_last_heartbeat else None,
+            "heartbeat_age_seconds": heartbeat_age,
+        }
+
+    if not _worker_running:
+        heartbeat_age = round((now - _worker_last_heartbeat).total_seconds(), 2) if _worker_last_heartbeat else None
+        return {
+            "status": "stopped",
+            "healthy": False,
+            "running": False,
+            "error": None,
+            "started_at": _worker_started_at.isoformat() if _worker_started_at else None,
+            "stopped_at": _worker_stopped_at.isoformat() if _worker_stopped_at else None,
+            "last_heartbeat_at": _worker_last_heartbeat.isoformat() if _worker_last_heartbeat else None,
+            "heartbeat_age_seconds": heartbeat_age,
+        }
+
+    heartbeat_age = round((now - _worker_last_heartbeat).total_seconds(), 2) if _worker_last_heartbeat else None
+    is_stalled = heartbeat_age is not None and heartbeat_age > stall_threshold_seconds
+
+    return {
+        "status": "stalled" if is_stalled else "running",
+        "healthy": not is_stalled,
+        "running": True,
+        "error": None,
+        "started_at": _worker_started_at.isoformat() if _worker_started_at else None,
+        "stopped_at": _worker_stopped_at.isoformat() if _worker_stopped_at else None,
+        "last_heartbeat_at": _worker_last_heartbeat.isoformat() if _worker_last_heartbeat else None,
+        "heartbeat_age_seconds": heartbeat_age,
+    }
+
+
+def is_worker_alive(stall_threshold_seconds: float = 60.0) -> bool:
+    return get_worker_health(stall_threshold_seconds=stall_threshold_seconds).get("healthy", False)
+
 
 def clean_md(text: str) -> str:
     if not text:
@@ -72,10 +173,18 @@ async def get_queue_position(db: AsyncSession, queue_item_id: int) -> int:
     # Position is determined by how many pending items exist that have id <= queue_item_id
     stmt = select(func.count(AiRequestQueue.id)).where(
         AiRequestQueue.status == "pending",
+        AiRequestQueue.request_type.in_(crud.EXECUTABLE_QUEUE_TYPES),
         AiRequestQueue.id <= queue_item_id
     )
     res = await db.execute(stmt)
     return (res.scalar() or 0)
+
+async def update_queue_payload(db: AsyncSession, queue_item_id: int, payload: dict):
+    """Updates the payload of a queue item."""
+    await db.execute(
+        update(AiRequestQueue).where(AiRequestQueue.id == queue_item_id).values(payload=payload)
+    )
+    await db.commit()
 
 async def get_next_pending_queue_item(db: AsyncSession) -> Optional[AiRequestQueue]:
     """Fetches the oldest pending item in the queue that is ready for processing/retry."""
@@ -86,6 +195,22 @@ async def get_next_pending_queue_item(db: AsyncSession) -> Optional[AiRequestQue
     ).order_by(AiRequestQueue.id.asc()).limit(1)
     res = await db.execute(stmt)
     return res.scalars().first()
+
+async def get_cached_adjustment(db, item, language):
+    """Persist provider output before any Telegram delivery or FSM transition."""
+    if item.payload.get('cached_adjustment'):
+        return gemini.FoodAnalysisResponse(**item.payload['cached_adjustment'])
+    result = await gemini.adjust_food_analysis(
+        original_data=item.payload.get('original_data'),
+        correction_text=item.payload.get('correction_text'),
+        language=language, user_id=item.user_id,
+    )
+    if result:
+        item.payload = {**item.payload, 'cached_adjustment': result.model_dump()}
+        await db.commit()
+        await log_ai_request(db, user_id=item.user_id, request_type=item.request_type)
+    return result
+
 
 async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiRequestQueue) -> bool:
     """Executes a queued item and handles state transitions / notifications."""
@@ -105,11 +230,10 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
 
     # A retry after delivery failure reuses the persisted result and confirmation.
     if payload.get("result_draft_id"):
-        from src.handlers.food import get_draft_keyboard
         draft = await crud.get_meal_draft(db, payload["result_draft_id"], user_id)
         if draft:
-            await bot.send_message(chat_id, payload["result_text"],
-                reply_markup=get_draft_keyboard(draft.id, user_language), parse_mode="Markdown")
+            from src.services.meal_cards import deliver_card
+            await deliver_card(bot, db, draft, chat_id, user_language, payload.get('status_message_id'))
         return True
 
     if req_type == "medication_photo":
@@ -155,22 +279,46 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
                 logger.error(f"Failed to download image for queued analysis: {e}")
                 return False
 
-        status_msg = await bot.send_message(chat_id, i18n_locales.get_text("food_analyzing", user_language))
-        try:
-            analysis = await gemini.analyze_food_input(
-                text_description=text_desc,
-                image_bytes=image_bytes,
-                images_bytes=images_bytes,
-                language=user_language,
-                user_id=user_id,
-            )
-        finally:
+        status_msg_id = payload.get("status_message_id")
+        if isinstance(status_msg_id, int) and hasattr(bot, "edit_message_text"):
             try:
-                await bot.delete_message(chat_id, status_msg.message_id)
+                await bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=status_msg_id,
+                    text=i18n_locales.get_text("food_analyzing", user_language)
+                )
             except Exception:
                 pass
+        elif status_msg_id is None:
+            try:
+                status_msg = await bot.send_message(chat_id, i18n_locales.get_text("food_analyzing", user_language))
+                mid = getattr(status_msg, "message_id", None)
+                if isinstance(mid, int):
+                    status_msg_id = mid
+                    payload = {**payload, "status_message_id": status_msg_id}
+                    item.payload = payload
+                    await db.commit()
+            except Exception:
+                status_msg_id = None
+
+        analysis = await gemini.analyze_food_input(
+            text_description=text_desc,
+            image_bytes=image_bytes,
+            images_bytes=images_bytes,
+            language=user_language,
+            user_id=user_id,
+        )
 
         if not analysis:
+            if status_msg_id and hasattr(bot, "edit_message_text"):
+                try:
+                    await bot.edit_message_text(
+                        chat_id=chat_id,
+                        message_id=status_msg_id,
+                        text=i18n_locales.get_text("err_analysis_failed", user_language)
+                    )
+                except Exception:
+                    pass
             return False
 
         await log_ai_request(db, user_id=user_id, request_type=req_type)
@@ -207,9 +355,10 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
                 and current_data.get("logged_at") == payload.get("logged_at")):
             await fsm_context.update_data(**draft_payload, draft_id=draft_id)
             await fsm_context.set_state(FoodLoggingState.waiting_for_confirm)
-        from src.handlers.food import get_draft_keyboard
-        await bot.send_message(chat_id, result_text,
-            reply_markup=get_draft_keyboard(draft_id, user_language), parse_mode="Markdown")
+        from src.services.meal_cards import deliver_card
+        draft = await crud.get_meal_draft(db, draft_id, user_id)
+        if draft:
+            await deliver_card(bot, db, draft, chat_id, user_language, status_msg_id)
         return True
 
     elif req_type == "adjust_food_analysis":
@@ -219,24 +368,41 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
         original_data = payload.get("original_data")
         correction_text = payload.get("correction_text")
 
-        status_msg = await bot.send_message(chat_id, i18n_locales.get_text("food_analyzing", user_language))
-        try:
-            adjusted_analysis = await gemini.adjust_food_analysis(
-                original_data=original_data,
-                correction_text=correction_text,
-                language=user_language,
-                user_id=user_id,
-            )
-        finally:
+        status_msg_id = payload.get("status_message_id")
+        if isinstance(status_msg_id, int) and hasattr(bot, "edit_message_text"):
             try:
-                await bot.delete_message(chat_id, status_msg.message_id)
+                await bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=status_msg_id,
+                    text=i18n_locales.get_text("food_analyzing", user_language)
+                )
             except Exception:
                 pass
+        elif status_msg_id is None:
+            try:
+                status_msg = await bot.send_message(chat_id, i18n_locales.get_text("food_analyzing", user_language))
+                mid = getattr(status_msg, "message_id", None)
+                if isinstance(mid, int):
+                    status_msg_id = mid
+                    payload = {**payload, "status_message_id": status_msg_id}
+                    item.payload = payload
+                    await db.commit()
+            except Exception:
+                status_msg_id = None
+
+        adjusted_analysis = await get_cached_adjustment(db, item, user_language)
 
         if not adjusted_analysis:
+            if isinstance(status_msg_id, int) and hasattr(bot, "edit_message_text"):
+                try:
+                    await bot.edit_message_text(
+                        chat_id=chat_id,
+                        message_id=status_msg_id,
+                        text=i18n_locales.get_text("err_correction_failed", user_language)
+                    )
+                except Exception:
+                    pass
             return False
-
-        await log_ai_request(db, user_id=user_id, request_type=req_type)
 
         items_str = ""
         for food_item in adjusted_analysis.food_items:
@@ -263,28 +429,47 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
                 {**draft.payload, "analysis": adjusted_analysis.model_dump()}, draft_id=draft_id)
             item.payload = {**payload, "result_draft_id": draft_id, "result_text": result_text}
             await db.commit()
-            from src.handlers.food import get_draft_keyboard
-            await bot.send_message(chat_id, result_text,
-                reply_markup=get_draft_keyboard(draft_id, user_language), parse_mode="Markdown")
+            from src.services.meal_cards import deliver_card
+            fresh = await crud.get_meal_draft(db, draft_id, user_id)
+            if fresh:
+                await deliver_card(bot, db, fresh, chat_id, user_language, status_msg_id)
             return True
 
-        if current_state == FoodLoggingState.waiting_for_correction:
+        current_state = await fsm_context.get_state()
+        flow_data = await fsm_context.get_data()
+        if ((current_state == FoodLoggingState.waiting_for_correction
+                and not flow_data.get('draft_id')
+                and flow_data.get('analysis', original_data) == original_data)
+                or (current_state == FoodLoggingState.waiting_for_confirm
+                    and flow_data.get('queue_correction_id') == item.id)):
             analysis_dict = adjusted_analysis.model_dump()
-            await fsm_context.update_data(analysis=analysis_dict)
+            await fsm_context.update_data(analysis=analysis_dict, queue_correction_id=item.id)
             await fsm_context.set_state(FoodLoggingState.waiting_for_confirm)
             from src.keyboards import reply
+            reply_markup = reply.get_food_confirm_keyboard(user_language)
             await bot.send_message(
-                chat_id,
-                result_text,
-                reply_markup=reply.get_food_confirm_keyboard(user_language),
-                parse_mode="Markdown"
-            )
+                    chat_id,
+                    result_text,
+                    reply_markup=reply_markup,
+                    parse_mode="Markdown"
+                )
+            await remove_status_message(bot, chat_id, status_msg_id)
         else:
-            await bot.send_message(
-                chat_id,
-                f"ℹ️ *Queued Food Analysis Adjustment Ready* (you are no longer in the correction flow):\n\n{result_text}",
-                parse_mode="Markdown"
-            )
+            text_out = f"ℹ️ *Queued Food Analysis Adjustment Ready* (you are no longer in the correction flow):\n\n{result_text}"
+            delivered = False
+            if isinstance(status_msg_id, int) and hasattr(bot, "edit_message_text"):
+                delivered = await try_edit(bot.edit_message_text,
+                        chat_id=chat_id,
+                        message_id=status_msg_id,
+                        text=text_out,
+                        parse_mode="Markdown"
+                    )
+            if not delivered:
+                await bot.send_message(
+                    chat_id,
+                    text_out,
+                    parse_mode="Markdown"
+                )
         return True
 
     elif req_type == "adjust_meal_edit":
@@ -296,24 +481,41 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
         edit_meal_id = payload.get("edit_meal_id")
         edit_date_str = payload.get("edit_date_str")
 
-        status_msg = await bot.send_message(chat_id, i18n_locales.get_text("food_analyzing", user_language))
-        try:
-            adjusted_analysis = await gemini.adjust_food_analysis(
-                original_data=original_data,
-                correction_text=correction_text,
-                language=user_language,
-                user_id=user_id,
-            )
-        finally:
+        status_msg_id = payload.get("status_message_id")
+        if isinstance(status_msg_id, int) and hasattr(bot, "edit_message_text"):
             try:
-                await bot.delete_message(chat_id, status_msg.message_id)
+                await bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=status_msg_id,
+                    text=i18n_locales.get_text("food_analyzing", user_language)
+                )
             except Exception:
                 pass
+        elif status_msg_id is None:
+            try:
+                status_msg = await bot.send_message(chat_id, i18n_locales.get_text("food_analyzing", user_language))
+                mid = getattr(status_msg, "message_id", None)
+                if isinstance(mid, int):
+                    status_msg_id = mid
+                    payload = {**payload, "status_message_id": status_msg_id}
+                    item.payload = payload
+                    await db.commit()
+            except Exception:
+                status_msg_id = None
+
+        adjusted_analysis = await get_cached_adjustment(db, item, user_language)
 
         if not adjusted_analysis:
+            if isinstance(status_msg_id, int) and hasattr(bot, "edit_message_text"):
+                try:
+                    await bot.edit_message_text(
+                        chat_id=chat_id,
+                        message_id=status_msg_id,
+                        text=i18n_locales.get_text("err_correction_failed", user_language)
+                    )
+                except Exception:
+                    pass
             return False
-
-        await log_ai_request(db, user_id=user_id, request_type=req_type)
 
         items_str = ""
         for food_item in adjusted_analysis.food_items:
@@ -331,27 +533,45 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
             carb=adjusted_analysis.total_carb
         )
 
-        if current_state == MealEditingState.waiting_for_edit_text:
+        current_state = await fsm_context.get_state()
+        flow_data = await fsm_context.get_data()
+        if ((current_state == MealEditingState.waiting_for_edit_text
+                and flow_data.get('edit_meal_id', edit_meal_id) == edit_meal_id)
+                or (current_state == MealEditingState.waiting_for_edit_confirm
+                    and flow_data.get('queue_correction_id') == item.id)):
             adjusted_dict = adjusted_analysis.model_dump()
             await fsm_context.update_data(
                 adjusted_analysis=adjusted_dict,
                 edit_meal_id=edit_meal_id,
-                edit_date_str=edit_date_str
+                edit_date_str=edit_date_str,
+                queue_correction_id=item.id,
             )
             await fsm_context.set_state(MealEditingState.waiting_for_edit_confirm)
             from src.keyboards import reply
+            reply_markup = reply.get_meal_edit_confirm_keyboard(user_language)
             await bot.send_message(
-                chat_id,
-                result_text,
-                reply_markup=reply.get_meal_edit_confirm_keyboard(user_language),
-                parse_mode="Markdown"
-            )
+                    chat_id,
+                    result_text,
+                    reply_markup=reply_markup,
+                    parse_mode="Markdown"
+                )
+            await remove_status_message(bot, chat_id, status_msg_id)
         else:
-            await bot.send_message(
-                chat_id,
-                f"ℹ️ *Queued Meal Edit Ready* (you are no longer in the editing flow):\n\n{result_text}",
-                parse_mode="Markdown"
-            )
+            text_out = f"ℹ️ *Queued Meal Edit Ready* (you are no longer in the editing flow):\n\n{result_text}"
+            delivered = False
+            if isinstance(status_msg_id, int) and hasattr(bot, "edit_message_text"):
+                delivered = await try_edit(bot.edit_message_text,
+                        chat_id=chat_id,
+                        message_id=status_msg_id,
+                        text=text_out,
+                        parse_mode="Markdown"
+                    )
+            if not delivered:
+                await bot.send_message(
+                    chat_id,
+                    text_out,
+                    parse_mode="Markdown"
+                )
         return True
 
     elif req_type == "generate_report":
@@ -363,10 +583,27 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
         from src.services.scheduler import generate_and_send_report_direct
         # Generate the report direct helper will query user, generate via Gemini and log request
         report_at = datetime.fromisoformat(payload["report_at"]) if payload.get("report_at") else item.created_at.replace(tzinfo=UTC)
-        await generate_and_send_report_direct(bot, db, user, report_type, report_at=report_at)
+        await generate_and_send_report_direct(bot, db, user, report_type, report_at=report_at, queue_item=item)
         return True
 
     return False
+
+async def _notify_item_failed(bot: Bot, db: AsyncSession, item: AiRequestQueue):
+    """Notifies user of item failure by updating the status message in-place."""
+    status_msg_id = item.payload.get("status_message_id") if item.payload else None
+    if not isinstance(status_msg_id, int) or not hasattr(bot, "edit_message_text"):
+        return
+    user = await crud.get_user(db, item.user_id)
+    lang = user.language if user and user.language else "en"
+    err_text = i18n_locales.get_text("err_analysis_failed", lang)
+    try:
+        await bot.edit_message_text(
+            chat_id=item.chat_id,
+            message_id=status_msg_id,
+            text=err_text
+        )
+    except Exception:
+        pass
 
 async def process_next_queue_item(bot: Bot, storage):
     """Checks rate limits and processes the next pending item in the queue."""
@@ -374,14 +611,17 @@ async def process_next_queue_item(bot: Bot, storage):
         item = await get_next_pending_queue_item(db)
         if not item:
             return
-        cached = item.payload.get('result_draft_id') or (item.request_type == 'medication_photo' and 'result' in item.payload)
+        cached = (item.payload.get('result_draft_id') or item.payload.get('cached_adjustment')
+                  or item.payload.get('report_delivery')
+                  or (item.request_type == 'medication_photo' and 'result' in item.payload))
         if not cached:
             is_limited, _ = await check_rate_limit(db)
             if is_limited:
                 return
 
-        item.status = "processing"
-        await db.commit()
+        if not await crud.claim_queue_task(db, item.id):
+            return
+        await db.refresh(item)
 
         try:
             success = await execute_queued_item(bot, storage, db, item)
@@ -392,13 +632,16 @@ async def process_next_queue_item(bot: Bot, storage):
                 item.last_error = None
             else:
                 item.status = "failed"
+                item.processed_at = datetime.now(UTC).replace(tzinfo=None)
                 item.error_message = "Execution returned failure"
+                await _notify_item_failed(bot, db, item)
         except AIQuotaExceeded as exc:
             item.status = "pending"
             item.next_retry_at = datetime.now(UTC).replace(tzinfo=None) + timedelta(seconds=exc.retry_after)
             item.error_message = "Waiting for AI quota"
         except TelegramForbiddenError:
             item.status = "failed"
+            item.processed_at = datetime.now(UTC).replace(tzinfo=None)
             item.error_message = "Telegram delivery forbidden"
             item.last_error = "Telegram delivery forbidden"
             item.next_retry_at = None
@@ -412,6 +655,7 @@ async def process_next_queue_item(bot: Bot, storage):
                 item.next_retry_at = None
                 item.processed_at = datetime.now(UTC).replace(tzinfo=None)
                 item.error_message = f"Retry limit reached after {item.retry_count} failures"
+                await _notify_item_failed(bot, db, item)
             else:
                 delay = min(240, 5 * (2 ** (item.retry_count - 1)))
                 item.next_retry_at = datetime.now(UTC).replace(tzinfo=None) + timedelta(seconds=delay)
@@ -423,32 +667,62 @@ async def process_next_queue_item(bot: Bot, storage):
 async def start_queue_worker(bot: Bot, storage):
     """Background loop that processes the AI request queue."""
     global _worker_running, _worker_task, _worker_stop_event
+    global _worker_started_at, _worker_stopped_at, _worker_last_heartbeat, _worker_last_error
+    global _bot, _storage
+    _bot = bot
+    _storage = storage
     _worker_task = asyncio.current_task()
     _worker_stop_event = asyncio.Event()
     _worker_running = True
+    _worker_started_at = datetime.now(UTC)
+    _worker_last_heartbeat = datetime.now(UTC)
+    _worker_last_error = None
+    _worker_stopped_at = None
     logger.info("AI Request Queue worker starting...")
+    async def pulse():
+        while _worker_running:
+            record_worker_heartbeat()
+            await asyncio.sleep(10)
+
+    heartbeat_task = asyncio.create_task(pulse())
     try:
         # Single-worker deployment: resume interrupted claims on startup.
         async with AsyncSessionLocal() as db:
-            await db.execute(update(AiRequestQueue).where(AiRequestQueue.status == "processing").values(status="pending"))
+            await db.execute(update(AiRequestQueue).where(
+                AiRequestQueue.status == "processing",
+                AiRequestQueue.request_type.in_(crud.EXECUTABLE_QUEUE_TYPES),
+            ).values(status="pending"))
             await db.commit()
         while _worker_running:
+            record_worker_heartbeat()
             try:
-                await process_next_queue_item(bot, storage)
+                # Pulse is independent of provider retries. A truly stuck operation
+                # still has a bounded deadline and leaves a recoverable claim.
+                await asyncio.wait_for(process_next_queue_item(bot, storage), timeout=900)
+            except asyncio.TimeoutError:
+                raise RuntimeError('Queue operation exceeded its execution deadline') from None
             except Exception as e:
                 logger.error(f"Error in queue worker iteration: {e}", exc_info=True)
+            record_worker_heartbeat()
             try:
                 await asyncio.wait_for(_worker_stop_event.wait(), timeout=2.0)
             except asyncio.TimeoutError:
                 pass
+    except Exception as exc:
+        _worker_last_error = str(exc)
+        logger.critical(f"Fatal error in AI Request Queue worker: {exc}", exc_info=True)
+        raise
     finally:
+        heartbeat_task.cancel()
+        await asyncio.gather(heartbeat_task, return_exceptions=True)
         _worker_running = False
-        _worker_task = None
+        _worker_stopped_at = datetime.now(UTC)
 
 async def stop_queue_worker(task=None, timeout=35):
     """Finish in-flight work while Telegram is open, or leave a recoverable claim."""
-    global _worker_running
+    global _worker_running, _worker_stopped_at
     _worker_running = False
+    _worker_stopped_at = datetime.now(UTC)
     task = task or _worker_task
     if _worker_stop_event is not None:
         _worker_stop_event.set()

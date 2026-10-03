@@ -104,7 +104,11 @@ async def test_execute_queued_analyze_food_input(db_session: AsyncSession, setup
     mock_analysis.total_protein = 0.5
     mock_analysis.total_fat = 0.3
     mock_analysis.total_carb = 25.0
-    mock_analysis.model_dump.return_value = {"food_items": []}
+    mock_analysis.model_dump.return_value = {
+        'food_items': [{'name': 'Apple', 'portion': '1 apple', 'calories': 95,
+                        'protein': 0.5, 'fat': 0.3, 'carb': 25.0}],
+        'total_calories': 95, 'total_protein': 0.5, 'total_fat': 0.3, 'total_carb': 25.0,
+    }
 
     async def mock_analyze(*args, **kwargs):
         return mock_analysis
@@ -134,7 +138,7 @@ async def test_execute_queued_analyze_food_input(db_session: AsyncSession, setup
 
     # Bot should have sent the message
     mock_bot.send_message.assert_called()
-    called_text = mock_bot.send_message.call_args[0][1]
+    called_text = mock_bot.send_message.call_args.kwargs['text']
     assert "95 kcal" in called_text
 
 async def test_execute_queued_adjust_food_analysis(db_session: AsyncSession, setup_test_user, mock_bot, monkeypatch):
@@ -344,7 +348,7 @@ async def test_execute_queued_analyze_food_input_with_photo_and_caption(db_sessi
 
     # Bot should have sent the message
     mock_bot.send_message.assert_called()
-    called_text = mock_bot.send_message.call_args[0][1]
+    called_text = mock_bot.send_message.call_args.kwargs['text']
     assert "Salad" in called_text
     assert "120 kcal" in called_text
 
@@ -450,5 +454,3 @@ async def test_execute_queued_report_generation(db_session: AsyncSession, setup_
     assert item_after.status == "completed"
     assert item_after.processed_at is not None
     assert item_after.last_error is None
-
-

@@ -285,7 +285,7 @@ async def generate_report(
         prompt = (
             f"You are a professional nutrition and fitness coach. "
             f"Generate a daily report for the user in the language: {lang_name}. "
-            f"Format the output using Telegram-compatible Markdown (bolding, lists, code blocks for tables).\n\n"
+            f"Use plain text with short headings and bullet lists. No Markdown, tables, pipes or code blocks.\n\n"
             f"--- USER PROFILE ---\n{profile_text}\n"
             f"--- FOOD LOGS FOR TODAY ---\n{food_text}\n"
             f"--- WEIGHT LOGS ---\n{weight_text}\n\n"
@@ -298,7 +298,7 @@ async def generate_report(
         prompt = (
             f"You are a professional nutrition and fitness coach. "
             f"Generate a weekly report for the user in the language: {lang_name}. "
-            f"Format the output using Telegram-compatible Markdown (bolding, lists, code blocks for tables).\n\n"
+            f"Use plain text with short headings and bullet lists. No Markdown, tables, pipes or code blocks.\n\n"
             f"--- USER PROFILE ---\n{profile_text}\n"
             f"--- FOOD LOGS FOR PREVIOUS WEEK ---\n{food_text}\n"
             f"--- WEIGHT LOGS ---\n{weight_text}\n\n"
@@ -311,7 +311,7 @@ async def generate_report(
         prompt = (
             f"You are a professional nutrition and fitness coach. "
             f"Generate a {report_type} report for the user in the language: {lang_name}. "
-            f"Format the output using Telegram-compatible Markdown (bolding, lists, code blocks for tables).\n\n"
+            f"Use plain text with short headings and bullet lists. No Markdown, tables, pipes or code blocks.\n\n"
             f"--- USER PROFILE ---\n{profile_text}\n"
             f"--- FOOD LOGS FOR PERIOD ---\n{food_text}\n"
             f"--- WEIGHT LOGS FOR PERIOD ---\n{weight_text}\n\n"
@@ -339,8 +339,8 @@ async def generate_report(
     )
     report_text = response.text
     if report_text:
-        from src.utils.escape import clean_telegram_markdown
-        report_text = clean_telegram_markdown(report_text)
+        from src.utils.report_format import report_plain_text
+        report_text = report_plain_text(report_text)
     return report_text
 
 

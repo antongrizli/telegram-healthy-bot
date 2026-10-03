@@ -2,12 +2,19 @@
 
 ## Startup and schema
 
-`init_db` creates new tables, then introspects and adds only missing startup columns.
-PostgreSQL upgrades hold a transaction advisory lock. An error aborts startup instead
-of continuing with an incomplete schema. User settings are never rewritten: weekday
-0 means Monday, 6 means Sunday. Previously overwritten choices cannot be inferred;
-users can select their desired day again in profile settings. This is an idempotent
-startup upgrade mechanism; a full versioned Alembic migration history remains future work.
+`init_db` runs `alembic upgrade head` on the application's own connection
+(`migrations/versions`). The baseline revision `0001_baseline` creates missing tables and
+adds missing legacy columns, so fresh, pre-Alembic and partially upgraded databases all
+converge to one versioned state. PostgreSQL upgrades hold a transaction advisory lock.
+An error — including a database stamped with a revision this build does not know —
+aborts startup instead of continuing with an incomplete schema. User settings are never
+rewritten: weekday 0 means Monday, 6 means Sunday. Previously overwritten choices cannot
+be inferred; users can select their desired day again in profile settings.
+
+New schema changes are new revisions (`alembic revision -m "..."`); use the idempotent
+helpers in `migrations/_util.py` because `create_all` in the baseline already contains
+the current models on fresh databases. Downgrade of the baseline is intentionally
+unsupported: restore a backup (see `docs/operations/backups.md`).
 
 The new `ai_request_attempts` table is created automatically. Existing data is retained.
 
@@ -40,6 +47,38 @@ results can be delivered without consuming or requiring additional AI quota.
 
 One application/queue worker is supported. Adding more instances requires database
 job leases; atomic provider quota alone does not prevent duplicate queue processing.
+
+## Queue operations and observability (review corrections, 2026-10-03)
+
+The public `/health` response excludes raw database/worker exceptions and queue
+error messages. Details stay in server logs and the administrator diagnostics.
+A failed metrics query is an unhealthy dependency check, even if SELECT 1 worked.
+A stopped scheduler or worker is degraded; a crashed/stalled worker or failed
+database check is unhealthy (503).
+
+Worker heartbeat runs independently every 10 seconds during provider I/O. Each
+queue iteration has a 15-minute deadline; exceeding it stops the worker with a
+recorded failure, leaving the processing claim recoverable on startup. Single-worker
+deployment remains mandatory; the pulse is event-loop liveness, not AI progress.
+
+Only executable AI task types enter the worker and administrative retry/cancel.
+Pending claims, retry and cancel use conditional UPDATEs. Cancellation accepts
+only pending/failed, never processing, meal drafts or report snapshots. Retry checks
+the owner's existence and block status again in the mutation. Queue health counts
+exclude storage records; failed-window timestamps use processed_at with a legacy
+created_at fallback. Top errors are limited to the same observation window.
+
+Queued reports atomically persist an owned snapshot reference and rendered summary
+before Telegram delivery. Retries bypass provider quota and reuse that result;
+direct-report delivery failures enqueue the prepared result too. Legacy correction
+results are cached before delivery and the confirming FSM is tagged with queue ID,
+so a send failure preserves the reply confirmation keyboard on retry. An unrelated
+or lost FSM is not guessed/restored as another meal flow.
+
+Telegram sendMessage has no idempotency key: an uncertain timeout may still result
+in repeated delivery. These changes avoid repeated AI work and known edit duplicates,
+but do not promise exactly-once sending. Provider cancellation before result storage
+may also cause repeat work after restart.
 
 ## Shutdown
 

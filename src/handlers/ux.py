@@ -1,5 +1,6 @@
 from datetime import datetime, UTC
 from aiogram import Router, F
+from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo, MenuButtonWebApp
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 from aiogram.fsm.context import FSMContext
@@ -8,7 +9,7 @@ from src.database.connection import AsyncSessionLocal
 from src.database import crud
 from src.services import ux
 from src.keyboards import reply
-from src.utils.i18n_locales import get_text as tr, get_all_translations
+from src.utils.i18n_locales import get_text as tr, get_all_translations, format_water_logged
 from src.config import settings
 
 router = Router()
@@ -29,28 +30,52 @@ def today_keyboard(lang):
 @router.message(F.text.in_(get_all_translations('ux_add')))
 async def add_menu(message: Message, state: FSMContext, user_language: str):
     await state.clear()
-    await message.answer(tr('ux_quick_food', user_language), reply_markup=reply.get_section_menu('add', user_language))
+    await message.answer(tr('ux_add', user_language), reply_markup=reply.get_section_menu('add', user_language))
 
 @router.message(F.text.in_(get_all_translations('ux_more')))
 async def more_menu(message: Message, state: FSMContext, user_language: str):
     await state.clear()
     await message.answer(tr('ux_more', user_language), reply_markup=reply.get_section_menu('more', user_language))
-    await message.answer(tr('ux_settings', user_language), reply_markup=InlineKeyboardMarkup(
-        inline_keyboard=[[web_button('ux_settings', user_language, '?panel=settings')]]))
+
+@router.message(F.text.in_(get_all_translations('btn_settings')))
+@router.message(F.text.in_(get_all_translations('ux_settings')))
+async def settings_menu(message: Message, state: FSMContext, user_language: str):
+    await state.clear()
+    parts = urlsplit(settings.WEBAPP_URL)
+    url = urlunsplit(parts._replace(query='panel=settings', fragment=''))
+    label = tr('btn_settings', user_language)
+    await message.bot.set_chat_menu_button(chat_id=message.chat.id,
+        menu_button=MenuButtonWebApp(text=label, web_app=WebAppInfo(url=url)))
+    from src.middlewares.i18n import _user_menu_button_cache
+    _user_menu_button_cache.pop(message.chat.id, None)
+    await message.answer(tr('ux_open_menu', user_language, section=label),
+                         reply_markup=reply.get_section_menu('more', user_language))
 
 @router.message(F.text.in_(get_all_translations('ux_today')))
 async def today(message: Message, state: FSMContext, user_language: str, db_user):
+    import time
+    now_monotonic = time.monotonic()
+    fsm_data = await state.get_data()
+    if now_monotonic - fsm_data.get('_last_today_press', 0) < 0.5:
+        return
     await state.clear()
+    await state.update_data(_last_today_press=now_monotonic)
     async with AsyncSessionLocal() as db:
-        data = await ux.today_data(db, db_user)
+        data = await ux.today_data(db, db_user, include_tip=False)
     await message.answer(data['summary'], reply_markup=reply.get_today_keyboard(user_language))
 
 @router.message(F.text.in_(get_all_translations('ux_progress')))
+async def progress_section(message: Message, state: FSMContext, user_language: str):
+    await state.clear()
+    await message.answer(tr('ux_progress', user_language),
+                         reply_markup=reply.get_progress_keyboard(user_language))
+
+@router.message(F.text.in_(get_all_translations('btn_charts')))
 @router.message(F.text.in_(get_all_translations('btn_all_achievements')))
 @router.message(F.text.in_(get_all_translations('btn_view_card')))
 async def progress(message: Message, state: FSMContext, user_language: str):
     await state.clear()
-    key, tab = 'ux_progress', 'charts'
+    key, tab = 'btn_charts', 'charts'
     for candidate, target in [('btn_all_achievements', 'achievements'), ('btn_view_card', 'health-card')]:
         if message.text in get_all_translations(candidate):
             key, tab = candidate, target
@@ -74,6 +99,16 @@ async def start_water(message: Message, state: FSMContext, user_language: str):
     await state.set_state(WaterState.amount)
     await message.answer(tr('ux_water_prompt', user_language), reply_markup=reply.get_cancel_keyboard(user_language))
 
+@router.message(WaterState.amount, Command("cancel"))
+@router.message(WaterState.amount, F.text.in_(get_all_translations("btn_cancel")))
+async def cancel_water_logging(message: Message, state: FSMContext, user_language: str, db_user = None):
+    await state.clear()
+    is_admin = db_user.telegram_id in settings.ADMIN_USER_IDS or db_user.is_admin if db_user else False
+    await message.answer(
+        tr("water_cancelled", user_language),
+        reply_markup=reply.get_main_menu(user_language, is_admin=is_admin),
+    )
+
 @router.message(WaterState.amount)
 async def water(message: Message, state: FSMContext, user_language: str, db_user):
     try:
@@ -85,16 +120,19 @@ async def water(message: Message, state: FSMContext, user_language: str, db_user
         await crud.add_water_log(db, message.from_user.id, amount)
         data = await ux.today_data(db, db_user)
     await state.clear()
-    await message.answer(tr('ux_saved', user_language) + '\n\n' + data['summary'], reply_markup=reply.get_main_menu(user_language, db_user.is_admin or db_user.telegram_id in settings.ADMIN_USER_IDS))
+    total = data['values']['water']
+    is_admin = bool(db_user and (db_user.is_admin or db_user.telegram_id in settings.ADMIN_USER_IDS))
+    await message.answer(
+        format_water_logged(amount, total, user_language),
+        reply_markup=reply.get_main_menu(user_language, is_admin=is_admin),
+    )
 
 @router.callback_query(F.data.in_({'ux:food', 'ux:pending'}))
 async def quick_callback(callback: CallbackQuery, state: FSMContext, user_language: str, db_user):
     await callback.answer()
     if callback.data == 'ux:pending':
         from src.handlers.food import show_pending_meals
-        async with AsyncSessionLocal() as db:
-            drafts = await crud.get_pending_meals(db, callback.from_user.id)
-        await show_pending_meals(callback.message, user_language, drafts)
+        await show_pending_meals(callback.message, user_language, user_id=callback.from_user.id)
     else:
         from src.handlers.food import FoodLoggingState
         await state.clear()
@@ -116,5 +154,6 @@ async def report_details(callback: CallbackQuery, user_language: str):
         await callback.answer(tr('draft_unavailable', user_language), show_alert=True)
         return
     await callback.answer()
-    from src.services.scheduler import send_multipart_message
-    await send_multipart_message(callback.bot, callback.from_user.id, saved.payload['text'])
+    from src.utils.report_format import report_parts
+    for part in report_parts(saved.payload['text']):
+        await callback.bot.send_message(callback.from_user.id, part, parse_mode=None)

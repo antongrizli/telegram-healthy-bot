@@ -73,6 +73,7 @@ async def test_generate_and_send_report_direct_weekly_name_error_fix(mocker):
     mocker.patch("src.services.rate_limiter.log_ai_request", new_callable=AsyncMock)
     mocker.patch("src.services.scheduler.send_multipart_message", new_callable=AsyncMock)
     mocker.patch('src.database.crud.save_report_snapshot', new_callable=AsyncMock, return_value=1)
+    mocker.patch('src.database.crud.get_saved_report', new_callable=AsyncMock, return_value=SimpleNamespace(id=1))
 
     # Call the function for weekly report, which references settings.WEBAPP_URL
     await generate_and_send_report_direct(bot, db, user, "weekly")

@@ -32,9 +32,11 @@ from datetime import datetime, UTC
 import base64
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.filters import Command, StateFilter
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
 from src.services import medications as meds, rate_limiter
-from src.utils.i18n_locales import LOCALES
+from src.utils.i18n_locales import LOCALES, get_all_translations
+from src.keyboards import reply
 from src.config import settings
 
 
@@ -174,6 +176,17 @@ async def medication_navigation(event: Message | CallbackQuery, state: FSMContex
         else:
             await state.clear()
             await show_library(message,uid,lang)
+
+
+@router.message(StateFilter(MedicationSetup), Command("cancel"))
+@router.message(StateFilter(MedicationSetup), F.text.in_(get_all_translations("btn_cancel")))
+async def cancel_medication_setup(message: Message, state: FSMContext, user_language: str = 'en', db_user = None):
+    await state.clear()
+    is_admin = db_user.telegram_id in settings.ADMIN_USER_IDS or db_user.is_admin if db_user else False
+    await message.answer(
+        get_text('action_cancelled', user_language),
+        reply_markup=reply.get_main_menu(user_language, is_admin=is_admin)
+    )
 
 
 @router.message(MedicationSetup.name)

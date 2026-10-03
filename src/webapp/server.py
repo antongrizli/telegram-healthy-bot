@@ -223,22 +223,69 @@ async def get_user_settings(request: web.Request) -> web.Response:
 async def health_check(request: web.Request) -> web.Response:
     """
     GET /health
+    Comprehensive health check for database, queue worker, scheduler, and AI queue.
     """
+    now_iso = datetime.now(UTC).isoformat()
+    db_ok = False
+    queue_data = {}
+
+    # 1. Database & Queue health
     try:
         async with AsyncSessionLocal() as db:
             await db.execute(select(1))
-        return web.json_response({
-            "status": "healthy",
-            "database": "connected",
-            "timestamp": datetime.now(UTC).isoformat()
-        })
-    except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        return web.json_response({
-            "status": "unhealthy",
-            "database": "disconnected",
-            "timestamp": datetime.now(UTC).isoformat()
-        }, status=500)
+            queue_data = await crud.get_queue_health(db)
+            db_ok = True
+    except Exception:
+        logger.exception("Health check database failure")
+
+    # 2. Worker health
+    from src.services.rate_limiter import get_worker_health
+    worker_data = get_worker_health()
+    worker_data = {key: value for key, value in worker_data.items() if key != 'error'}
+
+    # 3. Scheduler health
+    from src.services.scheduler import get_scheduler_health
+    scheduler_data = get_scheduler_health()
+
+    # 4. Overall status classification
+    # Critical failures:
+    # - DB is down -> 503 unhealthy
+    # - Worker is crashed or stalled -> 503 unhealthy
+    # Warning/Degraded:
+    # - Oldest pending task is older than 5 minutes (300s) -> 200 degraded
+    # - Oldest processing task is older than 5 minutes (300s) -> 200 degraded
+    # - High error rate in 24h (> 25% with > 5 tasks) -> 200 degraded
+    # - Worker is stopped (e.g. idle or not yet started) -> 200 degraded
+    # Healthy otherwise -> 200 healthy
+    if not db_ok:
+        overall_status = "unhealthy"
+        http_status = 503
+    elif worker_data.get("status") in ("crashed", "stalled"):
+        overall_status = "unhealthy"
+        http_status = 503
+    elif queue_data.get("oldest_pending_age_seconds", 0) > 300.0 or queue_data.get("oldest_processing_age_seconds", 0) > 300.0:
+        overall_status = "degraded"
+        http_status = 200
+    elif queue_data.get("error_rate", 0) > 0.25 and (queue_data.get("completed_24h", 0) + queue_data.get("failed_24h", 0)) > 5:
+        overall_status = "degraded"
+        http_status = 200
+    elif worker_data.get("status") == "stopped" or not scheduler_data.get("healthy"):
+        overall_status = "degraded"
+        http_status = 200
+    else:
+        overall_status = "healthy"
+        http_status = 200
+
+    payload = {
+        "status": overall_status,
+        "database": "connected" if db_ok else "disconnected",
+        "timestamp": now_iso,
+        "worker": worker_data,
+        "scheduler": scheduler_data,
+        "queue": {key: value for key, value in queue_data.items() if key != 'queue_errors'},
+    }
+
+    return web.json_response(payload, status=http_status)
 
 
 # Web App Routing Setup

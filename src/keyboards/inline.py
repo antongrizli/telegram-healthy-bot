@@ -115,3 +115,53 @@ def get_report_range_inline(lang: str = "en") -> InlineKeyboardMarkup:
         ]
     ]
     return InlineKeyboardMarkup(inline_keyboard=kb)
+
+
+def get_admin_dlq_inline(tasks: list, page: int, total_pages: int, lang: str = "en") -> InlineKeyboardMarkup:
+    """
+    Inline keyboard for browsing failed queue tasks with pagination and task selection.
+    """
+    rows = []
+    task_row = []
+    for task in tasks:
+        task_label = f"#{task.id} · {task.request_type[:12]}"
+        task_row.append(
+            InlineKeyboardButton(text=task_label, callback_data=f"dlq:view:{task.id}:{page}")
+        )
+        if len(task_row) == 2:
+            rows.append(task_row)
+            task_row = []
+    if task_row:
+        rows.append(task_row)
+
+    nav_row = []
+    if page > 0:
+        nav_row.append(InlineKeyboardButton(text="◀️", callback_data=f"dlq:page:{page-1}"))
+    if total_pages > 1:
+        nav_row.append(InlineKeyboardButton(text=f"{page+1}/{total_pages}", callback_data=f"dlq:page:{page}"))
+    if page + 1 < total_pages:
+        nav_row.append(InlineKeyboardButton(text="▶️", callback_data=f"dlq:page:{page+1}"))
+    if nav_row:
+        rows.append(nav_row)
+
+    refresh_label = "🔄 Обновить" if lang == "ru" else "🔄 Refresh"
+    close_label = "❌ Закрыть" if lang == "ru" else "❌ Close"
+    rows.append([
+        InlineKeyboardButton(text=refresh_label, callback_data=f"dlq:page:{page}"),
+        InlineKeyboardButton(text=close_label, callback_data="dlq:close")
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_admin_dlq_task_inline(task_id: int, page: int, lang: str = "en") -> InlineKeyboardMarkup:
+    """
+    Inline keyboard for viewing a specific failed task with retry, cancel, and back buttons.
+    """
+    retry_label = "🔄 Повторить задание" if lang == "ru" else "🔄 Retry Task"
+    cancel_label = "🚫 Отменить задание" if lang == "ru" else "🚫 Cancel Task"
+    back_label = "◀️ К списку" if lang == "ru" else "◀️ Back to List"
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=retry_label, callback_data=f"dlq:retry:{task_id}:{page}")],
+        [InlineKeyboardButton(text=cancel_label, callback_data=f"dlq:cancel:{task_id}:{page}")],
+        [InlineKeyboardButton(text=back_label, callback_data=f"dlq:page:{page}")]
+    ])

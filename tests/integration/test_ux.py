@@ -247,15 +247,13 @@ async def test_dispatcher_quick_input_menus_cancel_and_help_in_all_languages(db_
     try:
         for language in LOCALES:
             progress_keyboard = reply.get_progress_keyboard(language)
-            assert isinstance(progress_keyboard, ReplyKeyboardMarkup)
             assert [[button.text for button in row] for row in progress_keyboard.keyboard] == [
-                [get_text('ux_progress', language)],
-                [get_text('btn_all_achievements', language), get_text('btn_view_card', language)],
-                [get_text('btn_weekly_report', language)],
+                [get_text('btn_charts', language), get_text('btn_all_achievements', language)],
+                [get_text('btn_view_card', language), get_text('btn_weekly_report', language)],
                 [get_text('ux_back', language)],
             ]
             assert all(button.web_app is None for row in progress_keyboard.keyboard for button in row)
-            for key, tab in [('ux_progress', 'charts'), ('btn_all_achievements', 'achievements'), ('btn_view_card', 'health-card')]:
+            for key, tab in [('btn_charts', 'charts'), ('btn_all_achievements', 'achievements'), ('btn_view_card', 'health-card')]:
                 await send(get_text(key, language))
                 methods = [call.args[1] for call in bot.session.call_args_list]
                 menu = next(method.menu_button for method in methods if method.__api_method__ == 'setChatMenuButton')

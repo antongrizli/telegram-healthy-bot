@@ -15,7 +15,7 @@ def get_main_menu(lang: str = "en", is_admin: bool = False) -> ReplyKeyboardMark
 def get_section_menu(section, lang):
     rows = {
         'add': [('btn_log_food', 'btn_log_weight'), ('ux_water',), ('btn_pending_meals',)],
-        'more': [('btn_my_profile', 'btn_medications'), ('btn_help',)],
+        'more': [('btn_my_profile', 'btn_settings'), ('btn_medications', 'btn_help')],
     }[section]
     return ReplyKeyboardMarkup(keyboard=[
         [KeyboardButton(text=get_text(key, lang)) for key in row]
@@ -34,10 +34,10 @@ def get_today_keyboard(lang: str) -> ReplyKeyboardMarkup:
 
 def get_progress_keyboard(lang: str) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(keyboard=[
-        [KeyboardButton(text=get_text('ux_progress', lang))],
-        [KeyboardButton(text=get_text('btn_all_achievements', lang)),
-         KeyboardButton(text=get_text('btn_view_card', lang))],
-        [KeyboardButton(text=get_text('btn_weekly_report', lang))],
+        [KeyboardButton(text=get_text('btn_charts', lang)),
+         KeyboardButton(text=get_text('btn_all_achievements', lang))],
+        [KeyboardButton(text=get_text('btn_view_card', lang)),
+         KeyboardButton(text=get_text('btn_weekly_report', lang))],
         [KeyboardButton(text=get_text('ux_back', lang))],
     ], resize_keyboard=True)
 
@@ -65,6 +65,9 @@ def get_admin_menu(lang: str = "en") -> ReplyKeyboardMarkup:
         [
             KeyboardButton(text="👥 Active Users" if lang == "en" else "👥 Активные пользователи"),
             KeyboardButton(text="🚫 Blocked Users" if lang == "en" else "🚫 Заблокированные")
+        ],
+        [
+            KeyboardButton(text="⚠️ Failed Queue" if lang == "en" else "⚠️ Сбои очереди")
         ],
         [
             KeyboardButton(text=get_text("ux_back", lang))

@@ -36,6 +36,8 @@ def mock_bot():
     """Mock for the aiogram Bot class."""
     bot = MagicMock()
     bot.send_message = AsyncMock()
+    bot.edit_message_text = AsyncMock()
+    bot.delete_message = AsyncMock()
     return bot
 
 @pytest.fixture
@@ -74,7 +76,7 @@ def patch_async_session_local(monkeypatch, db_session):
         "src.services.ai_quota",
         "src.services.gamification",
         "src.services.briefing",
-        "src.handlers.ux", "src.webapp.ux", "src.middlewares.logging"
+        "src.handlers.ux", "src.webapp.ux", "src.webapp.server", "src.middlewares.logging"
     ]
     
     for mod in modules:

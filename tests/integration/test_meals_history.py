@@ -181,8 +181,10 @@ async def test_process_meal_edit_text(mock_state, mock_gemini_client):
     
     mock_state.update_data.assert_called_once()
     mock_state.set_state.assert_called_once_with(MealEditingState.waiting_for_edit_confirm)
-    message.answer.assert_called()
+    wait_msg = message.answer.return_value
+    assert not wait_msg.edit_text.called
     assert "Estimated Totals" in message.answer.call_args[0][0]
+    wait_msg.delete.assert_awaited_once()
 
 async def test_accept_meal_edit(db_session, mock_state, mock_db_user):
     await crud.create_or_update_user(
@@ -441,9 +443,11 @@ async def test_process_food_input_photo_and_caption(mock_state, monkeypatch):
     # State transitioned to waiting_for_confirm
     mock_state.set_state.assert_called_once_with(FoodLoggingState.waiting_for_confirm)
     
-    # User received message showing food details (call_count should be 2: one for wait message, one for final result)
-    assert message.answer.call_count == 2
-    answer_text = message.answer.call_args_list[1][0][0]
+    # User received initial status message, which was edited in-place into the final result (single status message per task)
+    assert message.answer.call_count == 1
+    wait_msg = message.answer.return_value
+    assert wait_msg.edit_text.called
+    answer_text = wait_msg.edit_text.call_args[0][0]
     assert "Oatmeal" in answer_text
     assert "150 kcal" in answer_text
 
@@ -489,5 +493,7 @@ async def test_process_food_correction_success(mock_state, mock_gemini_client, m
     
     mock_state.update_data.assert_called_once()
     mock_state.set_state.assert_called_once_with(FoodLoggingState.waiting_for_confirm)
-    message.answer.assert_called()
+    wait_msg = message.answer.return_value
+    assert not wait_msg.edit_text.called
     assert "Estimated Totals" in message.answer.call_args[0][0]
+    wait_msg.delete.assert_awaited_once()

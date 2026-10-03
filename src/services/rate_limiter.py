@@ -623,6 +623,7 @@ async def process_next_queue_item(bot: Bot, storage):
             return
         await db.refresh(item)
 
+        logger.info("Processing queue task #%s (%s) for user %s (attempt %s)", item.id, item.request_type, item.user_id, item.retry_count + 1)
         try:
             success = await execute_queued_item(bot, storage, db, item)
             if success:
@@ -630,10 +631,12 @@ async def process_next_queue_item(bot: Bot, storage):
                 item.processed_at = datetime.now(UTC).replace(tzinfo=None)
                 item.error_message = None
                 item.last_error = None
+                logger.info("Queue task #%s (%s) for user %s completed successfully", item.id, item.request_type, item.user_id)
             else:
                 item.status = "failed"
                 item.processed_at = datetime.now(UTC).replace(tzinfo=None)
                 item.error_message = "Execution returned failure"
+                logger.warning("Queue task #%s (%s) for user %s returned failure", item.id, item.request_type, item.user_id)
                 await _notify_item_failed(bot, db, item)
         except AIQuotaExceeded as exc:
             item.status = "pending"

@@ -124,7 +124,7 @@ async def call_gemini_with_retry(
     config=None,
     model: Optional[str] = None,
     max_retries=4,
-    initial_delay=0.1,
+    initial_delay=1.0,
     backoff_factor=2.0,
     user_id=None,
     request_type="ai",

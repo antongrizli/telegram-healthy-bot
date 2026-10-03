@@ -80,6 +80,8 @@ async def check_worker_watchdog(bot: Bot):
 
 def configure_scheduler_logging():
     # Keep failures and missed-run warnings immediate; suppress routine INFO noise.
+    logging.getLogger("apscheduler").setLevel(logging.WARNING)
+    logging.getLogger("apscheduler.scheduler").setLevel(logging.WARNING)
     logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
     logging.getLogger("apscheduler.executors").setLevel(logging.WARNING)
     scheduler.remove_listener(scheduler_log_summary.record)
@@ -147,7 +149,7 @@ async def send_daily_reminder(bot: Bot, user_id: int):
             from src.handlers.ux import today_keyboard
             await bot.send_message(user_id, msg, reply_markup=today_keyboard(user.language))
         except Exception as e:
-            print(f"Error sending daily reminder to {user_id}: {e}")
+            logger.error("Error sending daily reminder to %s: %s", user_id, e)
 
 async def deliver_saved_report(bot, db, user, delivery):
     """Delivery retries reference an owned snapshot, never another provider call."""
@@ -308,7 +310,7 @@ async def generate_and_send_report_direct(bot: Bot, db: AsyncSession, user, repo
         try:
             await bot.send_message(chat_id=user_id, text=promo_text, reply_markup=markup, parse_mode="Markdown")
         except Exception as e:
-            print(f"Failed to send weekly charts webapp promo to {user_id}: {e}")
+            logger.error("Failed to send weekly charts webapp promo to %s: %s", user_id, e)
 
 
 _in_flight_daily_reports: set[int] = set()
@@ -449,7 +451,7 @@ async def _send_daily_report(bot: Bot, user_id: int, automated: bool = False):
             logger.info("Report delivery forbidden for %s; not queued", user_id)
             return
         except Exception as e:
-            print(f"Error sending daily report to {user_id}: {e}")
+            logger.error("Error sending daily report to %s: %s", user_id, e)
             queue_id = await rate_limiter.add_to_queue(
                 db,
                 user_id=user_id,
@@ -496,7 +498,7 @@ async def send_weekly_report(bot: Bot, user_id: int, automated: bool = False):
             logger.info("Report delivery forbidden for %s; not queued", user_id)
             return
         except Exception as e:
-            print(f"Error sending weekly report to {user_id}: {e}")
+            logger.error("Error sending weekly report to %s: %s", user_id, e)
             queue_id = await rate_limiter.add_to_queue(
                 db,
                 user_id=user_id,
@@ -542,7 +544,7 @@ async def send_monthly_report(bot: Bot, user_id: int, automated: bool = False):
             logger.info("Report delivery forbidden for %s; not queued", user_id)
             return
         except Exception as e:
-            print(f"Error sending monthly report to {user_id}: {e}")
+            logger.error("Error sending monthly report to %s: %s", user_id, e)
             queue_id = await rate_limiter.add_to_queue(
                 db,
                 user_id=user_id,
@@ -585,7 +587,7 @@ async def check_daily_streaks_and_targets(bot: Bot, user_id: int):
             try:
                 await bot.send_message(user_id, msg, parse_mode="Markdown")
             except Exception as e:
-                print(f"Failed to send daily streak achievement unlock message to {user_id}: {e}")
+                logger.error("Failed to send daily streak achievement unlock message to %s: %s", user_id, e)
 
 async def send_morning_briefing_job(bot: Bot, user_id: int):
     async with AsyncSessionLocal() as db:
@@ -606,7 +608,7 @@ async def send_morning_briefing_job(bot: Bot, user_id: int):
         try:
             await bot.send_message(user_id, msg, reply_markup=markup, parse_mode="Markdown")
         except Exception as e:
-            print(f"Failed to send morning briefing to {user_id}: {e}")
+            logger.error("Failed to send morning briefing to %s: %s", user_id, e)
 
 async def send_weekly_health_card_job(bot: Bot, user_id: int):
     async with AsyncSessionLocal() as db:
@@ -638,7 +640,7 @@ async def send_weekly_health_card_job(bot: Bot, user_id: int):
         try:
             await bot.send_message(user_id, msg, reply_markup=markup, parse_mode="Markdown")
         except Exception as e:
-            print(f"Failed to send weekly health card to {user_id}: {e}")
+            logger.error("Failed to send weekly health card to %s: %s", user_id, e)
 
 async def reset_weekly_freezes_global():
     async with AsyncSessionLocal() as db:

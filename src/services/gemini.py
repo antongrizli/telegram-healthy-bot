@@ -7,16 +7,34 @@ from google import genai
 from google.genai import types
 from src.config import settings
 
+import re
+
 logger = logging.getLogger(__name__)
+
+def is_gemma_model(model_name: Optional[str] = None) -> bool:
+    name = (model_name or settings.GEMINI_MODEL or "").lower()
+    return "gemma" in name
 
 def extract_json(text: str) -> str:
     if not text:
         return ""
-    start_idx = text.find("{")
-    end_idx = text.rfind("}")
+    # Strip thinking / reasoning blocks (e.g. <thought>...</thought> or <think>...</think>)
+    cleaned = re.sub(r'<(thought|think)>.*?</\1>', '', text, flags=re.DOTALL | re.IGNORECASE).strip()
+    
+    # If wrapped in markdown code fences, extract inner text
+    fence_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', cleaned)
+    if fence_match:
+        cand = fence_match.group(1).strip()
+        start_cand = cand.find("{")
+        end_cand = cand.rfind("}")
+        if start_cand != -1 and end_cand != -1 and end_cand > start_cand:
+            return cand[start_cand:end_cand + 1]
+
+    start_idx = cleaned.find("{")
+    end_idx = cleaned.rfind("}")
     if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-        return text[start_idx:end_idx + 1]
-    return text.strip()
+        return cleaned[start_idx:end_idx + 1]
+    return cleaned.strip()
 
 # 1. Pydantic Models for Structured Outputs
 class FoodItem(BaseModel):
@@ -31,10 +49,10 @@ class FoodItem(BaseModel):
 class FoodAnalysisResponse(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
     food_items: List[FoodItem] = Field(min_length=1, max_length=100, description="List of all identified food items in the input")
-    total_calories: int = Field(ge=0, le=20000, description="Sum of all calories in kcal")
-    total_protein: float = Field(ge=0, le=2000, description="Sum of all protein in grams")
-    total_fat: float = Field(ge=0, le=2000, description="Sum of all fat in grams")
-    total_carb: float = Field(ge=0, le=2000, description="Sum of all carbohydrates in grams")
+    total_calories: int = Field(default=0, ge=0, le=20000, description="Sum of all calories in kcal")
+    total_protein: float = Field(default=0.0, ge=0, le=2000, description="Sum of all protein in grams")
+    total_fat: float = Field(default=0.0, ge=0, le=2000, description="Sum of all fat in grams")
+    total_carb: float = Field(default=0.0, ge=0, le=2000, description="Sum of all carbohydrates in grams")
 
     @model_validator(mode="after")
     def recompute_totals(self):
@@ -45,6 +63,43 @@ class FoodAnalysisResponse(BaseModel):
                 raise ValueError("Meal totals exceed supported bounds")
             setattr(self, total, value if field == 'calories' else round(value, 3))
         return self
+
+def parse_food_analysis_data(raw_text: str) -> FoodAnalysisResponse:
+    """Safely extracts, normalizes, and validates FoodAnalysisResponse from model text output."""
+    raw_json = extract_json(raw_text)
+    if not raw_json:
+        raise ValueError("Empty response received from AI model")
+
+    # Clean potential trailing commas before closing braces/brackets
+    cleaned_json = re.sub(r',\s*([}\]])', r'\1', raw_json)
+    try:
+        data = json.loads(cleaned_json)
+    except Exception:
+        data = json.loads(raw_json)
+
+    if not isinstance(data, dict):
+        raise ValueError(f"Expected JSON object, got {type(data).__name__}")
+
+    # Normalize alternative key names from open-weights models
+    if "food_items" not in data:
+        for alias in ("items", "meals", "food", "dishes", "foodItems"):
+            if alias in data and isinstance(data[alias], list):
+                data["food_items"] = data[alias]
+                break
+
+    if "food_items" in data and isinstance(data["food_items"], list):
+        for item in data["food_items"]:
+            if isinstance(item, dict):
+                if "proteins" in item and "protein" not in item:
+                    item["protein"] = item["proteins"]
+                if "fats" in item and "fat" not in item:
+                    item["fat"] = item["fats"]
+                if "carbs" in item and "carb" not in item:
+                    item["carb"] = item["carbs"]
+                if "weight" in item and "portion" not in item:
+                    item["portion"] = str(item["weight"])
+
+    return FoodAnalysisResponse(**data)
 
 # Initialize the Gemini Client
 import httpx
@@ -94,6 +149,23 @@ async def call_gemini_with_retry(
             return response
         except Exception as e:
             err_str = str(e)
+            # Automatic fallback if the model rejects structured schema or mime type
+            if ("400" in err_str or "INVALID_ARGUMENT" in err_str) and config is not None:
+                if getattr(config, "response_schema", None) is not None:
+                    logger.warning(
+                        f"Model {model} rejected response_schema with 400 INVALID_ARGUMENT. "
+                        "Retrying without response_schema..."
+                    )
+                    config.response_schema = None
+                    continue
+                if getattr(config, "response_mime_type", None) is not None:
+                    logger.warning(
+                        f"Model {model} rejected response_mime_type with 400 INVALID_ARGUMENT. "
+                        "Retrying without response_mime_type..."
+                    )
+                    config.response_mime_type = None
+                    continue
+
             is_transient = (
                 "503" in err_str or 
                 "UNAVAILABLE" in err_str or 
@@ -122,7 +194,7 @@ async def analyze_food_input(
     user_id=None,
 ) -> Optional[FoodAnalysisResponse]:
     """
-    Sends text or image food input to Gemini 2.5 Flash and returns structured nutritional facts.
+    Sends text or image food input to Gemini or Gemma and returns structured nutritional facts.
     """
     lang_names = {
         "en": "English",
@@ -138,7 +210,25 @@ async def analyze_food_input(
         f"You are a professional nutrition expert. Analyze the food described in the text or image. "
         f"Estimate the name, portion size, calories, protein, fat, and carbs. "
         f"Provide the response in the language: {lang_name}. "
-        f"Make sure to sum up the values correctly."
+        f"Make sure to sum up the values correctly.\n\n"
+        f"CRITICAL FORMAT REQUIREMENT:\n"
+        f"Output ONLY a single valid JSON object adhering to this schema (no extra explanation, no thinking tags, no markdown codeblocks outside the JSON):\n"
+        f"{{\n"
+        f'  "food_items": [\n'
+        f'    {{\n'
+        f'      "name": "food item name in {lang_name}",\n'
+        f'      "portion": "portion size (e.g. 150g or 1 cup)",\n'
+        f'      "calories": 140,\n'
+        f'      "protein": 12.0,\n'
+        f'      "fat": 10.0,\n'
+        f'      "carb": 1.0\n'
+        f'    }}\n'
+        f'  ],\n'
+        f'  "total_calories": 140,\n'
+        f'  "total_protein": 12.0,\n'
+        f'  "total_fat": 10.0,\n'
+        f'  "total_carb": 1.0\n'
+        f"}}"
     )
     
     contents = []
@@ -161,18 +251,18 @@ async def analyze_food_input(
         
     contents.append(prompt)
     
+    target_model = settings.GEMINI_MODEL
+    config_args = {"temperature": 0.2, "response_mime_type": "application/json"}
+    if not is_gemma_model(target_model):
+        config_args["response_schema"] = FoodAnalysisResponse
+
     response = await call_gemini_with_retry(
         user_id=user_id, request_type="analyze_food_input",
         contents=contents,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=FoodAnalysisResponse,
-            temperature=0.2
-        )
+        model=target_model,
+        config=types.GenerateContentConfig(**config_args)
     )
-    raw_json = extract_json(response.text)
-    data = json.loads(raw_json)
-    return FoodAnalysisResponse(**data)
+    return parse_food_analysis_data(response.text)
 
 async def adjust_food_analysis(
     original_data: dict,
@@ -199,21 +289,39 @@ async def adjust_food_analysis(
         f"The user has now provided the following corrections:\n"
         f"'{correction_text}'\n\n"
         f"Please adjust the food items list, portion sizes, calories, and macros based on these corrections. "
-        f"Provide the output in the language: {lang_name}."
+        f"Provide the output in the language: {lang_name}.\n\n"
+        f"CRITICAL FORMAT REQUIREMENT:\n"
+        f"Output ONLY a single valid JSON object adhering to this schema (no extra explanation, no thinking tags, no markdown codeblocks outside the JSON):\n"
+        f"{{\n"
+        f'  "food_items": [\n'
+        f'    {{\n'
+        f'      "name": "food item name in {lang_name}",\n'
+        f'      "portion": "portion size (e.g. 150g or 1 cup)",\n'
+        f'      "calories": 140,\n'
+        f'      "protein": 12.0,\n'
+        f'      "fat": 10.0,\n'
+        f'      "carb": 1.0\n'
+        f'    }}\n'
+        f'  ],\n'
+        f'  "total_calories": 140,\n'
+        f'  "total_protein": 12.0,\n'
+        f'  "total_fat": 10.0,\n'
+        f'  "total_carb": 1.0\n'
+        f"}}"
     )
     
+    target_model = settings.GEMINI_MODEL
+    config_args = {"temperature": 0.2, "response_mime_type": "application/json"}
+    if not is_gemma_model(target_model):
+        config_args["response_schema"] = FoodAnalysisResponse
+
     response = await call_gemini_with_retry(
         user_id=user_id, request_type="adjust_food_analysis",
         contents=[prompt],
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=FoodAnalysisResponse,
-            temperature=0.2
-        )
+        model=target_model,
+        config=types.GenerateContentConfig(**config_args)
     )
-    raw_json = extract_json(response.text)
-    data = json.loads(raw_json)
-    return FoodAnalysisResponse(**data)
+    return parse_food_analysis_data(response.text)
 
 async def generate_report(
     profile: dict,

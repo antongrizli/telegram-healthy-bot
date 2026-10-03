@@ -120,3 +120,94 @@ async def test_analyze_food_input_multiple_images(mock_gemini_client):
     contents = call_args[1]["contents"]
     # We expect 2 image parts + 1 text description + 1 prompt = 4 items in contents
     assert len(contents) == 4
+
+
+async def test_gemma_model_omits_response_schema(mock_gemini_client, monkeypatch):
+    monkeypatch.setattr(gemini.settings, "GEMINI_MODEL", "gemma-4-31b-it")
+    mock_response = MagicMock()
+    mock_response.text = (
+        '{"food_items": [{"name": "Apple", "portion": "1 apple", "calories": 95, "protein": 0.5, "fat": 0.3, "carb": 25.0}],'
+        ' "total_calories": 95, "total_protein": 0.5, "total_fat": 0.3, "total_carb": 25.0}'
+    )
+    mock_gemini_client.models.generate_content.return_value = mock_response
+
+    res = await gemini.analyze_food_input(text_description="1 apple")
+    assert res is not None
+    assert res.food_items[0].name == "Apple"
+
+    call_args = mock_gemini_client.models.generate_content.call_args
+    config = call_args[1].get("config")
+    # For Gemma models, response_schema must NOT be sent to avoid 400 INVALID_ARGUMENT
+    assert getattr(config, "response_schema", None) is None
+    assert getattr(config, "response_mime_type", None) == "application/json"
+
+
+async def test_gemma_thought_tags_and_markdown_stripping(mock_gemini_client):
+    mock_response = MagicMock()
+    mock_response.text = (
+        "<thought>\n"
+        "Let's calculate {nutrition}: 1 banana has about 105 kcal.\n"
+        "</thought>\n"
+        "```json\n"
+        "{\n"
+        '  "food_items": [{"name": "Banana", "portion": "1 medium", "calories": 105, "protein": 1.3, "fat": 0.4, "carb": 27.0}],\n'
+        '  "total_calories": 105, "total_protein": 1.3, "total_fat": 0.4, "total_carb": 27.0\n'
+        "}\n"
+        "```"
+    )
+    mock_gemini_client.models.generate_content.return_value = mock_response
+
+    res = await gemini.analyze_food_input(text_description="1 banana")
+    assert res is not None
+    assert res.food_items[0].name == "Banana"
+    assert res.total_calories == 105
+
+
+async def test_gemma_normalization_and_recomputing_totals(mock_gemini_client):
+    mock_response = MagicMock()
+    # Missing total_calories and using 'items', 'proteins', 'fats', 'carbs'
+    mock_response.text = (
+        '{\n'
+        '  "items": [\n'
+        '    {"name": "Oatmeal", "portion": "1 bowl", "calories": 150, "proteins": 5.0, "fats": 2.5, "carbs": 27.0},\n'
+        '    {"name": "Berries", "portion": "50g", "calories": 40, "proteins": 0.5, "fats": 0.2, "carbs": 9.0}\n'
+        '  ]\n'
+        '}'
+    )
+    mock_gemini_client.models.generate_content.return_value = mock_response
+
+    res = await gemini.analyze_food_input(text_description="Oatmeal with berries")
+    assert res is not None
+    assert len(res.food_items) == 2
+    assert res.food_items[0].name == "Oatmeal"
+    assert res.food_items[0].protein == 5.0
+    # Totals recomputed automatically
+    assert res.total_calories == 190
+    assert res.total_protein == 5.5
+
+
+async def test_call_gemini_400_invalid_argument_fallback(mock_gemini_client):
+    mock_response = MagicMock()
+    mock_response.text = '{"food_items": [{"name": "Egg", "portion": "1", "calories": 70, "protein": 6.0, "fat": 5.0, "carb": 0.5}]}'
+
+    attempt = 0
+    def side_effect(*args, **kwargs):
+        nonlocal attempt
+        attempt += 1
+        config = kwargs.get("config")
+        if attempt == 1 and getattr(config, "response_schema", None) is not None:
+            raise Exception("400 INVALID_ARGUMENT. Request contains an invalid argument.")
+        return mock_response
+
+    mock_gemini_client.models.generate_content.side_effect = side_effect
+
+    from google.genai import types
+    config = types.GenerateContentConfig(response_schema=gemini.FoodAnalysisResponse, response_mime_type="application/json")
+    res = await gemini.call_gemini_with_retry(
+        contents=["test"],
+        config=config,
+        model="some-model"
+    )
+    assert res == mock_response
+    assert config.response_schema is None
+

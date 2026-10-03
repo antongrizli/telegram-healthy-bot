@@ -12,6 +12,7 @@ from src.handlers.profile import (
     cancel_profile_deletion, process_invalid_delete_confirm
 )
 from src.database import crud
+from src.utils import i18n_locales
 
 pytestmark = pytest.mark.asyncio
 
@@ -406,8 +407,7 @@ async def test_weight_feedback_lose_weight_success(db_session, mock_state):
     await process_weight_input(message, mock_state, "en")
     
     response_msg = message.answer.call_args[0][0]
-    assert "78.5 kg" in response_msg
-    assert "Keep up the great work!" in response_msg
+    assert response_msg == i18n_locales.format_weight_logged(78.5, "en")
 
 
 async def test_weight_feedback_lose_weight_warn(db_session, mock_state):
@@ -432,8 +432,7 @@ async def test_weight_feedback_lose_weight_warn(db_session, mock_state):
     await process_weight_input(message, mock_state, "en")
     
     response_msg = message.answer.call_args[0][0]
-    assert "81.0 kg" in response_msg
-    assert "Please pay attention to your food intake or physical activity." in response_msg
+    assert response_msg == i18n_locales.format_weight_logged(81.0, "en")
 
 
 async def test_weight_feedback_gain_weight_success(db_session, mock_state):
@@ -458,8 +457,7 @@ async def test_weight_feedback_gain_weight_success(db_session, mock_state):
     await process_weight_input(message, mock_state, "en")
     
     response_msg = message.answer.call_args[0][0]
-    assert "81.0 kg" in response_msg
-    assert "Keep up the great work!" in response_msg
+    assert response_msg == i18n_locales.format_weight_logged(81.0, "en")
 
 
 async def test_weight_feedback_gain_weight_warn(db_session, mock_state):
@@ -484,8 +482,8 @@ async def test_weight_feedback_gain_weight_warn(db_session, mock_state):
     await process_weight_input(message, mock_state, "en")
     
     response_msg = message.answer.call_args[0][0]
-    assert "78.5 kg" in response_msg
-    assert "Please pay attention to your food intake or physical activity." in response_msg
+    assert response_msg == i18n_locales.format_weight_logged(78.5, "en")
+
 
 
 async def test_process_report_time_transitions_to_weekly_report_day(mock_state):

@@ -123,7 +123,9 @@ async def view_report_details(message: Message, user_language: str, db_user):
     if not report:
         await message.answer(i18n_locales.get_text('ux_invalid', user_language))
         return
-    await message.answer(report.payload['text'], parse_mode=None)
+    from src.utils.report_format import report_parts
+    for part in report_parts(report.payload['text']):
+        await message.answer(part, parse_mode=None)
 
 @recovery_router.message(F.text.in_(i18n_locales.get_all_translations("btn_my_progress")))
 @router.message(Command("streaks"))
@@ -160,13 +162,13 @@ async def cmd_back_to_main_menu(message: Message, state: FSMContext, user_langua
     await state.clear()
     is_admin = db_user.telegram_id in settings.ADMIN_USER_IDS or db_user.is_admin if db_user else False
     await message.answer(
-        i18n_locales.get_text('ux_quick_food', user_language),
+        i18n_locales.get_text('return_to_main_menu', user_language),
         reply_markup=reply.get_main_menu(user_language, is_admin=is_admin)
     )
 
 
-@recovery_router.message(Command("cancel"))
-@recovery_router.message(F.text.in_(i18n_locales.get_all_translations('btn_cancel')))
+@router.message(Command("cancel"))
+@router.message(F.text.in_(i18n_locales.get_all_translations('btn_cancel')))
 async def recover_menu(message: Message, state: FSMContext, user_language: str, db_user):
     """Reset navigation without deleting durable meal drafts."""
     if not db_user or db_user.is_blocked:

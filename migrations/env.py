@@ -10,10 +10,11 @@ from alembic import context
 # access to the values within the .ini file in use.
 config = context.config
 
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+# A caller that supplies its own connection (the application's startup upgrade)
+# must keep its logging configuration, so only the CLI configures logging.
+_external_connection = config.attributes.get("connection")
+if config.config_file_name is not None and _external_connection is None:
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # add your model's MetaData object here
 from src.database.models import Base
@@ -61,5 +62,7 @@ async def run_migrations_online() -> None:
 
 if context.is_offline_mode():
     run_migrations_offline()
+elif _external_connection is not None:
+    do_run_migrations(_external_connection)
 else:
     asyncio.run(run_migrations_online())

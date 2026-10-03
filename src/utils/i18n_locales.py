@@ -111,6 +111,9 @@ LOCALES = {
         "food_correction_prompt": "Please describe what is incorrect (e.g. 'Actually it was 200g of potatoes and no oil'):",
         "food_logged": "✅ Food logged successfully!",
         "food_cancelled": "❌ Food log cancelled.",
+        "weight_cancelled": "❌ Weight logging cancelled.",
+        "water_cancelled": "❌ Water logging cancelled.",
+        "action_cancelled": "❌ Action cancelled.",
         "weight_prompt": "Please write your current weight in kg (e.g., 73.2):",
         "weight_logged": "⚖️ Weight logged: *{weight} kg*.\n{weight_diff_str}\n{feedback_msg}",
         "weight_feedback_positive": "Keep up the great work!",
@@ -358,6 +361,9 @@ LOCALES = {
         "food_correction_prompt": "Опишите, что именно не так (например, 'На самом деле там было 200г картошки и без масла'):",
         "food_logged": "✅ Еда успешно записана!",
         "food_cancelled": "❌ Запись еды отменена.",
+        "weight_cancelled": "❌ Ввод веса отменён.",
+        "water_cancelled": "❌ Ввод воды отменён.",
+        "action_cancelled": "❌ Действие отменено.",
         "weight_prompt": "Пожалуйста, введите ваш текущий вес в кг (например, 73.2):",
         "weight_logged": "⚖️ Вес записан: *{weight} кг*.\n{weight_diff_str}\n{feedback_msg}",
         "weight_feedback_positive": "Продолжайте в том же духе!",
@@ -605,6 +611,9 @@ LOCALES = {
         "food_correction_prompt": "Опишіть, що саме неправильно (наприклад, 'Насправді було 200г картоплі та без олії'):",
         "food_logged": "✅ Їжу успішно записано!",
         "food_cancelled": "❌ Запис їжі скасовано.",
+        "weight_cancelled": "❌ Введення ваги скасовано.",
+        "water_cancelled": "❌ Введення води скасовано.",
+        "action_cancelled": "❌ Дію скасовано.",
         "weight_prompt": "Будь ласка, введіть вашу поточну вагу в кг (наприклад, 73.2):",
         "weight_logged": "⚖️ Вагу записано: *{weight} кг*.\n{weight_diff_str}\n{feedback_msg}",
         "weight_feedback_positive": "Продовжуйте в тому ж дусі!",
@@ -846,6 +855,9 @@ LOCALES = {
         "food_correction_prompt": "Opisz, co jest niepoprawne (np. 'W rzeczywistości to było 200g ziemniaków i bez oleju'):",
         "food_logged": "✅ Posiłek zapisany pomyślnie!",
         "food_cancelled": "❌ Zapisywanie posiłku anulowane.",
+        "weight_cancelled": "❌ Rejestracja wagi anulowana.",
+        "water_cancelled": "❌ Rejestracja wody anulowana.",
+        "action_cancelled": "❌ Działanie anulowane.",
         "weight_prompt": "Wpisz swoją aktualną wagę w kg (np. 73.2):",
         "weight_logged": "⚖️ Waga zapisana: *{weight} kg*.\n{weight_diff_str}\n{feedback_msg}",
         "weight_feedback_positive": "Tak trzymaj!",
@@ -1087,6 +1099,9 @@ LOCALES = {
         "food_correction_prompt": "Bitte beschreibe, was nicht stimmt (z. B. 'Eigentlich waren es 200g Kartoffeln und kein Öl'):",
         "food_logged": "✅ Essen erfolgreich eingetragen!",
         "food_cancelled": "❌ Essenseintrag abgebrochen.",
+        "weight_cancelled": "❌ Gewichtseingabe abgebrochen.",
+        "water_cancelled": "❌ Wassereingabe abgebrochen.",
+        "action_cancelled": "❌ Vorgang abgebrochen.",
         "weight_prompt": "Bitte gib dein aktuelles Gewicht in kg ein (z. B. 73.2):",
         "weight_logged": "⚖️ Gewicht eingetragen: *{weight} kg*.\n{weight_diff_str}\n{feedback_msg}",
         "weight_feedback_positive": "Mach weiter so!",
@@ -1328,6 +1343,9 @@ LOCALES = {
         "food_correction_prompt": "Lütfen neyin yanlış olduğunu açıklayın (örn. 'Aslında 200g patatesti ve yağ yoktu'):",
         "food_logged": "✅ Yemek başarıyla kaydedildi!",
         "food_cancelled": "❌ Yemek kaydı iptal edildi.",
+        "weight_cancelled": "❌ Kilo kaydı iptal edildi.",
+        "water_cancelled": "❌ Su kaydı iptal edildi.",
+        "action_cancelled": "❌ İşlem iptal edildi.",
         "weight_prompt": "Lütfen güncel kilonuzu kg olarak yazın (örn. 73.2):",
         "weight_logged": "⚖️ Kilo kaydedildi: *{weight} kg*.\n{weight_diff_str}\n{feedback_msg}",
         "weight_feedback_positive": "Harika çalışmaya devam edin!",
@@ -1569,6 +1587,9 @@ LOCALES = {
         "food_correction_prompt": "Por favor, describe qué es incorrecto (ej. 'En realidad eran 200g de patatas y nada de aceite'):",
         "food_logged": "✅ ¡Comida registrada con éxito!",
         "food_cancelled": "❌ Registro de comida cancelado.",
+        "weight_cancelled": "❌ Registro de peso cancelado.",
+        "water_cancelled": "❌ Registro de agua cancelado.",
+        "action_cancelled": "❌ Acción cancelada.",
         "weight_prompt": "Por favor, escribe tu peso actual en kg (ej. 73.2):",
         "weight_logged": "⚖️ Peso registrado: *{weight} kg*.\n{weight_diff_str}\n{feedback_msg}",
         "weight_feedback_positive": "¡Sigue así!",
@@ -1938,7 +1959,7 @@ install_ux_copy(LOCALES)
 def get_text(key: str, lang: str = "en", **kwargs) -> str:
     lang = lang if lang in LOCALES else "en"
     if key == 'session_recovery':
-        return LOCALES[lang]['ux_recovery'].format(add=LOCALES[lang]['ux_add'], pending=LOCALES[lang]['btn_pending_meals'], food=LOCALES[lang]['btn_log_food'])
+        return LOCALES[lang]['ux_recovery'].format(add=LOCALES[lang]['ux_add'], pending=LOCALES[lang]['btn_pending_meals'])
     if key == 'help_text':
         d = LOCALES[lang]
         return '\n\n'.join([d['ux_quick_food'], d['ux_estimate'],
@@ -1960,6 +1981,200 @@ def get_all_translations(key: str) -> list[str]:
     for locale_dict in LOCALES.values():
         translations.add(locale_dict.get(key, LOCALES["en"].get(key, key)))
     return list(translations)
+
+
+_food_logged_formats = {
+    "en": {
+        "food_logged_breakfast": "✅ Breakfast logged · {calories} kcal",
+        "food_logged_lunch": "✅ Lunch logged · {calories} kcal",
+        "food_logged_dinner": "✅ Dinner logged · {calories} kcal",
+        "food_logged_snack": "✅ Snack logged · {calories} kcal",
+        "food_logged_food": "✅ Food logged · {calories} kcal",
+        "ux_cannot_remove_last": "Cannot remove the only item. Use Cancel to discard the meal.",
+    },
+    "ru": {
+        "food_logged_breakfast": "✅ Завтрак записан · {calories} ккал",
+        "food_logged_lunch": "✅ Обед записан · {calories} ккал",
+        "food_logged_dinner": "✅ Ужин записан · {calories} ккал",
+        "food_logged_snack": "✅ Перекус записан · {calories} ккал",
+        "food_logged_food": "✅ Еда записана · {calories} ккал",
+        "ux_cannot_remove_last": "Нельзя удалить единственный продукт. Нажмите «Отмена», чтобы отменить запись.",
+    },
+    "uk": {
+        "food_logged_breakfast": "✅ Сніданок записано · {calories} ккал",
+        "food_logged_lunch": "✅ Обід записано · {calories} ккал",
+        "food_logged_dinner": "✅ Вечерю записано · {calories} ккал",
+        "food_logged_snack": "✅ Перекус записано · {calories} ккал",
+        "food_logged_food": "✅ Їжу записано · {calories} ккал",
+        "ux_cannot_remove_last": "Не можна видалити єдиний продукт. Натисніть «Скасувати», щоб скасувати запис.",
+    },
+    "pl": {
+        "food_logged_breakfast": "✅ Śniadanie zapisane · {calories} kcal",
+        "food_logged_lunch": "✅ Obiad zapisany · {calories} kcal",
+        "food_logged_dinner": "✅ Kolacja zapisana · {calories} kcal",
+        "food_logged_snack": "✅ Przekąska zapisana · {calories} kcal",
+        "food_logged_food": "✅ Posiłek zapisany · {calories} kcal",
+        "ux_cannot_remove_last": "Nie można usunąć jedynego produktu. Użyj Anuluj, aby odrzucić posiłek.",
+    },
+    "de": {
+        "food_logged_breakfast": "✅ Frühstück eingetragen · {calories} kcal",
+        "food_logged_lunch": "✅ Mittagessen eingetragen · {calories} kcal",
+        "food_logged_dinner": "✅ Abendessen eingetragen · {calories} kcal",
+        "food_logged_snack": "✅ Snack eingetragen · {calories} kcal",
+        "food_logged_food": "✅ Mahlzeit eingetragen · {calories} kcal",
+        "ux_cannot_remove_last": "Das einzige Produkt kann nicht entfernt werden. Nutze Abbrechen, um die Mahlzeit zu verwerfen.",
+    },
+    "tr": {
+        "food_logged_breakfast": "✅ Kahvaltı kaydedildi · {calories} kcal",
+        "food_logged_lunch": "✅ Öğle Yemeği kaydedildi · {calories} kcal",
+        "food_logged_dinner": "✅ Akşam Yemeği kaydedildi · {calories} kcal",
+        "food_logged_snack": "✅ Atıştırmalık kaydedildi · {calories} kcal",
+        "food_logged_food": "✅ Yemek kaydedildi · {calories} kcal",
+        "ux_cannot_remove_last": "Tek öğe silinemez. Öğünü silmek için İptal seçeneğini kullanın.",
+    },
+    "es": {
+        "food_logged_breakfast": "✅ Desayuno registrado · {calories} kcal",
+        "food_logged_lunch": "✅ Almuerzo registrado · {calories} kcal",
+        "food_logged_dinner": "✅ Cena registrada · {calories} kcal",
+        "food_logged_snack": "✅ Merienda registrada · {calories} kcal",
+        "food_logged_food": "✅ Comida registrada · {calories} kcal",
+        "ux_cannot_remove_last": "No se puede eliminar el único producto. Usa Cancelar para descartar la comida.",
+    },
+}
+for _lang, _formats in _food_logged_formats.items():
+    LOCALES[_lang].update(_formats)
+
+
+_water_logged_formats = {
+    "en": {"water_logged": "✅ Water +{added} ml · today {total} ml"},
+    "ru": {"water_logged": "✅ Вода +{added} мл · сегодня {total} мл"},
+    "uk": {"water_logged": "✅ Вода +{added} мл · сьогодні {total} мл"},
+    "pl": {"water_logged": "✅ Woda +{added} ml · dzisiaj {total} ml"},
+    "de": {"water_logged": "✅ Wasser +{added} ml · heute {total} ml"},
+    "tr": {"water_logged": "✅ Su +{added} ml · bugün {total} ml"},
+    "es": {"water_logged": "✅ Agua +{added} ml · hoy {total} ml"},
+}
+for _lang, _formats in _water_logged_formats.items():
+    LOCALES[_lang].update(_formats)
+
+
+_weight_logged_formats = {
+    "en": {"weight_logged": "✅ Weight {weight} kg"},
+    "ru": {"weight_logged": "✅ Вес {weight} кг"},
+    "uk": {"weight_logged": "✅ Вага {weight} кг"},
+    "pl": {"weight_logged": "✅ Waga {weight} kg"},
+    "de": {"weight_logged": "✅ Gewicht {weight} kg"},
+    "tr": {"weight_logged": "✅ Kilo {weight} kg"},
+    "es": {"weight_logged": "✅ Peso {weight} kg"},
+}
+for _lang, _formats in _weight_logged_formats.items():
+    LOCALES[_lang].update(_formats)
+
+
+_ux08_09_formats = {
+    "en": {
+        "btn_settings": "⚙️ Settings",
+        "btn_open_settings": "⚙️ Open Settings",
+        "btn_charts": "📊 Charts",
+        "btn_open_charts": "📊 Open Charts",
+    },
+    "ru": {
+        "btn_settings": "⚙️ Настройки",
+        "btn_open_settings": "⚙️ Открыть настройки",
+        "btn_charts": "📊 Графики",
+        "btn_open_charts": "📊 Открыть графики",
+    },
+    "uk": {
+        "btn_settings": "⚙️ Налаштування",
+        "btn_open_settings": "⚙️ Відкрити налаштування",
+        "btn_charts": "📊 Графіки",
+        "btn_open_charts": "📊 Відкрити графіки",
+    },
+    "pl": {
+        "btn_settings": "⚙️ Ustawienia",
+        "btn_open_settings": "⚙️ Otwórz ustawienia",
+        "btn_charts": "📊 Wykresy",
+        "btn_open_charts": "📊 Otwórz wykresy",
+    },
+    "de": {
+        "btn_settings": "⚙️ Einstellungen",
+        "btn_open_settings": "⚙️ Einstellungen öffnen",
+        "btn_charts": "📊 Diagramme",
+        "btn_open_charts": "📊 Diagramme öffnen",
+    },
+    "tr": {
+        "btn_settings": "⚙️ Ayarlar",
+        "btn_open_settings": "⚙️ Ayarları aç",
+        "btn_charts": "📊 Grafikler",
+        "btn_open_charts": "📊 Grafikleri aç",
+    },
+    "es": {
+        "btn_settings": "⚙️ Ajustes",
+        "btn_open_settings": "⚙️ Abrir ajustes",
+        "btn_charts": "📊 Gráficos",
+        "btn_open_charts": "📊 Abrir gráficos",
+    },
+}
+for _lang, _formats in _ux08_09_formats.items():
+    LOCALES[_lang].update(_formats)
+
+
+def format_food_logged(meal_type: str | None, calories: float | int | None, lang: str = "ru") -> str:
+    lang = "uk" if lang == "ua" else (lang if lang in LOCALES else "en")
+    mt = (meal_type or "food").strip().lower()
+    cal = int(round(calories or 0))
+    key = f"food_logged_{mt}"
+    if key not in LOCALES[lang]:
+        key = "food_logged_food"
+    return get_text(key, lang, calories=cal)
+
+
+def format_water_logged(added: int | float, total: int | float, lang: str = "ru") -> str:
+    lang = "uk" if lang == "ua" else (lang if lang in LOCALES else "en")
+    return get_text("water_logged", lang, added=int(round(float(added))), total=int(round(float(total))))
+
+
+def format_weight_value(weight: float | int | str, lang: str = "ru") -> str:
+    lang = "uk" if lang == "ua" else (lang if lang in LOCALES else "en")
+    try:
+        w = float(str(weight).replace(",", "."))
+        w = round(w, 2)
+        if w.is_integer():
+            val = str(int(w))
+        else:
+            val = f"{w:g}"
+    except (ValueError, TypeError):
+        val = str(weight)
+
+    if lang != "en":
+        val = val.replace(".", ",")
+    return val
+
+
+def format_weight_logged(weight: float | int | str, lang: str = "ru") -> str:
+    lang = "uk" if lang == "ua" else (lang if lang in LOCALES else "en")
+    formatted_val = format_weight_value(weight, lang)
+    return get_text("weight_logged", lang, weight=formatted_val)
+
+
+def strip_food_confirmation_question(text: str) -> str:
+    """Strip the confirmation prompt question from the food analysis text."""
+    if not text:
+        return ""
+    questions = [
+        "Do you accept these estimates or need to correct them?",
+        "Вы принимаете эти оценки или хотите исправить их?",
+        "Ви приймаєте ці оцінки чи бажаєте змінити їх?",
+        "Czy akceptujesz te szacunki, czy chcesz je poprawić?",
+        "Akzeptierst du diese Schätzungen oder musst du sie korrigieren?",
+        "Bu tahminleri kabul ediyor musunuz yoksa düzeltmeniz mi gerekiyor?",
+        "¿Aceptas estas estimaciones o necesitas corregirlas?",
+    ]
+    cleaned = text
+    for q in questions:
+        cleaned = cleaned.replace(f"\n\n{q}", "").replace(f"\n{q}", "").replace(q, "")
+    return cleaned.strip()
+
 
 
 for _lang, _text in {
@@ -2009,20 +2224,52 @@ for _lang, _label in {
     LOCALES[_lang]["admin_recent_user_row"] += f"\\n{_label}: {{last_bot_use_at}}"
 
 
-for _lang, _text in {
-    "en": "This keyboard no longer has an active session. The main menu is restored. Use «📝 Log food» to confirm saved meal drafts or start a new meal entry.",
-    "ru": "У этой клавиатуры больше нет активного сеанса. Главное меню восстановлено. Используйте «📝 Записать еду», чтобы подтвердить сохранённые черновики или начать новую запись.",
-    "uk": "Ця клавіатура більше не має активного сеансу. Головне меню відновлено. Використайте «📝 Записати їжу», щоб підтвердити збережені чернетки або почати новий запис.",
-    "pl": "Ta klawiatura nie ma już aktywnej sesji. Przywrócono menu główne. Użyj «📝 Zapisz jedzenie», aby potwierdzić zapisane wersje robocze lub dodać nowy posiłek.",
-    "de": "Diese Tastatur hat keine aktive Sitzung mehr. Das Hauptmenü wurde wiederhergestellt. Nutze «📝 Essen eintragen», um gespeicherte Entwürfe zu bestätigen oder eine neue Mahlzeit zu erfassen.",
-    "tr": "Bu klavyenin etkin oturumu yok. Ana menü geri yüklendi. Kayıtlı öğün taslaklarını onaylamak veya yeni bir öğün girmek için «📝 Yemek kaydet» seçeneğini kullanın.",
-    "es": "Este teclado ya no tiene una sesión activa. Se restauró el menú principal. Usa «📝 Registrar comida» para confirmar los borradores guardados o registrar una nueva comida.",
+
+
+for _lang, _label in {
+    'en': '📥 Food drafts',
+    'ru': '📥 Черновики еды',
+    'uk': '📥 Чернетки їжі',
+    'pl': '📥 Wersje robocze posiłków',
+    'de': '📥 Mahlzeiten-Entwürfe',
+    'tr': '📥 Yemek taslakları',
+    'es': '📥 Borradores de comida'
 }.items():
-    LOCALES[_lang]["session_recovery"] = _text
-
-
-for _lang, _label in {'en': '📥 Pending meals', 'ru': '📥 Неподтверждённая еда', 'uk': '📥 Непідтверджена їжа', 'pl': '📥 Posiłki do potwierdzenia', 'de': '📥 Unbestätigte Mahlzeiten', 'tr': '📥 Onay bekleyen öğünler', 'es': '📥 Comidas pendientes'}.items():
     LOCALES[_lang]["btn_pending_meals"] = _label
+    LOCALES[_lang]["food_drafts_title"] = _label
+
+for _lang, _prompt in {
+    'en': 'Select a draft to view and confirm:',
+    'ru': 'Выберите черновик для просмотра и подтверждения:',
+    'uk': 'Оберіть чернетку для перегляду та підтвердження:',
+    'pl': 'Wybierz wersję roboczą, aby przejrzeć i potwierdzić:',
+    'de': 'Wähle einen Entwurf zum Anzeigen und Bestätigen:',
+    'tr': 'Görüntülemek ve onaylamak için bir taslak seçin:',
+    'es': 'Selecciona un borrador para ver y confirmar:'
+}.items():
+    LOCALES[_lang]["food_drafts_select_prompt"] = _prompt
+
+for _lang, _back in {
+    'en': '◀️ Back to drafts',
+    'ru': '◀️ К списку черновиков',
+    'uk': '◀️ До списку чернеток',
+    'pl': '◀️ Do listy wersji roboczych',
+    'de': '◀️ Zurück zu Entwürfen',
+    'tr': '◀️ Taslak listesine dön',
+    'es': '◀️ Volver a borradores'
+}.items():
+    LOCALES[_lang]["food_drafts_back_to_list"] = _back
+
+for _lang, _close in {
+    'en': '❌ Close',
+    'ru': '❌ Закрыть',
+    'uk': '❌ Закрити',
+    'pl': '❌ Zamknij',
+    'de': '❌ Schließen',
+    'tr': '❌ Kapat',
+    'es': '❌ Cerrar'
+}.items():
+    LOCALES[_lang]["food_drafts_close"] = _close
 
 for _lang, (_new_entry, _prompt) in {
     'en': ('🍽️ New food entry', 'What would you like to do?'),

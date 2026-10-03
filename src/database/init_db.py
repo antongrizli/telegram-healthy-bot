@@ -1,43 +1,40 @@
-"""Idempotent schema upgrades that preserve users' scheduling choices."""
+"""Versioned schema upgrades through Alembic.
+
+The former startup DDL (create_all + idempotent ALTERs) now lives in the baseline
+revision ``migrations/versions/0001_baseline.py``. Add new schema changes as new
+revisions (``alembic revision -m "..."``), never here.
+"""
 import logging
+from pathlib import Path
+
 import sqlalchemy as sa
+from alembic import command
+from alembic.config import Config
 from src.database.connection import engine
-from src.database.models import Base
 
 logger = logging.getLogger(__name__)
 
-STARTUP_COLUMNS = {
-    "users": {
-        "ux_preferences": "JSON NOT NULL DEFAULT '{}'",
-        "timezone": "VARCHAR(50) NOT NULL DEFAULT 'UTC'",
-        "current_streak": "INTEGER NOT NULL DEFAULT 0",
-        "streak_freezes_left": "INTEGER NOT NULL DEFAULT 1",
-        "last_freeze_used_at": "TIMESTAMP",
-        "weekly_report_day": "INTEGER NOT NULL DEFAULT 6",
-        "monthly_report_day": "INTEGER NOT NULL DEFAULT 1",
-    },
-    "food_logs": {"meal_type": "VARCHAR(20) NOT NULL DEFAULT 'food'"},
-    "ai_request_queue": {
-        "retry_count": "INTEGER NOT NULL DEFAULT 0",
-        "next_retry_at": "TIMESTAMP",
-        "last_error": "TEXT",
-    },
-}
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def alembic_config(connection=None) -> Config:
+    config = Config(str(ROOT / "alembic.ini"))
+    # Absolute path: the process working directory is not guaranteed to be the repo root.
+    config.set_main_option("script_location", str(ROOT / "migrations"))
+    if connection is not None:
+        config.attributes["connection"] = connection
+    return config
+
+
+def _upgrade(connection) -> None:
+    command.upgrade(alembic_config(connection), "head")
+
 
 async def init_db():
-    logger.info("Initializing database schema...")
+    logger.info("Upgrading database schema with Alembic...")
     async with engine.begin() as conn:
         if conn.dialect.name == "postgresql":
+            # Serialise concurrent starts; the lock is released when the transaction ends.
             await conn.execute(sa.text("SELECT pg_advisory_xact_lock(72139402)"))
-        await conn.run_sync(Base.metadata.create_all)
-        for table, definitions in STARTUP_COLUMNS.items():
-            existing = await conn.run_sync(
-                lambda c, name=table: {col["name"] for col in sa.inspect(c).get_columns(name)}
-            )
-            for column, definition in definitions.items():
-                if column not in existing:
-                    # Identifiers and definitions come only from the static map above.
-                    await conn.execute(sa.text(f"ALTER TABLE {table} ADD COLUMN {column} {definition}"))
-                    logger.info("Added schema column %s.%s", table, column)
-        # 0 means Monday. Never reinterpret existing values as migration markers.
         # Schema errors propagate instead of starting against a partial schema.
+        await conn.run_sync(_upgrade)

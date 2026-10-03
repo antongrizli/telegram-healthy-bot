@@ -88,7 +88,7 @@ async def test_generate_report_success(mock_gemini_client):
     report = await gemini.generate_report(profile, [], [], "daily", "en")
     
     # Verify report is cleaned for Telegram Markdown V1
-    assert report == "*Daily Report*\n• *Goal:* lose\\_weight"
+    assert report == "Daily Report\n• Goal: lose_weight"
 
 async def test_generate_report_failure(mock_gemini_client):
     mock_gemini_client.models.generate_content.side_effect = Exception("API Error")

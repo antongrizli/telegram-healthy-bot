@@ -4,6 +4,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.models import User, FoodLog, WeightLog, MessageStat, AiRequestLog, AiRequestQueue, Streak, Achievement, HealthCard
 from src.config import settings
 
+EXECUTABLE_QUEUE_TYPES = ('analyze_food_input', 'adjust_food_analysis',
+                          'adjust_meal_edit', 'generate_report', 'medication_photo')
+
+
+async def claim_queue_task(db, task_id):
+    """Compare-and-set prevents executing a task cancelled after selection."""
+    now = datetime.now(UTC).replace(tzinfo=None)
+    result = await db.execute(update(AiRequestQueue).where(
+        AiRequestQueue.id == task_id, AiRequestQueue.status == 'pending',
+        AiRequestQueue.request_type.in_(EXECUTABLE_QUEUE_TYPES),
+        (AiRequestQueue.next_retry_at.is_(None) | (AiRequestQueue.next_retry_at <= now)),
+    ).values(status='processing').execution_options(synchronize_session=False))
+    await db.commit()
+    return result.rowcount == 1
+
+
+async def daily_report_intake_state(db, user_id, date_str):
+    from datetime import date
+    from src.database.models import MedicationIntake
+    rows = (await db.execute(select(MedicationIntake).where(
+        MedicationIntake.user_id == user_id,
+        MedicationIntake.local_date == date.fromisoformat(date_str),
+    ).order_by(MedicationIntake.id))).scalars()
+    return [(row.id, row.reminder_id, row.status) for row in rows]
+
 
 async def ai_quota_usage(db, since, user_id=None):
     """Include pre-upgrade successful calls without double-counting new attempts."""
@@ -134,12 +159,31 @@ async def get_saved_report(db, user_id, report_id):
     return (await db.execute(select(AiRequestQueue).where(AiRequestQueue.id == report_id,
         AiRequestQueue.user_id == user_id, AiRequestQueue.request_type == 'report_snapshot'))).scalar_one_or_none()
 
-async def save_report_snapshot(db, user_id, text):
+async def save_report_snapshot(db, user_id, text, *, commit=True, **metadata):
+    payload = {'text': text, **metadata}
     row = AiRequestQueue(user_id=user_id, chat_id=user_id, request_type='report_snapshot',
-                         status='completed', payload={'text': text})
+                         status='completed', payload=payload)
     db.add(row)
-    await db.commit()
+    if commit:
+        await db.commit()
+    else:
+        await db.flush()
     return row.id
+
+async def get_latest_report_snapshot(db, user_id, report_type='daily'):
+    result = await db.execute(
+        select(AiRequestQueue)
+        .where(
+            AiRequestQueue.user_id == user_id,
+            AiRequestQueue.request_type == 'report_snapshot',
+            AiRequestQueue.status == 'completed'
+        )
+        .order_by(AiRequestQueue.id.desc())
+    )
+    for row in result.scalars().all():
+        if row.payload and row.payload.get('report_type', 'daily') == report_type:
+            return row
+    return None
 
 async def get_user(db: AsyncSession, telegram_id: int) -> User:
     result = await db.execute(select(User).where(User.telegram_id == telegram_id))
@@ -154,8 +198,8 @@ async def get_all_users(db: AsyncSession, include_blocked: bool = True) -> list[
 
 async def create_or_update_user(db: AsyncSession, telegram_id: int, **kwargs) -> User:
     user = await get_user(db, telegram_id)
-    # Check if this user is in the settings.ADMIN_USER_IDS
-    is_admin = telegram_id in settings.ADMIN_USER_IDS
+    # Check if this user is in the settings.ADMIN_USER_IDS or specified in kwargs
+    is_admin = kwargs.pop("is_admin", telegram_id in settings.ADMIN_USER_IDS)
 
     if user:
         for key, value in kwargs.items():
@@ -277,6 +321,219 @@ async def log_message_stat(db: AsyncSession, user_id: int, message_type: str) ->
     db.add(stat)
     await db.commit()
     return stat
+
+
+async def get_queue_health(db: AsyncSession, window_hours: int = 24) -> dict:
+    """
+    Returns AI queue health metrics:
+    - status_counts: dict of counts by status
+    - pending, processing, completed, failed, cancelled: counts
+    - oldest_pending_age_seconds: age in seconds of oldest pending item (or 0.0)
+    - oldest_processing_age_seconds: age in seconds of oldest processing item (or 0.0)
+    - completed_24h, failed_24h: counts in window
+    - avg_latency_seconds: average processing latency for completed items in window
+    - error_rate: ratio of failed / (completed + failed) in window
+    - queue_errors: top recent error messages with counts
+    """
+    now = datetime.now(UTC).replace(tzinfo=None)
+    window_start = now - timedelta(hours=window_hours)
+
+    # 1. Status counts
+    q_status_res = await db.execute(
+        select(AiRequestQueue.status, func.count(AiRequestQueue.id))
+        .where(AiRequestQueue.request_type.in_(EXECUTABLE_QUEUE_TYPES))
+        .group_by(AiRequestQueue.status)
+    )
+    status_counts = dict(q_status_res.all())
+    pending_count = status_counts.get("pending", 0)
+    processing_count = status_counts.get("processing", 0)
+    completed_total = status_counts.get("completed", 0)
+    failed_total = status_counts.get("failed", 0)
+    cancelled_total = status_counts.get("cancelled", 0)
+
+    # 2. Oldest pending item age
+    pending_oldest_res = await db.execute(
+        select(AiRequestQueue.created_at)
+        .where(AiRequestQueue.request_type.in_(EXECUTABLE_QUEUE_TYPES))
+        .where(AiRequestQueue.status == "pending")
+        .order_by(AiRequestQueue.created_at.asc())
+        .limit(1)
+    )
+    oldest_pending_created = pending_oldest_res.scalar()
+    if oldest_pending_created:
+        t_naive = oldest_pending_created.replace(tzinfo=None) if oldest_pending_created.tzinfo else oldest_pending_created
+        oldest_pending_age_seconds = max(0.0, round((now - t_naive).total_seconds(), 2))
+    else:
+        oldest_pending_age_seconds = 0.0
+
+    # 3. Oldest processing item age
+    proc_oldest_res = await db.execute(
+        select(AiRequestQueue.created_at)
+        .where(AiRequestQueue.request_type.in_(EXECUTABLE_QUEUE_TYPES))
+        .where(AiRequestQueue.status == "processing")
+        .order_by(AiRequestQueue.created_at.asc())
+        .limit(1)
+    )
+    oldest_proc_created = proc_oldest_res.scalar()
+    if oldest_proc_created:
+        t_naive = oldest_proc_created.replace(tzinfo=None) if oldest_proc_created.tzinfo else oldest_proc_created
+        oldest_processing_age_seconds = max(0.0, round((now - t_naive).total_seconds(), 2))
+    else:
+        oldest_processing_age_seconds = 0.0
+
+    # 4. Completed items in window
+    latency_res = await db.execute(
+        select(AiRequestQueue.created_at, AiRequestQueue.processed_at)
+        .where(AiRequestQueue.request_type.in_(EXECUTABLE_QUEUE_TYPES))
+        .where(
+            and_(
+                AiRequestQueue.status == "completed",
+                AiRequestQueue.processed_at >= window_start
+            )
+        )
+    )
+    completed_items = latency_res.all()
+    completed_window = len(completed_items)
+    if completed_items:
+        valid_lats = [
+            (item.processed_at - item.created_at).total_seconds()
+            for item in completed_items
+            if item.processed_at and item.created_at
+        ]
+        avg_latency = round(sum(valid_lats) / len(valid_lats), 2) if valid_lats else 0.0
+    else:
+        avg_latency = 0.0
+
+    # 5. Failed items in window
+    failed_win_res = await db.execute(
+        select(func.count(AiRequestQueue.id))
+        .where(
+            and_(
+                AiRequestQueue.status == "failed",
+                func.coalesce(AiRequestQueue.processed_at, AiRequestQueue.created_at) >= window_start,
+                AiRequestQueue.request_type.in_(EXECUTABLE_QUEUE_TYPES)
+            )
+        )
+    )
+    failed_window = failed_win_res.scalar() or 0
+
+    total_window = completed_window + failed_window
+    error_rate = round(failed_window / total_window, 4) if total_window > 0 else 0.0
+
+    # 6. Top errors
+    error_res = await db.execute(
+        select(AiRequestQueue.last_error, func.count(AiRequestQueue.id))
+        .where(AiRequestQueue.last_error != None,
+               AiRequestQueue.request_type.in_(EXECUTABLE_QUEUE_TYPES),
+               func.coalesce(AiRequestQueue.processed_at, AiRequestQueue.created_at) >= window_start)
+        .group_by(AiRequestQueue.last_error)
+        .order_by(desc(func.count(AiRequestQueue.id)))
+        .limit(5)
+    )
+    queue_errors = dict(error_res.all())
+
+    return {
+        "pending": pending_count,
+        "processing": processing_count,
+        "completed": completed_total,
+        "failed": failed_total,
+        "cancelled": cancelled_total,
+        "status_counts": status_counts,
+        "completed_24h": completed_window,
+        "failed_24h": failed_window,
+        "oldest_pending_age_seconds": oldest_pending_age_seconds,
+        "oldest_processing_age_seconds": oldest_processing_age_seconds,
+        "avg_latency_seconds": avg_latency,
+        "error_rate": error_rate,
+        "queue_errors": queue_errors,
+    }
+
+
+async def get_failed_queue_tasks(db: AsyncSession, limit: int = 5, offset: int = 0):
+    """Returns paginated failed queue tasks and total count."""
+    total_res = await db.execute(
+        select(func.count(AiRequestQueue.id)).where(AiRequestQueue.status == "failed")
+    )
+    total = total_res.scalar() or 0
+
+    tasks_res = await db.execute(
+        select(AiRequestQueue)
+        .where(AiRequestQueue.status == "failed")
+        .order_by(AiRequestQueue.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    tasks = list(tasks_res.scalars().all())
+    return tasks, total
+
+
+async def get_queue_task(db: AsyncSession, task_id: int):
+    """Fetches a queue task by its ID."""
+    res = await db.execute(select(AiRequestQueue).where(AiRequestQueue.id == task_id))
+    return res.scalar_one_or_none()
+
+
+async def retry_queue_task(db: AsyncSession, task_id: int):
+    """
+    Safely resets a failed or cancelled queue task back to 'pending'.
+    Returns (success: bool, message: str, task: Optional[AiRequestQueue]).
+    Validates task existence, non-completed state, and that user exists and is not blocked.
+    """
+    task = await get_queue_task(db, task_id)
+    if not task:
+        return False, "Task not found", None
+    if task.status not in ("failed", "cancelled"):
+        return False, f"Task status is '{task.status}', only failed/cancelled tasks can be retried", task
+
+    if task.request_type not in EXECUTABLE_QUEUE_TYPES:
+        return False, "This record is not an executable task", task
+    user = await get_user(db, task.user_id)
+    if not user:
+        return False, "Task owner user not found in database", task
+    if user.is_blocked:
+        return False, "Task owner user is blocked", task
+
+    owner_allowed = select(User.telegram_id).where(
+        User.telegram_id == AiRequestQueue.user_id, User.is_blocked.is_(False)
+    ).exists()
+    result = await db.execute(update(AiRequestQueue).where(
+        AiRequestQueue.id == task_id, AiRequestQueue.status.in_(['failed', 'cancelled']),
+        AiRequestQueue.request_type.in_(EXECUTABLE_QUEUE_TYPES), owner_allowed,
+    ).values(status='pending', error_message=None, last_error=None, retry_count=0,
+             processed_at=None, next_retry_at=datetime.now(UTC).replace(tzinfo=None))
+      .execution_options(synchronize_session=False))
+    await db.commit()
+    await db.refresh(task)
+    if result.rowcount != 1:
+        return False, "Task or owner changed; refresh before retrying", task
+    return True, "Task scheduled for retry", task
+
+
+async def cancel_queue_task(db: AsyncSession, task_id: int):
+    """
+    Cancels a failed or pending queue task.
+    Returns (success: bool, message: str, task: Optional[AiRequestQueue]).
+    """
+    task = await get_queue_task(db, task_id)
+    if not task:
+        return False, "Task not found", None
+    if task.request_type not in EXECUTABLE_QUEUE_TYPES:
+        return False, "This record is not an executable task", task
+    if task.status == 'cancelled':
+        return False, "Task is already cancelled", task
+    if task.status not in ('pending', 'failed'):
+        return False, "Only pending/failed tasks can be cancelled; running work cannot be interrupted", task
+    result = await db.execute(update(AiRequestQueue).where(
+        AiRequestQueue.id == task_id, AiRequestQueue.status.in_(['pending', 'failed']),
+        AiRequestQueue.request_type.in_(EXECUTABLE_QUEUE_TYPES),
+    ).values(status='cancelled', error_message='Cancelled by admin', next_retry_at=None)
+      .execution_options(synchronize_session=False))
+    await db.commit()
+    await db.refresh(task)
+    if result.rowcount != 1:
+        return False, "Task changed; refresh before cancelling", task
+    return True, "Task cancelled", task
+
 
 async def get_admin_stats(db: AsyncSession) -> dict:
     now = datetime.now(UTC).replace(tzinfo=None)
@@ -413,36 +670,12 @@ async def get_admin_stats(db: AsyncSession) -> dict:
     correction_rate = (adjust_count / input_count * 100.0) if input_count > 0 else 0.0
 
     # --- Queue Health ---
-    q_status_res = await db.execute(
-        select(AiRequestQueue.status, func.count(AiRequestQueue.id))
-        .group_by(AiRequestQueue.status)
-    )
-    queue_status_counts = dict(q_status_res.all())
-
-    latency_res = await db.execute(
-        select(AiRequestQueue.created_at, AiRequestQueue.processed_at)
-        .where(
-            and_(
-                AiRequestQueue.status == "completed",
-                AiRequestQueue.processed_at >= one_day_ago
-            )
-        )
-    )
-    completed_items = latency_res.all()
-    if completed_items:
-        total_lat = sum((item.processed_at - item.created_at).total_seconds() for item in completed_items)
-        queue_avg_latency = total_lat / len(completed_items)
-    else:
-        queue_avg_latency = 0.0
-
-    error_res = await db.execute(
-        select(AiRequestQueue.last_error, func.count(AiRequestQueue.id))
-        .where(AiRequestQueue.last_error != None)
-        .group_by(AiRequestQueue.last_error)
-        .order_by(desc(func.count(AiRequestQueue.id)))
-        .limit(5)
-    )
-    queue_errors = dict(error_res.all())
+    q_health = await get_queue_health(db, window_hours=24)
+    queue_status_counts = q_health["status_counts"]
+    queue_avg_latency = q_health["avg_latency_seconds"]
+    queue_errors = q_health["queue_errors"]
+    queue_oldest_pending_age = q_health["oldest_pending_age_seconds"]
+    queue_error_rate = q_health["error_rate"]
 
     return {
         "total_users": total_users,
@@ -468,7 +701,9 @@ async def get_admin_stats(db: AsyncSession) -> dict:
         "correction_rate_24h": correction_rate,
         "queue_status_counts": queue_status_counts,
         "queue_avg_latency_seconds": queue_avg_latency,
-        "queue_errors": queue_errors
+        "queue_errors": queue_errors,
+        "queue_oldest_pending_age_seconds": queue_oldest_pending_age,
+        "queue_error_rate_24h": queue_error_rate
     }
 
 async def delete_user(db: AsyncSession, telegram_id: int) -> bool:
@@ -671,6 +906,18 @@ async def get_pending_meals(db, user_id):
         AiRequestQueue.user_id == user_id, AiRequestQueue.status == "awaiting_confirm"
     ).order_by(AiRequestQueue.id.asc()).limit(20))
     return list(result.scalars().all())
+
+
+async def get_pending_meals_page(db, user_id, page=1):
+    filters = (AiRequestQueue.user_id == user_id,
+               AiRequestQueue.request_type == 'meal_draft',
+               AiRequestQueue.status == 'awaiting_confirm')
+    total = await db.scalar(select(func.count()).select_from(AiRequestQueue).where(*filters))
+    pages = max(1, (total + 4) // 5)
+    page = min(max(1, page), pages)
+    rows = (await db.execute(select(AiRequestQueue).where(*filters)
+        .order_by(AiRequestQueue.id).offset((page - 1) * 5).limit(5))).scalars().all()
+    return list(rows), total, page, pages
 
 
 async def get_recent_user_activity(db: AsyncSession) -> list[dict]:

@@ -184,10 +184,10 @@ async def test_confirmation_callback_after_restart(db_session):
         answer=AsyncMock(), message=SimpleNamespace(answer=AsyncMock(), edit_reply_markup=AsyncMock()))
     await handle_meal_draft(callback, state, "en", user)
     assert len((await db_session.execute(select(FoodLog))).scalars().all()) == 1
+    assert callback.message.answer.call_count == 1
     assert "logged" in callback.message.answer.call_args.args[0].lower()
-    assert callback.message.answer.call_args.kwargs.get('reply_markup') is None
     from aiogram.types import ReplyKeyboardMarkup
-    assert isinstance(callback.message.answer.call_args_list[0].kwargs['reply_markup'], ReplyKeyboardMarkup)
+    assert isinstance(callback.message.answer.call_args.kwargs['reply_markup'], ReplyKeyboardMarkup)
     await handle_meal_draft(callback, state, "en", user)
     assert len((await db_session.execute(select(FoodLog))).scalars().all()) == 1
     assert callback.answer.call_args.kwargs["show_alert"]
@@ -198,7 +198,8 @@ async def test_queue_delivery_failure_reuses_persisted_draft(db_session, monkeyp
     await make_user(db_session)
     analyze = AsyncMock(return_value=gemini.FoodAnalysisResponse(**ANALYSIS))
     monkeypatch.setattr(gemini, "analyze_food_input", analyze)
-    bot = SimpleNamespace(id=1, send_message=AsyncMock(side_effect=[SimpleNamespace(message_id=1), RuntimeError("delivery failed")]),
+    bot = SimpleNamespace(id=1, send_message=AsyncMock(return_value=SimpleNamespace(message_id=1)),
+                          edit_message_text=AsyncMock(side_effect=[RuntimeError('delivery failed'), None]),
                           delete_message=AsyncMock())
     queue_id = await rate_limiter.add_to_queue(db_session, 123, 123, "analyze_food_input", {"text_description": "apple"})
     item = await db_session.get(AiRequestQueue, queue_id)

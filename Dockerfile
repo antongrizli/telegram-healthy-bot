@@ -2,12 +2,15 @@ FROM python:3.12-alpine
 
 WORKDIR /app
 
+ENV TZ=UTC
+
 # Copy dependency definition
 COPY requirements.txt .
 
 # Install runtime dependencies, temporary build tools, compile packages, and clean up in one layer.
 # pip is build-only and is removed because its bundled msgpack would otherwise ship in the image.
 RUN apk update && apk upgrade && apk add --no-cache \
+    tzdata \
     postgresql-libs \
     libpng \
     freetype \

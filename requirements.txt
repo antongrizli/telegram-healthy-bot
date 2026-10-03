@@ -1,6 +1,6 @@
 # Runtime dependencies pinned to the versions verified by the test suite.
 # Test tooling lives in requirements-dev.txt and is not shipped in the image.
-aiohttp==3.14.1
+aiohttp==3.14.3
 aiogram==3.29.0
 google-genai==2.8.0
 sqlalchemy[asyncio]==2.0.50
@@ -9,7 +9,7 @@ aiosqlite==0.22.1
 alembic==1.18.4
 apscheduler==3.11.2
 pydantic==2.13.4
-pydantic-settings==2.14.1
+pydantic-settings==2.14.2
 tzlocal==5.3.1
 tzdata==2026.2
 matplotlib==3.11.0

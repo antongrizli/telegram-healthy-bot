@@ -7,7 +7,7 @@ from aiogram.filters import Command, StateFilter
 from aiogram.types import Message, CallbackQuery, LinkPreviewOptions, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from src.database.connection import AsyncSessionLocal
+from src.database.connection import AsyncSessionLocal, AsyncSession
 from src.database import crud
 from src.utils import i18n_locales
 from src.keyboards import reply, inline

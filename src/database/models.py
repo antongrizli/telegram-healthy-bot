@@ -31,6 +31,7 @@ class User(Base):
     is_blocked = Column(Boolean, default=False)
     is_admin = Column(Boolean, default=False)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+    blocked_at = Column(DateTime, nullable=True)
 
     # Gamification
     current_streak = Column(Integer, default=0, nullable=False)

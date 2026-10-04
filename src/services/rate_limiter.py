@@ -649,6 +649,8 @@ async def process_next_queue_item(bot: Bot, storage):
             item.last_error = "Telegram delivery forbidden"
             item.next_retry_at = None
             logger.info("Queue item %s cannot be delivered; not retrying", item.id)
+            from src.services.scheduler import handle_user_blocked_bot
+            await handle_user_blocked_bot(item.user_id, db=db)
         except Exception as e:
             logger.error(f"Error executing queued item {item.id}: {e}", exc_info=True)
             item.retry_count += 1

@@ -10,6 +10,13 @@ class RegistrationCheckMiddleware(BaseMiddleware):
         data: Dict[str, Any]
     ) -> Any:
         db_user = data.get("db_user")
+        from src.database import crud
+        if db_user and crud.is_user_deleted(db_user):
+            from src.database.connection import AsyncSessionLocal
+            async with AsyncSessionLocal() as db:
+                await crud.delete_user(db, db_user.telegram_id)
+            db_user = None
+            data["db_user"] = None
         
         # If user is registered and not blocked, allow normal execution
         if db_user and not db_user.is_blocked:

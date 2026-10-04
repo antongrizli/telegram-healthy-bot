@@ -192,7 +192,7 @@ async def get_user(db: AsyncSession, telegram_id: int) -> User:
 async def get_all_users(db: AsyncSession, include_blocked: bool = True) -> list[User]:
     stmt = select(User)
     if not include_blocked:
-        stmt = stmt.where(User.is_blocked == False)
+        stmt = stmt.where(User.is_blocked == False, User.blocked_at.is_(None))
     result = await db.execute(stmt)
     return list(result.scalars().all())
 
@@ -205,6 +205,8 @@ async def create_or_update_user(db: AsyncSession, telegram_id: int, **kwargs) ->
         for key, value in kwargs.items():
             setattr(user, key, value)
         user.is_admin = is_admin
+        if "blocked_at" not in kwargs:
+            user.blocked_at = None
     else:
         user = User(telegram_id=telegram_id, is_admin=is_admin, **kwargs)
         db.add(user)
@@ -220,6 +222,54 @@ async def block_user(db: AsyncSession, telegram_id: int, block: bool = True) -> 
         await db.commit()
         return True
     return False
+
+async def mark_user_blocked(db: AsyncSession, telegram_id: int) -> bool:
+    user = await get_user(db, telegram_id)
+    if user:
+        user.notifications_enabled = False
+        if user.blocked_at is None:
+            user.blocked_at = datetime.now(UTC).replace(tzinfo=None)
+        await db.commit()
+        return True
+    return False
+
+async def mark_user_unblocked(db: AsyncSession, telegram_id: int) -> bool:
+    user = await get_user(db, telegram_id)
+    if user:
+        user.blocked_at = None
+        user.notifications_enabled = True
+        await db.commit()
+        return True
+    return False
+
+def is_user_bot_blocked(user: User | None) -> bool:
+    if not user:
+        return False
+    blocked_at = getattr(user, "blocked_at", None)
+    return isinstance(blocked_at, datetime)
+
+def is_user_deleted(user: User | None, grace_period_days: int = 3) -> bool:
+    if not user:
+        return False
+    blocked_at = getattr(user, "blocked_at", None)
+    if not isinstance(blocked_at, datetime):
+        return False
+    now = datetime.now(UTC).replace(tzinfo=None)
+    if blocked_at.tzinfo is not None:
+        blocked_at = blocked_at.astimezone(UTC).replace(tzinfo=None)
+    return (now - blocked_at) >= timedelta(days=grace_period_days)
+
+async def purge_blocked_users(db: AsyncSession, grace_period_days: int = 3) -> int:
+    threshold = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=grace_period_days)
+    stmt = select(User.telegram_id).where(
+        User.blocked_at.isnot(None),
+        User.blocked_at <= threshold
+    )
+    result = await db.execute(stmt)
+    user_ids = list(result.scalars().all())
+    for uid in user_ids:
+        await delete_user(db, uid)
+    return len(user_ids)
 
 async def add_food_log(
     db: AsyncSession,

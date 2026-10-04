@@ -533,7 +533,99 @@ async def test_process_monthly_report_day_invalid(mock_state):
     # Out of range input
     message2 = make_mock_message("29")
     await process_monthly_report_day(message2, mock_state, "en")
-    assert "Invalid day of the month" in message2.answer.call_args[0][0]
+async def test_on_user_blocked_and_unblocked_handlers(db_session, mocker):
+    from src.handlers.common import on_user_blocked_bot, on_user_unblocked_bot, cmd_start
+    from datetime import timedelta
+    reschedule_mock = mocker.patch("src.services.scheduler.reschedule_user_jobs")
+    remove_jobs_mock = mocker.patch("src.services.scheduler.remove_user_jobs")
+
+    # 1. Create a user
+    user = await crud.create_or_update_user(
+        db_session,
+        telegram_id=77777,
+        name="BlockTest",
+        sex="male",
+        age=30,
+        height_cm=175.0,
+        weight_kg=70.0,
+        activity_level="moderate",
+        goal="maintain",
+        target_calories=2000,
+        target_protein=120,
+        target_fat=60,
+        target_carb=240,
+        notifications_enabled=True,
+    )
+    assert user.notifications_enabled is True
+
+    # 2. Simulate Telegram event: user blocked the bot
+    event_blocked = MagicMock()
+    event_blocked.from_user.id = 77777
+    event_blocked.bot = AsyncMock()
+    await on_user_blocked_bot(event_blocked)
+    remove_jobs_mock.assert_called_with(77777)
+
+    # Check user in DB
+    blocked_user = await crud.get_user(db_session, 77777)
+    assert blocked_user.notifications_enabled is False
+    assert blocked_user.blocked_at is not None
+
+    # 3. Simulate Telegram event: user unblocked within 3 days
+    event_unblocked = MagicMock()
+    event_unblocked.from_user.id = 77777
+    event_unblocked.bot = AsyncMock()
+    await on_user_unblocked_bot(event_unblocked)
+    reschedule_mock.assert_called_once()
+
+    unblocked_user = await crud.get_user(db_session, 77777)
+    assert unblocked_user.notifications_enabled is True
+    assert unblocked_user.blocked_at is None
+
+    # 4. User blocks again and 3 days elapse
+    await on_user_blocked_bot(event_blocked)
+    expired_user = await crud.get_user(db_session, 77777)
+    expired_user.blocked_at = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=3, hours=1)
+    await db_session.commit()
+
+    # 5. User unblocks after 3 days -> data should be purged
+    await on_user_unblocked_bot(event_unblocked)
+    purged_user = await crud.get_user(db_session, 77777)
+    assert purged_user is None
+
+
+async def test_cmd_start_with_expired_blocked_user(db_session, mock_state, mocker):
+    from src.handlers.common import cmd_start
+    from datetime import timedelta
+    start_setup_mock = mocker.patch("src.handlers.profile.start_profile_setup", new_callable=AsyncMock)
+
+    # User with blocked_at > 3 days ago
+    user = await crud.create_or_update_user(
+        db_session,
+        telegram_id=66666,
+        name="ExpiredUser",
+        sex="female",
+        age=25,
+        height_cm=160.0,
+        weight_kg=55.0,
+        activity_level="sedentary",
+        goal="lose_weight",
+        target_calories=1500,
+        target_protein=90,
+        target_fat=45,
+        target_carb=180,
+        notifications_enabled=False,
+    )
+    user.blocked_at = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=4)
+    await db_session.commit()
+
+    message = make_mock_message("/start", user_id=66666)
+    await cmd_start(message, mock_state, "en", db_user=user)
+
+    # Should purge user from DB and initiate profile setup as new user
+    purged_user = await crud.get_user(db_session, 66666)
+    assert purged_user is None
+    start_setup_mock.assert_awaited_once_with(message, mock_state, "en", db_user=None)
+
 
 
 

@@ -345,3 +345,85 @@ async def test_admin_stats_advanced_metrics(db_session):
     assert stats["queue_avg_latency_seconds"] == 100.0  # 120s - 20s
     assert stats["queue_errors"]["API Timeout"] >= 1
 
+
+async def test_blocked_user_lifecycle(db_session):
+    # 1. Create a user
+    user = await crud.create_or_update_user(
+        db_session,
+        telegram_id=88888,
+        name="Lifecycle User",
+        sex="female",
+        age=28,
+        height_cm=165.0,
+        weight_kg=60.0,
+        activity_level="moderate",
+        goal="maintain",
+        target_calories=1800,
+        target_protein=100,
+        target_fat=50,
+        target_carb=200,
+        notifications_enabled=True,
+    )
+    assert user.notifications_enabled is True
+    assert user.blocked_at is None
+
+    # 2. User blocks the bot
+    success = await crud.mark_user_blocked(db_session, 88888)
+    assert success is True
+    blocked_user = await crud.get_user(db_session, 88888)
+    assert blocked_user.notifications_enabled is False
+    assert blocked_user.blocked_at is not None
+
+    # Excluded from active users
+    active_users = await crud.get_all_users(db_session, include_blocked=False)
+    assert not any(u.telegram_id == 88888 for u in active_users)
+
+    # 3. Initially (< 3 days), user is not considered deleted
+    assert crud.is_user_deleted(blocked_user, grace_period_days=3) is False
+
+    # 4. User unblocks before 3 days
+    success = await crud.mark_user_unblocked(db_session, 88888)
+    assert success is True
+    unblocked_user = await crud.get_user(db_session, 88888)
+    assert unblocked_user.notifications_enabled is True
+    assert unblocked_user.blocked_at is None
+    active_users = await crud.get_all_users(db_session, include_blocked=False)
+    assert any(u.telegram_id == 88888 for u in active_users)
+
+    # 5. User blocks again and 3+ days elapse
+    await crud.mark_user_blocked(db_session, 88888)
+    expired_user = await crud.get_user(db_session, 88888)
+    expired_user.blocked_at = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=3, hours=2)
+    await db_session.commit()
+
+    # Add associated food log and weight log
+    await crud.add_food_log(
+        db_session, user_id=88888, items_json=[{"name": "salad"}],
+        calories=150, proteins=3.0, fats=5.0, carbs=10.0
+    )
+    await crud.add_weight_log(db_session, user_id=88888, weight=59.5)
+
+    # Verify user is considered deleted after 3 days
+    assert crud.is_user_deleted(expired_user, grace_period_days=3) is True
+
+    # 6. Purge expired users
+    purged_count = await crud.purge_blocked_users(db_session, grace_period_days=3)
+    assert purged_count >= 1
+
+    # 7. Verify user and all their records are deleted from DB
+    deleted_user = await crud.get_user(db_session, 88888)
+    assert deleted_user is None
+    food_logs = await crud.get_food_logs(
+        db_session, 88888,
+        datetime(2000, 1, 1),
+        datetime(2100, 1, 1)
+    )
+    assert len(food_logs) == 0
+    weight_logs = await crud.get_weight_logs(
+        db_session, 88888,
+        datetime(2000, 1, 1),
+        datetime(2100, 1, 1)
+    )
+    assert len(weight_logs) == 0
+
+

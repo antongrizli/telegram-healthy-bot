@@ -112,10 +112,23 @@ async def send_multipart_message(bot: Bot, chat_id: int, text: str, parse_mode: 
             await bot.send_message(chat_id, part, parse_mode=None)
 
 
+async def handle_user_blocked_bot(user_id: int, db: AsyncSession | None = None):
+    """When Telegram reports a user blocked the bot, disable notifications, mark blocked_at, and unschedule all jobs."""
+    logger.info("User %s blocked the bot; disabling notifications, recording blocked_at, and unscheduling jobs", user_id)
+    if db is not None:
+        await crud.mark_user_blocked(db, user_id)
+    else:
+        async with AsyncSessionLocal() as session:
+            await crud.mark_user_blocked(session, user_id)
+    remove_user_jobs(user_id)
+
+
 async def send_report_notice(bot, user_id, text, **kwargs):
     """Notification failure must not mask an already queued report."""
     try:
         await bot.send_message(user_id, text, **kwargs)
+    except TelegramForbiddenError:
+        await handle_user_blocked_bot(user_id)
     except TelegramAPIError as exc:
         logger.info("Report notice could not be delivered to %s: %s", user_id, exc)
 
@@ -124,7 +137,7 @@ async def send_daily_reminder(bot: Bot, user_id: int):
     from src.services import ux
     async with AsyncSessionLocal() as db:
         user = await crud.get_user(db, user_id)
-        if not user or user.is_blocked or not user.notifications_enabled:
+        if not user or user.is_blocked or crud.is_user_bot_blocked(user) or not user.notifications_enabled:
             return
         if not ux.coaching_allowed(user):
             return
@@ -148,6 +161,8 @@ async def send_daily_reminder(bot: Bot, user_id: int):
             msg = i18n_locales.get_text('ux_evening' if logs else 'ux_empty', user.language)
             from src.handlers.ux import today_keyboard
             await bot.send_message(user_id, msg, reply_markup=today_keyboard(user.language))
+        except TelegramForbiddenError:
+            await handle_user_blocked_bot(user_id, db=db)
         except Exception as e:
             logger.error("Error sending daily reminder to %s: %s", user_id, e)
 
@@ -309,6 +324,8 @@ async def generate_and_send_report_direct(bot: Bot, db: AsyncSession, user, repo
         
         try:
             await bot.send_message(chat_id=user_id, text=promo_text, reply_markup=markup, parse_mode="Markdown")
+        except TelegramForbiddenError:
+            await handle_user_blocked_bot(user_id, db=db)
         except Exception as e:
             logger.error("Failed to send weekly charts webapp promo to %s: %s", user_id, e)
 
@@ -351,7 +368,7 @@ async def _send_daily_report(bot: Bot, user_id: int, automated: bool = False):
     report_at = datetime.now(UTC)
     async with AsyncSessionLocal() as db:
         user = await crud.get_user(db, user_id)
-        if not user or user.is_blocked:
+        if not user or user.is_blocked or crud.is_user_bot_blocked(user) or (automated and not user.notifications_enabled):
             return
 
         from src.services.ux import zone
@@ -448,7 +465,7 @@ async def _send_daily_report(bot: Bot, user_id: int, automated: bool = False):
             await bot.send_message(user_id, i18n_locales.get_text("report_calculating", user.language), parse_mode="Markdown")
             await generate_and_send_report_direct(bot, db, user, "daily", report_at=report_at, delivery_cache=delivery_cache)
         except TelegramForbiddenError:
-            logger.info("Report delivery forbidden for %s; not queued", user_id)
+            await handle_user_blocked_bot(user_id, db=db)
             return
         except Exception as e:
             logger.error("Error sending daily report to %s: %s", user_id, e)
@@ -470,7 +487,7 @@ async def send_weekly_report(bot: Bot, user_id: int, automated: bool = False):
     report_at = datetime.now(UTC)
     async with AsyncSessionLocal() as db:
         user = await crud.get_user(db, user_id)
-        if not user or user.is_blocked:
+        if not user or user.is_blocked or crud.is_user_bot_blocked(user) or (automated and not user.notifications_enabled):
             return
         
         is_limited, _ = await rate_limiter.check_rate_limit(db)
@@ -495,7 +512,7 @@ async def send_weekly_report(bot: Bot, user_id: int, automated: bool = False):
             await bot.send_message(user_id, i18n_locales.get_text("report_calculating", user.language), parse_mode="Markdown")
             await generate_and_send_report_direct(bot, db, user, "weekly", report_at=report_at, delivery_cache=delivery_cache)
         except TelegramForbiddenError:
-            logger.info("Report delivery forbidden for %s; not queued", user_id)
+            await handle_user_blocked_bot(user_id, db=db)
             return
         except Exception as e:
             logger.error("Error sending weekly report to %s: %s", user_id, e)
@@ -516,7 +533,7 @@ async def send_monthly_report(bot: Bot, user_id: int, automated: bool = False):
     report_at = datetime.now(UTC)
     async with AsyncSessionLocal() as db:
         user = await crud.get_user(db, user_id)
-        if not user or user.is_blocked:
+        if not user or user.is_blocked or crud.is_user_bot_blocked(user) or (automated and not user.notifications_enabled):
             return
         
         is_limited, _ = await rate_limiter.check_rate_limit(db)
@@ -541,7 +558,7 @@ async def send_monthly_report(bot: Bot, user_id: int, automated: bool = False):
             await bot.send_message(user_id, i18n_locales.get_text("report_calculating", user.language), parse_mode="Markdown")
             await generate_and_send_report_direct(bot, db, user, "monthly", report_at=report_at, delivery_cache=delivery_cache)
         except TelegramForbiddenError:
-            logger.info("Report delivery forbidden for %s; not queued", user_id)
+            await handle_user_blocked_bot(user_id, db=db)
             return
         except Exception as e:
             logger.error("Error sending monthly report to %s: %s", user_id, e)
@@ -561,7 +578,7 @@ async def send_monthly_report(bot: Bot, user_id: int, automated: bool = False):
 async def check_daily_streaks_and_targets(bot: Bot, user_id: int):
     async with AsyncSessionLocal() as db:
         user = await crud.get_user(db, user_id)
-        if not user or user.is_blocked:
+        if not user or user.is_blocked or crud.is_user_bot_blocked(user) or not user.notifications_enabled:
             return
             
         # Update daily target streaks
@@ -586,13 +603,15 @@ async def check_daily_streaks_and_targets(bot: Bot, user_id: int):
             msg = f"🏆 *{i18n_locales.get_text('achievements_unlocked_title', user.language)}*\n" + "\n".join(ach_notifs)
             try:
                 await bot.send_message(user_id, msg, parse_mode="Markdown")
+            except TelegramForbiddenError:
+                await handle_user_blocked_bot(user_id, db=db)
             except Exception as e:
                 logger.error("Failed to send daily streak achievement unlock message to %s: %s", user_id, e)
 
 async def send_morning_briefing_job(bot: Bot, user_id: int):
     async with AsyncSessionLocal() as db:
         user = await crud.get_user(db, user_id)
-        if not user or user.is_blocked or not user.notifications_enabled:
+        if not user or user.is_blocked or crud.is_user_bot_blocked(user) or not user.notifications_enabled:
             return
         from src.services.ux import coaching_allowed
         if user.ux_preferences or not coaching_allowed(user):
@@ -607,13 +626,15 @@ async def send_morning_briefing_job(bot: Bot, user_id: int):
         
         try:
             await bot.send_message(user_id, msg, reply_markup=markup, parse_mode="Markdown")
+        except TelegramForbiddenError:
+            await handle_user_blocked_bot(user_id, db=db)
         except Exception as e:
             logger.error("Failed to send morning briefing to %s: %s", user_id, e)
 
 async def send_weekly_health_card_job(bot: Bot, user_id: int):
     async with AsyncSessionLocal() as db:
         user = await crud.get_user(db, user_id)
-        if not user or user.is_blocked or not user.notifications_enabled:
+        if not user or user.is_blocked or crud.is_user_bot_blocked(user) or not user.notifications_enabled:
             return
         from src.services.ux import coaching_allowed
         if not coaching_allowed(user, 'weekly'):
@@ -639,6 +660,8 @@ async def send_weekly_health_card_job(bot: Bot, user_id: int):
         
         try:
             await bot.send_message(user_id, msg, reply_markup=markup, parse_mode="Markdown")
+        except TelegramForbiddenError:
+            await handle_user_blocked_bot(user_id, db=db)
         except Exception as e:
             logger.error("Failed to send weekly health card to %s: %s", user_id, e)
 
@@ -659,6 +682,8 @@ async def scheduled_report(bot, user_id, report_type):
 
 
 def reschedule_user_jobs(bot: Bot, user):
+    if not user:
+        return
     user_id = user.telegram_id
     
     # Remove existing jobs for this user
@@ -667,7 +692,7 @@ def reschedule_user_jobs(bot: Bot, user):
         if scheduler.get_job(job_id):
             scheduler.remove_job(job_id)
             
-    if user.is_blocked:
+    if user.is_blocked or crud.is_user_bot_blocked(user) or not user.notifications_enabled:
         return
         
     try:
@@ -749,6 +774,17 @@ def remove_user_jobs(user_id: int):
         if scheduler.get_job(job_id):
             scheduler.remove_job(job_id)
 
+async def purge_expired_blocked_users_job():
+    """Periodic job: deletes users who blocked the bot > 3 days ago, clearing all their records."""
+    try:
+        async with AsyncSessionLocal() as db:
+            purged_count = await crud.purge_blocked_users(db, grace_period_days=3)
+            if purged_count > 0:
+                logger.info("Purged %d user(s) who blocked the bot > 3 days ago", purged_count)
+    except Exception as e:
+        logger.error("Error in purge_expired_blocked_users_job: %s", e)
+
+
 async def init_scheduler(bot: Bot):
     configure_scheduler_logging()
     from src.services.medications import send_medication_reminders
@@ -769,6 +805,16 @@ async def init_scheduler(bot: Bot):
         seconds=60,
         args=[bot],
         id="worker_watchdog",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    # Register hourly purge job for users who blocked the bot > 3 days ago
+    scheduler.add_job(
+        purge_expired_blocked_users_job,
+        "interval",
+        hours=1,
+        id="purge_expired_blocked_users",
         replace_existing=True,
         max_instances=1,
         coalesce=True,

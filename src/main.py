@@ -15,6 +15,8 @@ async def main():
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
     )
+    logging.getLogger("google_genai.models").setLevel(logging.WARNING)
+    logging.getLogger("google_genai").setLevel(logging.WARNING)
     logger = logging.getLogger(__name__)
 
     from src.database.init_db import init_db

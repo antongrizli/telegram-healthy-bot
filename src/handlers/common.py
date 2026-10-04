@@ -1,7 +1,9 @@
+import logging
 from aiogram import Router, F
 from aiogram.filters import CommandStart, Command, StateFilter
+from aiogram.filters.chat_member_updated import ChatMemberUpdatedFilter, KICKED, LEFT, MEMBER
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import Message, ChatMemberUpdated
 from src.utils import i18n_locales
 from src.utils.escape import escape_markdown
 from src.config import settings
@@ -10,13 +12,28 @@ from src.services.scheduler import send_daily_report, send_weekly_report
 from src.database.connection import AsyncSessionLocal
 from src.database import crud
 
+logger = logging.getLogger(__name__)
+
 router = Router()
 recovery_router = Router()
 
 @recovery_router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext, user_language: str, db_user):
+    if db_user and crud.is_user_deleted(db_user):
+        async with AsyncSessionLocal() as db:
+            await crud.delete_user(db, db_user.telegram_id)
+        db_user = None
+
     if db_user and not db_user.is_blocked:
         await state.clear()
+        if getattr(db_user, "notifications_enabled", True) is False or crud.is_user_bot_blocked(db_user):
+            async with AsyncSessionLocal() as db:
+                await crud.mark_user_unblocked(db, db_user.telegram_id)
+                fresh_user = await crud.get_user(db, db_user.telegram_id)
+                if fresh_user:
+                    db_user = fresh_user
+            from src.services.scheduler import reschedule_user_jobs
+            reschedule_user_jobs(message.bot, db_user)
         is_admin = db_user.telegram_id in settings.ADMIN_USER_IDS or db_user.is_admin
         await message.answer(
             i18n_locales.get_text("welcome", user_language),
@@ -192,3 +209,28 @@ async def recover_stale_keyboard(message: Message, state: FSMContext, user_langu
         await process_food_input(message, state, user_language, album=album)
     else:
         await recover_menu(message, state, user_language, db_user)
+
+
+@router.my_chat_member(ChatMemberUpdatedFilter(member_status_changed=KICKED | LEFT))
+async def on_user_blocked_bot(event: ChatMemberUpdated):
+    user_id = event.from_user.id
+    from src.services.scheduler import handle_user_blocked_bot
+    await handle_user_blocked_bot(user_id)
+    logger.info("User %s blocked or left the bot (my_chat_member: KICKED/LEFT)", user_id)
+
+
+@router.my_chat_member(ChatMemberUpdatedFilter(member_status_changed=MEMBER))
+async def on_user_unblocked_bot(event: ChatMemberUpdated):
+    user_id = event.from_user.id
+    async with AsyncSessionLocal() as db:
+        user = await crud.get_user(db, user_id)
+        if user and not user.is_blocked:
+            if crud.is_user_deleted(user):
+                await crud.delete_user(db, user_id)
+                logger.info("User %s unblocked bot after 3+ days; purged user data", user_id)
+                return
+            await crud.mark_user_unblocked(db, user_id)
+            user = await crud.get_user(db, user_id)
+            from src.services.scheduler import reschedule_user_jobs
+            reschedule_user_jobs(event.bot, user)
+    logger.info("User %s unblocked the bot (my_chat_member: MEMBER)", user_id)

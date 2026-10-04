@@ -135,3 +135,25 @@ async def test_multipart_does_not_swallow_delivery_failure():
     bot.send_message.side_effect = [TelegramBadRequest(method=method, message="can't parse entities"), True]
     await send_multipart_message(bot, 123, "*bad markdown")
     assert bot.send_message.call_args.kwargs["parse_mode"] is None
+
+
+@pytest.mark.asyncio
+async def test_handle_user_blocked_bot(mocker):
+    from src.services.scheduler import handle_user_blocked_bot
+    mock_mark = mocker.patch("src.database.crud.mark_user_blocked", new_callable=AsyncMock)
+    mock_remove = mocker.patch("src.services.scheduler.remove_user_jobs")
+    fake_db = AsyncMock()
+
+    await handle_user_blocked_bot(999, db=fake_db)
+    mock_mark.assert_awaited_once_with(fake_db, 999)
+    mock_remove.assert_called_once_with(999)
+
+
+@pytest.mark.asyncio
+async def test_purge_expired_blocked_users_job(mocker):
+    from src.services.scheduler import purge_expired_blocked_users_job
+    mock_purge = mocker.patch("src.database.crud.purge_blocked_users", new_callable=AsyncMock, return_value=3)
+
+    await purge_expired_blocked_users_job()
+    mock_purge.assert_awaited_once()
+

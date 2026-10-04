@@ -133,3 +133,33 @@ async def test_middleware_blocks_and_redirects_unregistered_callback(mock_state)
     mock_state.set_state.assert_called_once_with(ProfileStatesGroup.language)
     cb.answer.assert_called_once()
     cb.message.answer.assert_called_once()
+
+
+async def test_middleware_blocks_and_redirects_expired_blocked_user(mock_state, mocker):
+    from datetime import datetime, UTC, timedelta
+    middleware = RegistrationCheckMiddleware()
+    handler = AsyncMock(return_value="allowed")
+    message = make_mock_message("📝 Log Food", user_id=55555)
+
+    delete_mock = mocker.patch("src.database.crud.delete_user", new_callable=AsyncMock)
+
+    db_user = DbUser(
+        telegram_id=55555,
+        is_admin=False,
+        is_blocked=False,
+        language="en",
+        blocked_at=datetime.now(UTC).replace(tzinfo=None) - timedelta(days=3, hours=1),
+    )
+    data = {
+        "db_user": db_user,
+        "user_language": "en",
+        "state": mock_state,
+    }
+
+    result = await middleware(handler, message, data)
+    assert result is None
+    handler.assert_not_called()
+    delete_mock.assert_awaited_once()
+    assert data["db_user"] is None
+    mock_state.set_state.assert_called_once_with(ProfileStatesGroup.language)
+

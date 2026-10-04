@@ -5,6 +5,7 @@ import re
 from datetime import datetime, date, time, timedelta, UTC
 from zoneinfo import ZoneInfo
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.exceptions import TelegramForbiddenError
 from src.database import crud
 from src.database.connection import AsyncSessionLocal
 from src.utils.i18n_locales import get_text
@@ -86,7 +87,7 @@ async def send_medication_reminders(bot):
         for user in await crud.get_all_users(db, include_blocked=False):
             try:
                 await materialize_intakes(db, user, now, days=2)
-                if not user.notifications_enabled:
+                if not user.notifications_enabled or crud.is_user_bot_blocked(user):
                     continue
                 # Delayed reminders beyond 15 minutes remain unmarked in statistics.
                 rows = await crud.get_medication_intakes(db, user.telegram_id,
@@ -102,6 +103,10 @@ async def send_medication_reminders(bot):
                                     dose=row.reminder.dose, time=row.reminder.reminder_time.strftime('%H:%M'))
                     try:
                         await bot.send_message(user.telegram_id, text, reply_markup=keyboard, parse_mode=None)
+                    except TelegramForbiddenError:
+                        await crud.finish_medication_delivery(db, row.id, 'uncertain')
+                        from src.services.scheduler import handle_user_blocked_bot
+                        await handle_user_blocked_bot(user.telegram_id, db=db)
                     except Exception:
                         # Telegram may have accepted a timed-out request. Do not duplicate a dose reminder.
                         await crud.finish_medication_delivery(db, row.id, 'uncertain')

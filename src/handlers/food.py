@@ -397,13 +397,15 @@ async def process_food_input(
 
     wait_msg = await message.answer(i18n_locales.get_text("food_analyzing", user_language))
     try:
-        analysis = await gemini.analyze_food_input(
-            text_description=text_desc,
-            image_bytes=image_bytes,
-            images_bytes=images_bytes,
-            language=user_language,
-            user_id=message.from_user.id,
-        )
+        from aiogram.utils.chat_action import ChatActionSender
+        async with ChatActionSender.typing(bot=message.bot, chat_id=message.chat.id):
+            analysis = await gemini.analyze_food_input(
+                text_description=text_desc,
+                image_bytes=image_bytes,
+                images_bytes=images_bytes,
+                language=user_language,
+                user_id=message.from_user.id,
+            )
     except Exception as e:
         logger.warning(f"Direct food analysis failed, queuing request: {e}")
         try:
@@ -659,12 +661,14 @@ async def process_food_correction(message: Message, state: FSMContext, user_lang
 
     wait_msg = await message.answer(i18n_locales.get_text("food_analyzing", user_language))
     try:
-        adjusted_analysis = await gemini.adjust_food_analysis(
-            original_data=original_analysis,
-            correction_text=correction_text,
-            language=user_language,
-            user_id=message.from_user.id,
-        )
+        from aiogram.utils.chat_action import ChatActionSender
+        async with ChatActionSender.typing(bot=message.bot, chat_id=message.chat.id):
+            adjusted_analysis = await gemini.adjust_food_analysis(
+                original_data=original_analysis,
+                correction_text=correction_text,
+                language=user_language,
+                user_id=message.from_user.id,
+            )
     except Exception as e:
         logger.warning(f"Direct food correction failed, queuing request: {e}")
         try:
@@ -1006,12 +1010,14 @@ async def process_meal_edit_text(message: Message, state: FSMContext, user_langu
 
     wait_msg = await message.answer(i18n_locales.get_text("food_analyzing", user_language))
     try:
-        adjusted_analysis = await gemini.adjust_food_analysis(
-            original_data=original_data,
-            correction_text=correction_text,
-            language=user_language,
-            user_id=message.from_user.id,
-        )
+        from aiogram.utils.chat_action import ChatActionSender
+        async with ChatActionSender.typing(bot=message.bot, chat_id=message.chat.id):
+            adjusted_analysis = await gemini.adjust_food_analysis(
+                original_data=original_data,
+                correction_text=correction_text,
+                language=user_language,
+                user_id=message.from_user.id,
+            )
     except Exception as e:
         logger.warning(f"Direct meal edit adjustment failed, queuing request: {e}")
         try:

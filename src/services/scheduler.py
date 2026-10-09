@@ -70,12 +70,40 @@ def get_scheduler_health() -> dict:
     }
 
 
+_last_watchdog_alert_time: float | None = None
+_last_watchdog_status: str | None = None
+
+
 async def check_worker_watchdog(bot: Bot):
-    """Periodic health check of AI queue worker. Logs warnings if stalled or dead."""
-    from src.services.rate_limiter import get_worker_health
+    """Periodic health check of AI queue worker. Auto-heals if crashed/stopped, and throttles noisy alerts."""
+    global _last_watchdog_alert_time, _last_watchdog_status
+    from src.services.rate_limiter import get_worker_health, ensure_queue_worker_running
     worker_health = get_worker_health(stall_threshold_seconds=60.0)
     if not worker_health.get("healthy"):
-        logger.warning("Queue worker watchdog alert: %s", worker_health)
+        status = worker_health.get("status")
+        # Attempt auto-recovery if crashed or stopped
+        if status in ("crashed", "stopped"):
+            restarted_task = ensure_queue_worker_running(bot=bot)
+            if restarted_task:
+                logger.info("Watchdog detected %s queue worker; auto-recovery task triggered", status)
+                _last_watchdog_status = "recovering"
+                return
+
+        now = monotonic()
+        # Throttle noisy warnings: only log if status changed or at least 15 minutes elapsed
+        if (
+            _last_watchdog_alert_time is None
+            or status != _last_watchdog_status
+            or (now - _last_watchdog_alert_time) > 900
+        ):
+            logger.warning("Queue worker watchdog alert: %s", worker_health)
+            _last_watchdog_alert_time = now
+            _last_watchdog_status = status
+    else:
+        if _last_watchdog_status is not None and _last_watchdog_status != "running":
+            logger.info("Queue worker recovered and is healthy again")
+        _last_watchdog_status = "running"
+        _last_watchdog_alert_time = None
 
 
 def configure_scheduler_logging():
@@ -247,7 +275,9 @@ async def generate_and_send_report_direct(bot: Bot, db: AsyncSession, user, repo
         db, user, now_local.date().isoformat(), food_logs, weight_logs,
         profile_dict['medications'], water_ml,
     ) if report_type == 'daily' else None
-    report = await gemini.generate_report(profile_dict, food_logs, weight_logs, report_type, user.language, user_id=user_id)
+    from aiogram.utils.chat_action import ChatActionSender
+    async with ChatActionSender.typing(bot=bot, chat_id=user_id):
+        report = await gemini.generate_report(profile_dict, food_logs, weight_logs, report_type, user.language, user_id=user_id)
     await rate_limiter.log_ai_request(db, user_id=user_id, request_type="generate_report")
 
     if report_type == "daily":

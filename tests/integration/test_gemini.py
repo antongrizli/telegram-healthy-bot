@@ -211,3 +211,21 @@ async def test_call_gemini_400_invalid_argument_fallback(mock_gemini_client):
     assert res == mock_response
     assert config.response_schema is None
 
+
+async def test_analyze_food_input_float_calories_coercion(mock_gemini_client):
+    """Verifies that float calories from models (e.g. Gemma returning 231.9) do not raise ValidationError."""
+    mock_response = MagicMock()
+    mock_response.text = (
+        '{"food_items": [{"name": "Grilled Chicken", "portion": "150g", "calories": 231.9, "protein": 31.2, "fat": 4.8, "carb": 0.0}],'
+        ' "total_calories": 231.9, "total_protein": 31.2, "total_fat": 4.8, "total_carb": 0.0}'
+    )
+    mock_gemini_client.models.generate_content.return_value = mock_response
+
+    res = await gemini.analyze_food_input(text_description="150g grilled chicken")
+
+    assert res is not None
+    assert isinstance(res, FoodAnalysisResponse)
+    assert res.food_items[0].calories == 232
+    assert res.total_calories == 232
+
+

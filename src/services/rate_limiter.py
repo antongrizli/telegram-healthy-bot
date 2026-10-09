@@ -239,7 +239,9 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
     if req_type == "medication_photo":
         import base64
         if "result" not in payload:
-            result = await gemini.recognize_medication(base64.b64decode(payload["image"]), payload["mime_type"], user_id=user_id)
+            from aiogram.utils.chat_action import ChatActionSender
+            async with ChatActionSender.typing(bot=bot, chat_id=chat_id):
+                result = await gemini.recognize_medication(base64.b64decode(payload["image"]), payload["mime_type"], user_id=user_id)
             await log_ai_request(db, user_id=user_id, request_type=req_type)
             item.payload = {"result": result, **({"bot_category": payload["bot_category"]} if payload.get("bot_category") else {})}
             await db.commit()
@@ -301,13 +303,15 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
             except Exception:
                 status_msg_id = None
 
-        analysis = await gemini.analyze_food_input(
-            text_description=text_desc,
-            image_bytes=image_bytes,
-            images_bytes=images_bytes,
-            language=user_language,
-            user_id=user_id,
-        )
+        from aiogram.utils.chat_action import ChatActionSender
+        async with ChatActionSender.typing(bot=bot, chat_id=chat_id):
+            analysis = await gemini.analyze_food_input(
+                text_description=text_desc,
+                image_bytes=image_bytes,
+                images_bytes=images_bytes,
+                language=user_language,
+                user_id=user_id,
+            )
 
         if not analysis:
             if status_msg_id and hasattr(bot, "edit_message_text"):
@@ -390,7 +394,9 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
             except Exception:
                 status_msg_id = None
 
-        adjusted_analysis = await get_cached_adjustment(db, item, user_language)
+        from aiogram.utils.chat_action import ChatActionSender
+        async with ChatActionSender.typing(bot=bot, chat_id=chat_id):
+            adjusted_analysis = await get_cached_adjustment(db, item, user_language)
 
         if not adjusted_analysis:
             if isinstance(status_msg_id, int) and hasattr(bot, "edit_message_text"):
@@ -503,7 +509,9 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
             except Exception:
                 status_msg_id = None
 
-        adjusted_analysis = await get_cached_adjustment(db, item, user_language)
+        from aiogram.utils.chat_action import ChatActionSender
+        async with ChatActionSender.typing(bot=bot, chat_id=chat_id):
+            adjusted_analysis = await get_cached_adjustment(db, item, user_language)
 
         if not adjusted_analysis:
             if isinstance(status_msg_id, int) and hasattr(bot, "edit_message_text"):
@@ -705,7 +713,17 @@ async def start_queue_worker(bot: Bot, storage):
                 # still has a bounded deadline and leaves a recoverable claim.
                 await asyncio.wait_for(process_next_queue_item(bot, storage), timeout=900)
             except asyncio.TimeoutError:
-                raise RuntimeError('Queue operation exceeded its execution deadline') from None
+                logger.error("Queue item operation exceeded deadline (900s); resetting claim and continuing worker loop")
+                try:
+                    async with AsyncSessionLocal() as db:
+                        now_utc = datetime.now(UTC).replace(tzinfo=None)
+                        await db.execute(update(AiRequestQueue).where(
+                            AiRequestQueue.status == "processing",
+                            AiRequestQueue.request_type.in_(crud.EXECUTABLE_QUEUE_TYPES),
+                        ).values(status="pending", next_retry_at=now_utc + timedelta(seconds=30)))
+                        await db.commit()
+                except Exception as db_err:
+                    logger.error(f"Failed to reset timed out queue items: {db_err}")
             except Exception as e:
                 logger.error(f"Error in queue worker iteration: {e}", exc_info=True)
             record_worker_heartbeat()
@@ -744,3 +762,19 @@ async def stop_queue_worker(task=None, timeout=35):
         except asyncio.CancelledError:
             if not task.cancelled():
                 raise
+
+
+def ensure_queue_worker_running(bot: Optional[Bot] = None, storage=None) -> Optional[asyncio.Task]:
+    """Ensures that the AI queue worker background task is running. Restarts it if stopped or crashed."""
+    global _worker_task, _worker_running, _bot, _storage
+    b = bot or _bot
+    s = storage or _storage
+    if b is None or s is None:
+        logger.warning("Cannot ensure queue worker: bot or storage not set")
+        return None
+    if _worker_task is None or _worker_task.done() or not _worker_running:
+        logger.info("Restarting queue worker background task...")
+        _worker_task = asyncio.create_task(start_queue_worker(b, s))
+        return _worker_task
+    return _worker_task
+

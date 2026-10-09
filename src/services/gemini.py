@@ -2,7 +2,7 @@ import json
 import asyncio
 import logging
 from typing import List, Optional
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import BaseModel, Field, ConfigDict, model_validator, field_validator
 from google import genai
 from google.genai import types
 from src.config import settings
@@ -46,6 +46,31 @@ class FoodItem(BaseModel):
     fat: float = Field(ge=0, le=2000, description="Fat in grams")
     carb: float = Field(ge=0, le=2000, description="Carbohydrates in grams")
 
+    @field_validator("calories", mode="before")
+    @classmethod
+    def coerce_calories(cls, v):
+        if isinstance(v, (int, float)):
+            return int(round(v))
+        if isinstance(v, str):
+            try:
+                return int(round(float(v.strip())))
+            except (ValueError, TypeError):
+                pass
+        return v
+
+    @field_validator("protein", "fat", "carb", mode="before")
+    @classmethod
+    def coerce_macros(cls, v):
+        if isinstance(v, (int, float)):
+            return round(float(v), 3)
+        if isinstance(v, str):
+            v_cleaned = re.sub(r'[^\d.]', '', v)
+            try:
+                return round(float(v_cleaned), 3)
+            except (ValueError, TypeError):
+                pass
+        return v
+
 class FoodAnalysisResponse(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
     food_items: List[FoodItem] = Field(min_length=1, max_length=100, description="List of all identified food items in the input")
@@ -54,6 +79,18 @@ class FoodAnalysisResponse(BaseModel):
     total_fat: float = Field(default=0.0, ge=0, le=2000, description="Sum of all fat in grams")
     total_carb: float = Field(default=0.0, ge=0, le=2000, description="Sum of all carbohydrates in grams")
 
+    @field_validator("total_calories", mode="before")
+    @classmethod
+    def coerce_total_calories(cls, v):
+        if isinstance(v, (int, float)):
+            return int(round(v))
+        if isinstance(v, str):
+            try:
+                return int(round(float(v.strip())))
+            except (ValueError, TypeError):
+                pass
+        return v
+
     @model_validator(mode="after")
     def recompute_totals(self):
         for total, field, limit in [('total_calories', 'calories', 20000), ('total_protein', 'protein', 2000),
@@ -61,7 +98,7 @@ class FoodAnalysisResponse(BaseModel):
             value = sum(getattr(item, field) for item in self.food_items)
             if value > limit:
                 raise ValueError("Meal totals exceed supported bounds")
-            setattr(self, total, value if field == 'calories' else round(value, 3))
+            setattr(self, total, int(round(value)) if field == 'calories' else round(value, 3))
         return self
 
 def parse_food_analysis_data(raw_text: str) -> FoodAnalysisResponse:
@@ -98,6 +135,17 @@ def parse_food_analysis_data(raw_text: str) -> FoodAnalysisResponse:
                     item["carb"] = item["carbs"]
                 if "weight" in item and "portion" not in item:
                     item["portion"] = str(item["weight"])
+                if "calories" in item and isinstance(item["calories"], (int, float, str)):
+                    try:
+                        item["calories"] = int(round(float(item["calories"])))
+                    except (ValueError, TypeError):
+                        pass
+
+    if "total_calories" in data and isinstance(data["total_calories"], (int, float, str)):
+        try:
+            data["total_calories"] = int(round(float(data["total_calories"])))
+        except (ValueError, TypeError):
+            pass
 
     return FoodAnalysisResponse(**data)
 

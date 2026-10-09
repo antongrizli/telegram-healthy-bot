@@ -38,6 +38,7 @@ def mock_bot():
     bot.send_message = AsyncMock()
     bot.edit_message_text = AsyncMock()
     bot.delete_message = AsyncMock()
+    bot.send_chat_action = AsyncMock()
     return bot
 
 @pytest.fixture

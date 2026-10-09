@@ -32,7 +32,34 @@ async def main():
         bot = Bot(token=settings.TELEGRAM_BOT_TOKEN, session=session)
     else:
         bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
+
+    from src.middlewares.retry import TelegramRetryRequestMiddleware
+    middleware_res = bot.session.middleware(TelegramRetryRequestMiddleware())
+    if asyncio.iscoroutine(middleware_res):
+        await middleware_res
+
     dp = Dispatcher(storage=MemoryStorage(), events_isolation=SimpleEventIsolation())
+
+    from aiogram.types import ErrorEvent
+    from aiogram.exceptions import TelegramNetworkError
+
+    @dp.error()
+    async def global_error_handler(event: ErrorEvent):
+        """Catches unhandled errors during update dispatching."""
+        if isinstance(event.exception, TelegramNetworkError):
+            logger.warning(
+                "Telegram network error during update %s: %s",
+                getattr(event.update, "update_id", None),
+                event.exception,
+            )
+            return True
+        logger.error(
+            "Unhandled exception processing update %s: %s",
+            getattr(event.update, "update_id", None),
+            event.exception,
+            exc_info=True,
+        )
+        return True
 
     # Set persistent Menu Button next to the message input field
     menu_button_set = False

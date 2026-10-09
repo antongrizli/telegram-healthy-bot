@@ -4,8 +4,9 @@ import logging
 from typing import List, Optional
 from pydantic import BaseModel, Field, ConfigDict, model_validator, field_validator
 from google import genai
-from google.genai import types
+from google.genai import types, errors
 from src.config import settings
+from src.utils.languages import LANG_NAMES
 
 import re
 
@@ -188,17 +189,33 @@ async def call_gemini_with_retry(
         from src.services.ai_quota import reserve_attempt
         await reserve_attempt(user_id, request_type)
         try:
-            response = await asyncio.to_thread(
-                client.models.generate_content,
-                model=model,
-                contents=contents,
-                config=config
-            )
+            if hasattr(client, "aio") and hasattr(client.aio, "models"):
+                res_coro = client.aio.models.generate_content(
+                    model=model,
+                    contents=contents,
+                    config=config,
+                )
+                if asyncio.iscoroutine(res_coro):
+                    response = await asyncio.wait_for(res_coro, timeout=60.0)
+                else:
+                    response = res_coro
+            else:
+                response = await asyncio.to_thread(
+                    client.models.generate_content,
+                    model=model,
+                    contents=contents,
+                    config=config,
+                )
             return response
         except Exception as e:
             err_str = str(e)
+            is_400 = (
+                (isinstance(e, errors.ClientError) and getattr(e, "code", None) == 400)
+                or "400" in err_str
+                or "INVALID_ARGUMENT" in err_str
+            )
             # Automatic fallback if the model rejects structured schema or mime type
-            if ("400" in err_str or "INVALID_ARGUMENT" in err_str) and config is not None:
+            if is_400 and config is not None:
                 if getattr(config, "response_schema", None) is not None:
                     logger.warning(
                         f"Model {model} rejected response_schema with 400 INVALID_ARGUMENT. "
@@ -214,15 +231,17 @@ async def call_gemini_with_retry(
                     config.response_mime_type = None
                     continue
 
+            code = getattr(e, "code", None) or getattr(e, "status_code", None)
             is_transient = (
-                "503" in err_str or 
-                "UNAVAILABLE" in err_str or 
-                "ResourceExhausted" in err_str or 
-                "429" in err_str or
-                "500" in err_str or
-                "INTERNAL" in err_str or
-                getattr(e, "code", None) in (500, 503) or
-                getattr(e, "status_code", None) in (500, 503)
+                isinstance(e, errors.ServerError)
+                or (isinstance(e, errors.ClientError) and code == 429)
+                or code in (500, 502, 503, 504, 429)
+                or "503" in err_str
+                or "UNAVAILABLE" in err_str
+                or "ResourceExhausted" in err_str
+                or "429" in err_str
+                or "500" in err_str
+                or "INTERNAL" in err_str
             )
             if is_transient and attempt < max_retries - 1:
                 logger.warning(
@@ -244,16 +263,7 @@ async def analyze_food_input(
     """
     Sends text or image food input to Gemini or Gemma and returns structured nutritional facts.
     """
-    lang_names = {
-        "en": "English",
-        "ru": "Russian",
-        "uk": "Ukrainian",
-        "pl": "Polish",
-        "de": "German",
-        "tr": "Turkish",
-        "es": "Spanish"
-    }
-    lang_name = lang_names.get(language, "English")
+    lang_name = LANG_NAMES.get(language, "English")
     prompt = (
         f"You are a professional nutrition expert. Analyze the food described in the text or image. "
         f"Estimate the name, portion size, calories, protein, fat, and carbs. "
@@ -321,16 +331,7 @@ async def adjust_food_analysis(
     """
     Re-evaluates a food analysis based on the user's text corrections.
     """
-    lang_names = {
-        "en": "English",
-        "ru": "Russian",
-        "uk": "Ukrainian",
-        "pl": "Polish",
-        "de": "German",
-        "tr": "Turkish",
-        "es": "Spanish"
-    }
-    lang_name = lang_names.get(language, "English")
+    lang_name = LANG_NAMES.get(language, "English")
     prompt = (
         f"You are a professional nutrition expert. The user previously logged food, and it was analyzed as follows:\n"
         f"{json.dumps(original_data, indent=2)}\n\n"
@@ -426,16 +427,7 @@ async def generate_report(
     if not weight_text:
         weight_text = f"No weights logged during this period. Profile weight is {profile.get('weight_kg')} kg.\n"
 
-    lang_names = {
-        "en": "English",
-        "ru": "Russian",
-        "uk": "Ukrainian",
-        "pl": "Polish",
-        "de": "German",
-        "tr": "Turkish",
-        "es": "Spanish"
-    }
-    lang_name = lang_names.get(language, "English")
+    lang_name = LANG_NAMES.get(language, "English")
     
     if report_type == "daily":
         prompt = (

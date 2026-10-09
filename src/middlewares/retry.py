@@ -3,17 +3,37 @@ import logging
 from typing import Any
 from aiogram import Bot
 from aiogram.client.session.middlewares.base import BaseRequestMiddleware, NextRequestMiddlewareType
-from aiogram.methods import Response, TelegramMethod
+from aiogram.methods import (
+    AnswerCallbackQuery,
+    DeleteMessage,
+    EditMessageReplyMarkup,
+    EditMessageText,
+    GetFile,
+    GetMe,
+    SendChatAction,
+)
 from aiogram.methods.get_updates import GetUpdates
 from aiogram.exceptions import TelegramNetworkError
 
 logger = logging.getLogger(__name__)
 
+IDEMPOTENT_METHODS = (
+    EditMessageText,
+    EditMessageReplyMarkup,
+    DeleteMessage,
+    SendChatAction,
+    AnswerCallbackQuery,
+    GetFile,
+    GetMe,
+)
+
 
 class TelegramRetryRequestMiddleware(BaseRequestMiddleware):
     """
     Middleware that intercepts outgoing Bot API requests and retries transient
-    TelegramNetworkError (socket timeouts, connection resets) with exponential backoff.
+    TelegramNetworkError (socket timeouts, connection resets) with exponential backoff
+    strictly for idempotent methods. Non-idempotent methods (e.g. SendMessage) are not
+    retried to prevent duplicate messages or double-actions.
     """
 
     def __init__(self, max_retries: int = 2, delay: float = 1.0, backoff: float = 2.0):
@@ -27,8 +47,8 @@ class TelegramRetryRequestMiddleware(BaseRequestMiddleware):
         bot: Bot,
         method: TelegramMethod[Any],
     ) -> Response[Any]:
-        # Do not retry GetUpdates polling requests here; Aiogram's polling loop already manages its own reconnects.
-        if isinstance(method, GetUpdates):
+        # Do not retry GetUpdates polling requests or non-idempotent methods (like SendMessage)
+        if isinstance(method, GetUpdates) or not isinstance(method, IDEMPOTENT_METHODS):
             return await make_request(bot, method)
 
         attempt = 0

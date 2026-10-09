@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock
 from aiogram import Bot
-from aiogram.methods import SendMessage, GetUpdates
+from aiogram.methods import EditMessageText, GetUpdates, SendMessage
 from aiogram.exceptions import TelegramNetworkError
 from src.middlewares.retry import TelegramRetryRequestMiddleware
 
@@ -10,7 +10,7 @@ pytestmark = pytest.mark.asyncio
 
 async def test_retry_middleware_success_on_first_try():
     mw = TelegramRetryRequestMiddleware(max_retries=2, delay=0.01)
-    method = SendMessage(chat_id=123, text="hi")
+    method = EditMessageText(chat_id=123, message_id=1, text="hi")
     bot = AsyncMock(spec=Bot)
     make_request = AsyncMock(return_value="ok")
 
@@ -19,9 +19,9 @@ async def test_retry_middleware_success_on_first_try():
     assert make_request.await_count == 1
 
 
-async def test_retry_middleware_retries_transient_network_error():
+async def test_retry_middleware_retries_transient_network_error_for_idempotent_method():
     mw = TelegramRetryRequestMiddleware(max_retries=2, delay=0.01)
-    method = SendMessage(chat_id=123, text="hi")
+    method = EditMessageText(chat_id=123, message_id=1, text="hi")
     bot = AsyncMock(spec=Bot)
 
     call_count = 0
@@ -37,15 +37,26 @@ async def test_retry_middleware_retries_transient_network_error():
     assert call_count == 2
 
 
-async def test_retry_middleware_raises_after_max_retries():
+async def test_retry_middleware_raises_after_max_retries_for_idempotent_method():
     mw = TelegramRetryRequestMiddleware(max_retries=2, delay=0.01)
-    method = SendMessage(chat_id=123, text="hi")
+    method = EditMessageText(chat_id=123, message_id=1, text="hi")
     bot = AsyncMock(spec=Bot)
     make_request = AsyncMock(side_effect=TelegramNetworkError(method=method, message="Request timeout error"))
 
     with pytest.raises(TelegramNetworkError):
         await mw(make_request, bot, method)
     assert make_request.await_count == 3  # initial + 2 retries
+
+
+async def test_retry_middleware_does_not_retry_non_idempotent_method():
+    mw = TelegramRetryRequestMiddleware(max_retries=2, delay=0.01)
+    method = SendMessage(chat_id=123, text="non-idempotent message")
+    bot = AsyncMock(spec=Bot)
+    make_request = AsyncMock(side_effect=TelegramNetworkError(method=method, message="Request timeout error"))
+
+    with pytest.raises(TelegramNetworkError):
+        await mw(make_request, bot, method)
+    assert make_request.await_count == 1  # No retries for SendMessage!
 
 
 async def test_retry_middleware_skips_get_updates():

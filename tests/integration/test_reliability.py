@@ -43,7 +43,7 @@ async def test_startup_preserves_monday_and_upgrades_legacy_schema(monkeypatch):
             assert (await conn.execute(sa.text("SELECT weekly_report_day, monthly_report_day, timezone FROM users"))).one() == (0, 1, "UTC")
             tables = await conn.run_sync(lambda c: sa.inspect(c).get_table_names())
             assert "ai_request_attempts" in tables
-            assert (await conn.execute(sa.text("SELECT version_num FROM alembic_version"))).scalar() == "0002_add_user_blocked_at"
+            assert (await conn.execute(sa.text("SELECT version_num FROM alembic_version"))).scalar() == "0003_hot_path_indexes"
         # A database stamped with a revision this build does not know must refuse to start.
         async with engine.begin() as conn:
             await conn.execute(sa.text("UPDATE alembic_version SET version_num = 'from_the_future'"))
@@ -61,7 +61,7 @@ async def test_startup_creates_fresh_database_at_head(monkeypatch):
         async with engine.connect() as conn:
             tables = await conn.run_sync(lambda c: set(sa.inspect(c).get_table_names()))
             assert {"users", "food_logs", "ai_request_queue", "alembic_version"} <= tables
-            assert (await conn.execute(sa.text("SELECT version_num FROM alembic_version"))).scalar() == "0002_add_user_blocked_at"
+            assert (await conn.execute(sa.text("SELECT version_num FROM alembic_version"))).scalar() == "0003_hot_path_indexes"
     finally:
         await engine.dispose()
 

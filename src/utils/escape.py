@@ -1,5 +1,14 @@
 import re
 
+def clean_md(text: str) -> str:
+    """Strips Markdown delimiter characters (*, _, [, ], `) from user strings."""
+    if not text:
+        return ""
+    for char in ["*", "_", "[", "]", "`"]:
+        text = text.replace(char, "")
+    return text
+
+
 def escape_markdown(text: str) -> str:
     """
     Escapes special characters in text for safe rendering in Telegram Markdown (V1).

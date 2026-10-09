@@ -191,3 +191,13 @@ async def test_check_worker_watchdog_auto_recovery_and_throttle(mocker, caplog):
     assert len(warning_records) == 1
 
 
+@pytest.mark.asyncio
+async def test_cleanup_operational_data_job(mocker):
+    from src.services.scheduler import cleanup_operational_data_job
+    mock_cleanup = mocker.patch("src.database.crud.cleanup_operational_logs", new_callable=AsyncMock, return_value={"attempts": 5, "logs": 10, "stats": 2, "queue": 1})
+
+    await cleanup_operational_data_job()
+    mock_cleanup.assert_awaited_once()
+
+
+

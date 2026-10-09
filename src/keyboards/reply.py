@@ -49,12 +49,6 @@ def get_report_keyboard(lang: str, report_id: int) -> ReplyKeyboardMarkup:
     ], resize_keyboard=True)
 
 
-def get_food_menu(lang: str, has_pending_meals: bool) -> ReplyKeyboardMarkup:
-    kb = [[KeyboardButton(text=get_text("btn_new_food", lang))]]
-    if has_pending_meals:
-        kb.append([KeyboardButton(text=get_text("btn_pending_meals", lang))])
-    kb.append([KeyboardButton(text=get_text("ux_back", lang))])
-    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_admin_menu(lang: str = "en") -> ReplyKeyboardMarkup:
     kb = [
@@ -289,31 +283,6 @@ def get_meal_edit_confirm_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-def get_active_users_keyboard(users: list, lang: str = "en") -> ReplyKeyboardMarkup:
-    kb = []
-    for u in users:
-        username_str = f" (@{u.username})" if u.username else ""
-        label = f"🚫 Block {u.name} (ID: {u.telegram_id}){username_str}" if lang == "en" else f"🚫 Блокировать {u.name} (ID: {u.telegram_id}){username_str}"
-        kb.append([KeyboardButton(text=label)])
-    kb.append([KeyboardButton(text="⬅️ Back to Menu" if lang == "en" else "⬅️ Назад в меню")])
-    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
-
-def get_blocked_users_keyboard(users: list, lang: str = "en") -> ReplyKeyboardMarkup:
-    kb = []
-    for u in users:
-        username_str = f" (@{u.username})" if u.username else ""
-        label = f"✅ Unblock {u.name} (ID: {u.telegram_id}){username_str}" if lang == "en" else f"✅ Разблокировать {u.name} (ID: {u.telegram_id}){username_str}"
-        kb.append([KeyboardButton(text=label)])
-    kb.append([KeyboardButton(text="⬅️ Back to Menu" if lang == "en" else "⬅️ Назад в меню")])
-    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
-
-def get_admin_cancel_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
-    kb = [[KeyboardButton(text=get_text("btn_cancel", lang))]]
-    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
-
-def get_admin_back_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
-    kb = [[KeyboardButton(text="⬅️ Back to Menu" if lang == "en" else "⬅️ Назад в меню")]]
-    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_admin_stats_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
     kb = [

@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 from typing import Any
 from aiogram import Bot
 from aiogram.client.session.middlewares.base import BaseRequestMiddleware, NextRequestMiddlewareType
+from aiogram.methods.base import TelegramMethod, Response
 from aiogram.methods import (
     AnswerCallbackQuery,
     DeleteMessage,

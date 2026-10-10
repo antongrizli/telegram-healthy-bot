@@ -2,10 +2,11 @@ import json
 import asyncio
 import logging
 from typing import List, Optional
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import BaseModel, Field, ConfigDict, model_validator, field_validator
 from google import genai
-from google.genai import types
+from google.genai import types, errors
 from src.config import settings
+from src.utils.languages import LANG_NAMES
 
 import re
 
@@ -46,6 +47,31 @@ class FoodItem(BaseModel):
     fat: float = Field(ge=0, le=2000, description="Fat in grams")
     carb: float = Field(ge=0, le=2000, description="Carbohydrates in grams")
 
+    @field_validator("calories", mode="before")
+    @classmethod
+    def coerce_calories(cls, v):
+        if isinstance(v, (int, float)):
+            return int(round(v))
+        if isinstance(v, str):
+            try:
+                return int(round(float(v.strip())))
+            except (ValueError, TypeError):
+                pass
+        return v
+
+    @field_validator("protein", "fat", "carb", mode="before")
+    @classmethod
+    def coerce_macros(cls, v):
+        if isinstance(v, (int, float)):
+            return round(float(v), 3)
+        if isinstance(v, str):
+            v_cleaned = re.sub(r'[^\d.]', '', v)
+            try:
+                return round(float(v_cleaned), 3)
+            except (ValueError, TypeError):
+                pass
+        return v
+
 class FoodAnalysisResponse(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
     food_items: List[FoodItem] = Field(min_length=1, max_length=100, description="List of all identified food items in the input")
@@ -54,6 +80,18 @@ class FoodAnalysisResponse(BaseModel):
     total_fat: float = Field(default=0.0, ge=0, le=2000, description="Sum of all fat in grams")
     total_carb: float = Field(default=0.0, ge=0, le=2000, description="Sum of all carbohydrates in grams")
 
+    @field_validator("total_calories", mode="before")
+    @classmethod
+    def coerce_total_calories(cls, v):
+        if isinstance(v, (int, float)):
+            return int(round(v))
+        if isinstance(v, str):
+            try:
+                return int(round(float(v.strip())))
+            except (ValueError, TypeError):
+                pass
+        return v
+
     @model_validator(mode="after")
     def recompute_totals(self):
         for total, field, limit in [('total_calories', 'calories', 20000), ('total_protein', 'protein', 2000),
@@ -61,7 +99,7 @@ class FoodAnalysisResponse(BaseModel):
             value = sum(getattr(item, field) for item in self.food_items)
             if value > limit:
                 raise ValueError("Meal totals exceed supported bounds")
-            setattr(self, total, value if field == 'calories' else round(value, 3))
+            setattr(self, total, int(round(value)) if field == 'calories' else round(value, 3))
         return self
 
 def parse_food_analysis_data(raw_text: str) -> FoodAnalysisResponse:
@@ -98,6 +136,17 @@ def parse_food_analysis_data(raw_text: str) -> FoodAnalysisResponse:
                     item["carb"] = item["carbs"]
                 if "weight" in item and "portion" not in item:
                     item["portion"] = str(item["weight"])
+                if "calories" in item and isinstance(item["calories"], (int, float, str)):
+                    try:
+                        item["calories"] = int(round(float(item["calories"])))
+                    except (ValueError, TypeError):
+                        pass
+
+    if "total_calories" in data and isinstance(data["total_calories"], (int, float, str)):
+        try:
+            data["total_calories"] = int(round(float(data["total_calories"])))
+        except (ValueError, TypeError):
+            pass
 
     return FoodAnalysisResponse(**data)
 
@@ -140,17 +189,33 @@ async def call_gemini_with_retry(
         from src.services.ai_quota import reserve_attempt
         await reserve_attempt(user_id, request_type)
         try:
-            response = await asyncio.to_thread(
-                client.models.generate_content,
-                model=model,
-                contents=contents,
-                config=config
-            )
+            if hasattr(client, "aio") and hasattr(client.aio, "models"):
+                res_coro = client.aio.models.generate_content(
+                    model=model,
+                    contents=contents,
+                    config=config,
+                )
+                if asyncio.iscoroutine(res_coro):
+                    response = await asyncio.wait_for(res_coro, timeout=60.0)
+                else:
+                    response = res_coro
+            else:
+                response = await asyncio.to_thread(
+                    client.models.generate_content,
+                    model=model,
+                    contents=contents,
+                    config=config,
+                )
             return response
         except Exception as e:
             err_str = str(e)
+            is_400 = (
+                (isinstance(e, errors.ClientError) and getattr(e, "code", None) == 400)
+                or "400" in err_str
+                or "INVALID_ARGUMENT" in err_str
+            )
             # Automatic fallback if the model rejects structured schema or mime type
-            if ("400" in err_str or "INVALID_ARGUMENT" in err_str) and config is not None:
+            if is_400 and config is not None:
                 if getattr(config, "response_schema", None) is not None:
                     logger.warning(
                         f"Model {model} rejected response_schema with 400 INVALID_ARGUMENT. "
@@ -166,15 +231,17 @@ async def call_gemini_with_retry(
                     config.response_mime_type = None
                     continue
 
+            code = getattr(e, "code", None) or getattr(e, "status_code", None)
             is_transient = (
-                "503" in err_str or 
-                "UNAVAILABLE" in err_str or 
-                "ResourceExhausted" in err_str or 
-                "429" in err_str or
-                "500" in err_str or
-                "INTERNAL" in err_str or
-                getattr(e, "code", None) in (500, 503) or
-                getattr(e, "status_code", None) in (500, 503)
+                isinstance(e, errors.ServerError)
+                or (isinstance(e, errors.ClientError) and code == 429)
+                or code in (500, 502, 503, 504, 429)
+                or "503" in err_str
+                or "UNAVAILABLE" in err_str
+                or "ResourceExhausted" in err_str
+                or "429" in err_str
+                or "500" in err_str
+                or "INTERNAL" in err_str
             )
             if is_transient and attempt < max_retries - 1:
                 logger.warning(
@@ -196,16 +263,7 @@ async def analyze_food_input(
     """
     Sends text or image food input to Gemini or Gemma and returns structured nutritional facts.
     """
-    lang_names = {
-        "en": "English",
-        "ru": "Russian",
-        "uk": "Ukrainian",
-        "pl": "Polish",
-        "de": "German",
-        "tr": "Turkish",
-        "es": "Spanish"
-    }
-    lang_name = lang_names.get(language, "English")
+    lang_name = LANG_NAMES.get(language, "English")
     prompt = (
         f"You are a professional nutrition expert. Analyze the food described in the text or image. "
         f"Estimate the name, portion size, calories, protein, fat, and carbs. "
@@ -273,16 +331,7 @@ async def adjust_food_analysis(
     """
     Re-evaluates a food analysis based on the user's text corrections.
     """
-    lang_names = {
-        "en": "English",
-        "ru": "Russian",
-        "uk": "Ukrainian",
-        "pl": "Polish",
-        "de": "German",
-        "tr": "Turkish",
-        "es": "Spanish"
-    }
-    lang_name = lang_names.get(language, "English")
+    lang_name = LANG_NAMES.get(language, "English")
     prompt = (
         f"You are a professional nutrition expert. The user previously logged food, and it was analyzed as follows:\n"
         f"{json.dumps(original_data, indent=2)}\n\n"
@@ -378,16 +427,7 @@ async def generate_report(
     if not weight_text:
         weight_text = f"No weights logged during this period. Profile weight is {profile.get('weight_kg')} kg.\n"
 
-    lang_names = {
-        "en": "English",
-        "ru": "Russian",
-        "uk": "Ukrainian",
-        "pl": "Polish",
-        "de": "German",
-        "tr": "Turkish",
-        "es": "Spanish"
-    }
-    lang_name = lang_names.get(language, "English")
+    lang_name = LANG_NAMES.get(language, "English")
     
     if report_type == "daily":
         prompt = (

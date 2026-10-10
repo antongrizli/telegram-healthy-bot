@@ -24,148 +24,17 @@ from src.services.meal_cards import finalize_card
 
 router = Router()
 
-def clean_md(text: str) -> str:
-    if not text:
-        return ""
-    for char in ["*", "_", "[", "]", "`"]:
-        text = text.replace(char, "")
-    return text
-
-class FoodLoggingState(StatesGroup):
-    waiting_for_meal_type = State()
-    waiting_for_input = State()
-    waiting_for_confirm = State()
-    waiting_for_correction = State()
-
-class MealEditingState(StatesGroup):
-    waiting_for_edit_text = State()
-    waiting_for_edit_confirm = State()
-
-class MealViewingState(StatesGroup):
-    viewing = State()
-
-class LocalCorrectionState(StatesGroup):
-    value = State()
-
-
-def format_draft_card_text(payload: dict, user_language: str) -> str:
-    data = payload.get("analysis", {})
-    def _item_str(item):
-        name = item.get('name', '')
-        portion = item.get('portion') or (f"{item['weight_grams']}g" if 'weight_grams' in item else "")
-        return f"- {name} ({portion})" if portion else f"- {name}"
-    items = "\n".join(_item_str(item) for item in data.get("food_items", []))
-    text = i18n_locales.get_text(
-        "food_analysis_result",
-        user_language,
-        items=items,
-        calories=data.get("total_calories", 0),
-        protein=data.get("total_protein", 0),
-        fat=data.get("total_fat", 0),
-        carb=data.get("total_carb", 0)
-    )
-    text += '\n' + i18n_locales.get_text('meal_type_' + payload.get('meal_type', 'food'), user_language)
-    text += '\n' + i18n_locales.get_text('ux_estimate', user_language)
-    return text
-
-
-
-def get_draft_keyboard(draft_id, language, page: int = 1):
-    return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text=i18n_locales.get_text(key, language),
-                             callback_data=f"meal_draft:{action}:{draft_id}")
-        for action, key in [("accept", "btn_accept"), ("correct", "btn_correct"), ("cancel", "btn_cancel")]
-    ], [
-        InlineKeyboardButton(text=i18n_locales.get_text('ux_type', language), callback_data=f'uxdraft:type:{draft_id}')
-    ], [
-        InlineKeyboardButton(text=i18n_locales.get_text('food_drafts_back_to_list', language), callback_data=f'uxdraft:list:{page}')
-    ]])
-
-
-def correction_keyboard(draft_id, lang):
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=i18n_locales.get_text(key, lang), callback_data=f'uxdraft:{action}:{draft_id}')]
-        for action, key in [('portion', 'ux_portion'), ('add', 'ux_add_item'), ('remove', 'ux_remove_item'), ('manual', 'ux_manual')]
-    ] + [[InlineKeyboardButton(text=i18n_locales.get_text('ux_previous', lang), callback_data=f'uxdraft:back:{draft_id}')]])
-
-
-def format_drafts_list(drafts: list, page: int, total_pages: int, user_language: str, total_count=None) -> str:
-    title = i18n_locales.get_text("food_drafts_title", user_language)
-    paged = total_count is not None
-    total_count = len(drafts) if total_count is None else total_count
-
-    if total_pages > 1:
-        header = f"{title} ({total_count} · {page}/{total_pages})"
-    else:
-        header = f"{title} ({total_count})"
-
-    start_idx = (page - 1) * 5
-    page_drafts = drafts if paged else drafts[start_idx:start_idx + 5]
-
-    kcal_str = "ккал" if user_language in ("ru", "uk") else "kcal"
-
-    entries = []
-    for i, draft in enumerate(page_drafts, start=start_idx + 1):
-        payload = getattr(draft, "payload", {}) or {}
-        meal_type_key = "meal_type_" + payload.get("meal_type", "food")
-        type_label = i18n_locales.get_text(meal_type_key, user_language)
-
-        analysis = payload.get("analysis") or {}
-        calories = analysis.get("total_calories", 0)
-
-        food_items = analysis.get("food_items") or []
-        item_names = [it.get("name") for it in food_items if it.get("name")]
-        items_str = ", ".join(item_names)
-        if len(items_str) > 60:
-            items_str = items_str[:57] + "..."
-
-        entry = f"{i}. {type_label} · {calories} {kcal_str}"
-        if items_str:
-            entry += f"\n   {items_str}"
-        entries.append(entry)
-
-    prompt = i18n_locales.get_text("food_drafts_select_prompt", user_language)
-    body = "\n".join(entries)
-    return f"{header}\n\n{body}\n\n{prompt}"
-
-
-def get_drafts_list_keyboard(drafts: list, page: int, total_pages: int, user_language: str, paged=False) -> InlineKeyboardMarkup:
-    start_idx = (page - 1) * 5
-    page_drafts = drafts if paged else drafts[start_idx:start_idx + 5]
-
-    rows = []
-    select_row = [
-        InlineKeyboardButton(
-            text=str(i),
-            callback_data=f"uxdraft:view:{draft.id}:{page}"
-        )
-        for i, draft in enumerate(page_drafts, start=start_idx + 1)
-    ]
-    if select_row:
-        rows.append(select_row)
-
-    if total_pages > 1:
-        prev_btn = InlineKeyboardButton(
-            text="⬅️",
-            callback_data=f"uxdraft:list:{page - 1}" if page > 1 else "uxdraft:noop"
-        )
-        page_btn = InlineKeyboardButton(
-            text=f"{page}/{total_pages}",
-            callback_data="uxdraft:noop"
-        )
-        next_btn = InlineKeyboardButton(
-            text="➡️",
-            callback_data=f"uxdraft:list:{page + 1}" if page < total_pages else "uxdraft:noop"
-        )
-        rows.append([prev_btn, page_btn, next_btn])
-
-    close_btn = InlineKeyboardButton(
-        text=i18n_locales.get_text("food_drafts_close", user_language),
-        callback_data="uxdraft:close"
-    )
-    rows.append([close_btn])
-
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+from src.utils.escape import clean_md
+from src.states import (
+    FoodLoggingState,
+    MealEditingState,
+    MealViewingState,
+    LocalCorrectionState,
+)
+from src.presenters.food import format_food_analysis
+from src.utils.telegram_action import send_typing_action
+from src.presenters.food import format_draft_card_text, format_drafts_list
+from src.keyboards.inline import get_draft_keyboard, correction_keyboard, get_drafts_list_keyboard
 
 
 async def send_draft_card(message: Message, draft, user_language: str, page: int = 1):
@@ -397,13 +266,14 @@ async def process_food_input(
 
     wait_msg = await message.answer(i18n_locales.get_text("food_analyzing", user_language))
     try:
-        analysis = await gemini.analyze_food_input(
-            text_description=text_desc,
-            image_bytes=image_bytes,
-            images_bytes=images_bytes,
-            language=user_language,
-            user_id=message.from_user.id,
-        )
+        async with send_typing_action(bot=message.bot, chat_id=message.chat.id):
+            analysis = await gemini.analyze_food_input(
+                text_description=text_desc,
+                image_bytes=image_bytes,
+                images_bytes=images_bytes,
+                language=user_language,
+                user_id=message.from_user.id,
+            )
     except Exception as e:
         logger.warning(f"Direct food analysis failed, queuing request: {e}")
         try:
@@ -457,22 +327,7 @@ async def process_food_input(
         raw_text=text_desc
     )
     
-    items_str = ""
-    for item in analysis.food_items:
-        name = clean_md(item.name)
-        portion = clean_md(item.portion)
-        items_str += f"- **{name}** ({portion}): {item.calories} kcal | P: {item.protein}g, F: {item.fat}g, C: {item.carb}g\n"
-        
-    result_text = i18n_locales.get_text(
-        "food_analysis_result",
-        user_language,
-        items=items_str,
-        calories=analysis.total_calories,
-        protein=analysis.total_protein,
-        fat=analysis.total_fat,
-        carb=analysis.total_carb
-    )
-    
+    result_text = format_food_analysis(analysis, user_language)
     result_text += '\n' + i18n_locales.get_text('meal_type_' + state_data.get('meal_type', 'food'), user_language)
     result_text += '\n' + i18n_locales.get_text('ux_estimate', user_language)
     await state.set_state(FoodLoggingState.waiting_for_confirm)
@@ -659,12 +514,13 @@ async def process_food_correction(message: Message, state: FSMContext, user_lang
 
     wait_msg = await message.answer(i18n_locales.get_text("food_analyzing", user_language))
     try:
-        adjusted_analysis = await gemini.adjust_food_analysis(
-            original_data=original_analysis,
-            correction_text=correction_text,
-            language=user_language,
-            user_id=message.from_user.id,
-        )
+        async with send_typing_action(bot=message.bot, chat_id=message.chat.id):
+            adjusted_analysis = await gemini.adjust_food_analysis(
+                original_data=original_analysis,
+                correction_text=correction_text,
+                language=user_language,
+                user_id=message.from_user.id,
+            )
     except Exception as e:
         logger.warning(f"Direct food correction failed, queuing request: {e}")
         try:
@@ -711,21 +567,7 @@ async def process_food_correction(message: Message, state: FSMContext, user_lang
                 {**draft.payload, "analysis": analysis_dict}, draft_id=draft_id)
     await state.update_data(analysis=analysis_dict, correction_action=None)
     
-    items_str = ""
-    for item in adjusted_analysis.food_items:
-        name = clean_md(item.name)
-        portion = clean_md(item.portion)
-        items_str += f"- **{name}** ({portion}): {item.calories} kcal | P: {item.protein}g, F: {item.fat}g, C: {item.carb}g\n"
-        
-    result_text = i18n_locales.get_text(
-        "food_analysis_result",
-        user_language,
-        items=items_str,
-        calories=adjusted_analysis.total_calories,
-        protein=adjusted_analysis.total_protein,
-        fat=adjusted_analysis.total_fat,
-        carb=adjusted_analysis.total_carb
-    )
+    result_text = format_food_analysis(adjusted_analysis, user_language)
     
     await state.set_state(FoodLoggingState.waiting_for_confirm)
     if draft_id:
@@ -1006,12 +848,13 @@ async def process_meal_edit_text(message: Message, state: FSMContext, user_langu
 
     wait_msg = await message.answer(i18n_locales.get_text("food_analyzing", user_language))
     try:
-        adjusted_analysis = await gemini.adjust_food_analysis(
-            original_data=original_data,
-            correction_text=correction_text,
-            language=user_language,
-            user_id=message.from_user.id,
-        )
+        async with send_typing_action(bot=message.bot, chat_id=message.chat.id):
+            adjusted_analysis = await gemini.adjust_food_analysis(
+                original_data=original_data,
+                correction_text=correction_text,
+                language=user_language,
+                user_id=message.from_user.id,
+            )
     except Exception as e:
         logger.warning(f"Direct meal edit adjustment failed, queuing request: {e}")
         try:
@@ -1050,21 +893,7 @@ async def process_meal_edit_text(message: Message, state: FSMContext, user_langu
     adjusted_dict = adjusted_analysis.model_dump()
     await state.update_data(adjusted_analysis=adjusted_dict)
     
-    items_str = ""
-    for item in adjusted_analysis.food_items:
-        name = clean_md(item.name)
-        portion = clean_md(item.portion)
-        items_str += f"- **{name}** ({portion}): {item.calories} kcal | P: {item.protein}g, F: {item.fat}g, C: {item.carb}g\n"
-        
-    result_text = i18n_locales.get_text(
-        "food_analysis_result",
-        user_language,
-        items=items_str,
-        calories=adjusted_analysis.total_calories,
-        protein=adjusted_analysis.total_protein,
-        fat=adjusted_analysis.total_fat,
-        carb=adjusted_analysis.total_carb
-    )
+    result_text = format_food_analysis(adjusted_analysis, user_language)
     
     await state.set_state(MealEditingState.waiting_for_edit_confirm)
     markup = reply.get_meal_edit_confirm_keyboard(user_language)

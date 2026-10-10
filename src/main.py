@@ -32,7 +32,51 @@ async def main():
         bot = Bot(token=settings.TELEGRAM_BOT_TOKEN, session=session)
     else:
         bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
+
+    from src.middlewares.retry import TelegramRetryRequestMiddleware
+    bot.session.middleware(TelegramRetryRequestMiddleware())
+
     dp = Dispatcher(storage=MemoryStorage(), events_isolation=SimpleEventIsolation())
+
+    from aiogram.types import ErrorEvent
+    from aiogram.exceptions import TelegramNetworkError
+    import contextlib
+    from src.utils import i18n_locales
+
+    @dp.error()
+    async def global_error_handler(event: ErrorEvent):
+        """Catches unhandled errors during update dispatching and informs user."""
+        upd = event.update
+        update_id = getattr(upd, "update_id", None)
+        if isinstance(event.exception, TelegramNetworkError):
+            logger.warning(
+                "Telegram network error during update %s: %s",
+                update_id,
+                event.exception,
+            )
+        else:
+            logger.error(
+                "Unhandled exception processing update %s: %s",
+                update_id,
+                event.exception,
+                exc_info=True,
+            )
+
+        # Notify user so they are not left hanging without feedback
+        target = getattr(upd, "message", None)
+        if not target and getattr(upd, "callback_query", None):
+            target = getattr(upd.callback_query, "message", None)
+
+        if target and hasattr(target, "answer"):
+            user_obj = None
+            if getattr(upd, "message", None):
+                user_obj = getattr(upd.message, "from_user", None)
+            elif getattr(upd, "callback_query", None):
+                user_obj = getattr(upd.callback_query, "from_user", None)
+            lang = getattr(user_obj, "language_code", "en") or "en"
+            with contextlib.suppress(Exception):
+                await target.answer(i18n_locales.get_text("err_generic_retry", lang))
+        return True
 
     # Set persistent Menu Button next to the message input field
     menu_button_set = False

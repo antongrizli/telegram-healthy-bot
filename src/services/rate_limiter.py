@@ -19,6 +19,10 @@ from src.utils import i18n_locales
 from src.config import settings
 from src.services.ai_quota import AIQuotaExceeded
 from src.utils.telegram_edit import try_edit
+from src.utils.escape import clean_md
+from src.presenters.food import format_food_analysis
+from src.states import FoodLoggingState, MealEditingState
+from src.utils.telegram_action import send_typing_action
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +41,32 @@ _worker_stop_event = None
 _worker_started_at = None
 _worker_stopped_at = None
 _worker_last_heartbeat = None
-_worker_last_error = None
+_worker_shutting_down = False
 _bot = None
 _storage = None
+
+
+class QueueWorker:
+    """Encapsulates background processing of the AI request queue."""
+
+    def __init__(self, bot: Bot, storage, deadline: float = 900.0):
+        self.bot = bot
+        self.storage = storage
+        self.deadline = deadline
+        self._task: Optional[asyncio.Task] = None
+        self._stop_event = asyncio.Event()
+
+    def record_heartbeat(self):
+        record_worker_heartbeat()
+
+    def health(self, stall_threshold_seconds: float = 60.0) -> dict:
+        return get_worker_health(stall_threshold_seconds=stall_threshold_seconds)
+
+    async def start(self):
+        return await start_queue_worker(self.bot, self.storage)
+
+    async def stop(self, timeout: float = 35.0):
+        return await stop_queue_worker(self._task, timeout=timeout)
 
 
 def record_worker_heartbeat():
@@ -126,12 +153,9 @@ def is_worker_alive(stall_threshold_seconds: float = 60.0) -> bool:
     return get_worker_health(stall_threshold_seconds=stall_threshold_seconds).get("healthy", False)
 
 
-def clean_md(text: str) -> str:
-    if not text:
-        return ""
-    for char in ["*", "_", "[", "]", "`"]:
-        text = text.replace(char, "")
-    return text
+def is_worker_shutting_down() -> bool:
+    """Returns True if the worker is currently shutting down intentionally."""
+    return _worker_shutting_down
 
 async def check_rate_limit(db: AsyncSession) -> Tuple[bool, str]:
     """
@@ -239,7 +263,8 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
     if req_type == "medication_photo":
         import base64
         if "result" not in payload:
-            result = await gemini.recognize_medication(base64.b64decode(payload["image"]), payload["mime_type"], user_id=user_id)
+            async with send_typing_action(bot=bot, chat_id=chat_id):
+                result = await gemini.recognize_medication(base64.b64decode(payload["image"]), payload["mime_type"], user_id=user_id)
             await log_ai_request(db, user_id=user_id, request_type=req_type)
             item.payload = {"result": result, **({"bot_category": payload["bot_category"]} if payload.get("bot_category") else {})}
             await db.commit()
@@ -301,13 +326,14 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
             except Exception:
                 status_msg_id = None
 
-        analysis = await gemini.analyze_food_input(
-            text_description=text_desc,
-            image_bytes=image_bytes,
-            images_bytes=images_bytes,
-            language=user_language,
-            user_id=user_id,
-        )
+        async with send_typing_action(bot=bot, chat_id=chat_id):
+            analysis = await gemini.analyze_food_input(
+                text_description=text_desc,
+                image_bytes=image_bytes,
+                images_bytes=images_bytes,
+                language=user_language,
+                user_id=user_id,
+            )
 
         if not analysis:
             if status_msg_id and hasattr(bot, "edit_message_text"):
@@ -323,22 +349,7 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
 
         await log_ai_request(db, user_id=user_id, request_type=req_type)
 
-        items_str = ""
-        for food_item in analysis.food_items:
-            name = clean_md(food_item.name)
-            portion = clean_md(food_item.portion)
-            items_str += f"- **{name}** ({portion}): {food_item.calories} kcal | P: {food_item.protein}g, F: {food_item.fat}g, C: {food_item.carb}g\n"
-
-        result_text = i18n_locales.get_text(
-            "food_analysis_result",
-            user_language,
-            items=items_str,
-            calories=analysis.total_calories,
-            protein=analysis.total_protein,
-            fat=analysis.total_fat,
-            carb=analysis.total_carb
-        )
-
+        result_text = format_food_analysis(analysis, user_language)
         result_text += '\n' + i18n_locales.get_text('meal_type_' + meal_type, user_language)
         result_text += '\n' + i18n_locales.get_text('ux_estimate', user_language)
         draft_payload = {
@@ -390,7 +401,8 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
             except Exception:
                 status_msg_id = None
 
-        adjusted_analysis = await get_cached_adjustment(db, item, user_language)
+        async with send_typing_action(bot=bot, chat_id=chat_id):
+            adjusted_analysis = await get_cached_adjustment(db, item, user_language)
 
         if not adjusted_analysis:
             if isinstance(status_msg_id, int) and hasattr(bot, "edit_message_text"):
@@ -404,21 +416,7 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
                     pass
             return False
 
-        items_str = ""
-        for food_item in adjusted_analysis.food_items:
-            name = clean_md(food_item.name)
-            portion = clean_md(food_item.portion)
-            items_str += f"- **{name}** ({portion}): {food_item.calories} kcal | P: {food_item.protein}g, F: {food_item.fat}g, C: {food_item.carb}g\n"
-
-        result_text = i18n_locales.get_text(
-            "food_analysis_result",
-            user_language,
-            items=items_str,
-            calories=adjusted_analysis.total_calories,
-            protein=adjusted_analysis.total_protein,
-            fat=adjusted_analysis.total_fat,
-            carb=adjusted_analysis.total_carb
-        )
+        result_text = format_food_analysis(adjusted_analysis, user_language)
 
         draft_id = payload.get("draft_id")
         if draft_id:
@@ -473,7 +471,6 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
         return True
 
     elif req_type == "adjust_meal_edit":
-        from src.handlers.food import MealEditingState
         current_state = await fsm_context.get_state()
 
         original_data = payload.get("original_data")
@@ -503,7 +500,8 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
             except Exception:
                 status_msg_id = None
 
-        adjusted_analysis = await get_cached_adjustment(db, item, user_language)
+        async with send_typing_action(bot=bot, chat_id=chat_id):
+            adjusted_analysis = await get_cached_adjustment(db, item, user_language)
 
         if not adjusted_analysis:
             if isinstance(status_msg_id, int) and hasattr(bot, "edit_message_text"):
@@ -517,21 +515,7 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
                     pass
             return False
 
-        items_str = ""
-        for food_item in adjusted_analysis.food_items:
-            name = clean_md(food_item.name)
-            portion = clean_md(food_item.portion)
-            items_str += f"- **{name}** ({portion}): {food_item.calories} kcal | P: {food_item.protein}g, F: {food_item.fat}g, C: {food_item.carb}g\n"
-
-        result_text = i18n_locales.get_text(
-            "food_analysis_result",
-            user_language,
-            items=items_str,
-            calories=adjusted_analysis.total_calories,
-            protein=adjusted_analysis.total_protein,
-            fat=adjusted_analysis.total_fat,
-            carb=adjusted_analysis.total_carb
-        )
+        result_text = format_food_analysis(adjusted_analysis, user_language)
 
         current_state = await fsm_context.get_state()
         flow_data = await fsm_context.get_data()
@@ -673,12 +657,14 @@ async def start_queue_worker(bot: Bot, storage):
     """Background loop that processes the AI request queue."""
     global _worker_running, _worker_task, _worker_stop_event
     global _worker_started_at, _worker_stopped_at, _worker_last_heartbeat, _worker_last_error
+    global _worker_shutting_down
     global _bot, _storage
     _bot = bot
     _storage = storage
     _worker_task = asyncio.current_task()
     _worker_stop_event = asyncio.Event()
     _worker_running = True
+    _worker_shutting_down = False
     _worker_started_at = datetime.now(UTC)
     _worker_last_heartbeat = datetime.now(UTC)
     _worker_last_error = None
@@ -705,7 +691,30 @@ async def start_queue_worker(bot: Bot, storage):
                 # still has a bounded deadline and leaves a recoverable claim.
                 await asyncio.wait_for(process_next_queue_item(bot, storage), timeout=900)
             except asyncio.TimeoutError:
-                raise RuntimeError('Queue operation exceeded its execution deadline') from None
+                logger.error("Queue item operation exceeded deadline (900s); handling timed out processing items")
+                try:
+                    async with AsyncSessionLocal() as db:
+                        now_utc = datetime.now(UTC).replace(tzinfo=None)
+                        timed_out_items = (await db.scalars(select(AiRequestQueue).where(
+                            AiRequestQueue.status == "processing",
+                            AiRequestQueue.request_type.in_(crud.EXECUTABLE_QUEUE_TYPES),
+                        ))).all()
+                        for it in timed_out_items:
+                            it.retry_count += 1
+                            it.last_error = "Queue operation exceeded its execution deadline"
+                            if it.retry_count >= settings.AI_QUEUE_MAX_RETRIES:
+                                it.status = "failed"
+                                it.processed_at = now_utc
+                                it.error_message = f"Execution deadline exceeded ({it.retry_count} attempts)"
+                                it.next_retry_at = None
+                                await _notify_item_failed(bot, db, it)
+                            else:
+                                it.status = "pending"
+                                it.next_retry_at = now_utc + timedelta(minutes=5)
+                                it.error_message = f"Execution deadline exceeded; retrying in 5m (attempt {it.retry_count})"
+                        await db.commit()
+                except Exception as db_err:
+                    logger.error(f"Failed to reset timed out queue items: {db_err}")
             except Exception as e:
                 logger.error(f"Error in queue worker iteration: {e}", exc_info=True)
             record_worker_heartbeat()
@@ -725,22 +734,42 @@ async def start_queue_worker(bot: Bot, storage):
 
 async def stop_queue_worker(task=None, timeout=35):
     """Finish in-flight work while Telegram is open, or leave a recoverable claim."""
-    global _worker_running, _worker_stopped_at
+    global _worker_running, _worker_stopped_at, _worker_shutting_down
     _worker_running = False
+    _worker_shutting_down = True
     _worker_stopped_at = datetime.now(UTC)
     task = task or _worker_task
     if _worker_stop_event is not None:
         _worker_stop_event.set()
     logger.info("AI Request Queue worker stopping...")
-    if task is not None and task is not asyncio.current_task():
-        if task is not _worker_task and not task.done():
-            task.cancel()  # Stop a task that has not entered its startup yet.
-        try:
-            await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
-        except asyncio.TimeoutError:
-            logger.warning("Queue shutdown timed out; interrupted work will resume on restart")
-            task.cancel()
-            await asyncio.gather(task, return_exceptions=True)
-        except asyncio.CancelledError:
-            if not task.cancelled():
-                raise
+    try:
+        if task is not None and task is not asyncio.current_task():
+            if task is not _worker_task and not task.done():
+                task.cancel()  # Stop a task that has not entered its startup yet.
+            try:
+                await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
+            except asyncio.TimeoutError:
+                logger.warning("Queue shutdown timed out; interrupted work will resume on restart")
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+            except asyncio.CancelledError:
+                if not task.cancelled():
+                    raise
+    finally:
+        _worker_shutting_down = False
+
+
+def ensure_queue_worker_running(bot: Optional[Bot] = None, storage=None) -> Optional[asyncio.Task]:
+    """Ensures that the AI queue worker background task is running. Restarts it if stopped or crashed."""
+    global _worker_task, _worker_running, _bot, _storage
+    b = bot or _bot
+    s = storage or _storage
+    if b is None or s is None:
+        logger.warning("Cannot ensure queue worker: bot or storage not set")
+        return None
+    if _worker_task is None or _worker_task.done() or not _worker_running:
+        logger.info("Restarting queue worker background task...")
+        _worker_task = asyncio.create_task(start_queue_worker(b, s))
+        return _worker_task
+    return _worker_task
+

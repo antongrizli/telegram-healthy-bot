@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 async def finalize_card(message, payload, language, accept):
     """Best-effort UI cleanup after the database transaction has succeeded."""
-    from src.handlers.food import format_draft_card_text
+    from src.presenters.food import format_draft_card_text
     from src.utils import i18n_locales
     text = i18n_locales.strip_food_confirmation_question(format_draft_card_text(payload, language))
     status = (i18n_locales.format_food_logged(payload.get('meal_type', 'food'),
@@ -28,7 +28,8 @@ async def finalize_card(message, payload, language, accept):
 
 
 async def deliver_card(bot, db, draft, chat_id, language, status_message_id=None):
-    from src.handlers.food import format_draft_card_text, get_draft_keyboard
+    from src.presenters.food import format_draft_card_text
+    from src.keyboards.inline import get_draft_keyboard
     target = draft.payload.get('card_message_id') or status_message_id
     kwargs = dict(text=format_draft_card_text(draft.payload, language),
                   reply_markup=get_draft_keyboard(draft.id, language, draft.payload.get('draft_page', 1)),

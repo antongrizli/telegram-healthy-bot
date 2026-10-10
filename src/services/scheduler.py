@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import hashlib
 import json
@@ -70,12 +71,54 @@ def get_scheduler_health() -> dict:
     }
 
 
+_last_watchdog_alert_time: float | None = None
+_last_watchdog_status: str | None = None
+
+
 async def check_worker_watchdog(bot: Bot):
-    """Periodic health check of AI queue worker. Logs warnings if stalled or dead."""
-    from src.services.rate_limiter import get_worker_health
+    """Periodic health check of AI queue worker. Auto-heals if crashed/stopped, and throttles noisy alerts."""
+    global _last_watchdog_alert_time, _last_watchdog_status
+    from src.services.rate_limiter import get_worker_health, ensure_queue_worker_running, is_worker_shutting_down
+    if is_worker_shutting_down():
+        return
+
     worker_health = get_worker_health(stall_threshold_seconds=60.0)
     if not worker_health.get("healthy"):
-        logger.warning("Queue worker watchdog alert: %s", worker_health)
+        status = worker_health.get("status")
+        # Attempt auto-recovery if crashed or stopped
+        if status in ("crashed", "stopped"):
+            restarted_task = ensure_queue_worker_running(bot=bot)
+            if restarted_task:
+                logger.info("Watchdog detected %s queue worker; auto-recovery task triggered", status)
+                _last_watchdog_status = "recovering"
+                return
+
+        now = monotonic()
+        # Throttle noisy warnings: only log if status changed or at least 15 minutes elapsed
+        if (
+            _last_watchdog_alert_time is None
+            or status != _last_watchdog_status
+            or (now - _last_watchdog_alert_time) > 900
+        ):
+            logger.warning("Queue worker watchdog alert: %s", worker_health)
+            _last_watchdog_alert_time = now
+            _last_watchdog_status = status
+
+            # Send alert to admins if worker crashed or stalled
+            if status in ("crashed", "stalled"):
+                for admin_id in settings.ADMIN_USER_IDS:
+                    with contextlib.suppress(Exception):
+                        err_msg = worker_health.get("error") or "Worker heartbeat stalled"
+                        await bot.send_message(
+                            admin_id,
+                            f"⚠️ *Queue worker watchdog alert*: `{status}`\n`{err_msg}`",
+                            parse_mode="Markdown",
+                        )
+    else:
+        if _last_watchdog_status is not None and _last_watchdog_status != "running":
+            logger.info("Queue worker recovered and is healthy again")
+        _last_watchdog_status = "running"
+        _last_watchdog_alert_time = None
 
 
 def configure_scheduler_logging():
@@ -247,7 +290,9 @@ async def generate_and_send_report_direct(bot: Bot, db: AsyncSession, user, repo
         db, user, now_local.date().isoformat(), food_logs, weight_logs,
         profile_dict['medications'], water_ml,
     ) if report_type == 'daily' else None
-    report = await gemini.generate_report(profile_dict, food_logs, weight_logs, report_type, user.language, user_id=user_id)
+    from src.utils.telegram_action import send_typing_action
+    async with send_typing_action(bot=bot, chat_id=user_id):
+        report = await gemini.generate_report(profile_dict, food_logs, weight_logs, report_type, user.language, user_id=user_id)
     await rate_limiter.log_ai_request(db, user_id=user_id, request_type="generate_report")
 
     if report_type == "daily":
@@ -601,8 +646,11 @@ async def check_daily_streaks_and_targets(bot: Bot, user_id: int):
                     ach_notifs.append(f"{icon} *{name}* — {desc}")
             
             msg = f"🏆 *{i18n_locales.get_text('achievements_unlocked_title', user.language)}*\n" + "\n".join(ach_notifs)
+            from src.keyboards.inline import get_achievement_inline
+            ach_key_for_share = new_ach_keys[0] if len(new_ach_keys) == 1 else ""
+            markup = get_achievement_inline(lang=user.language or "en", ach_key=ach_key_for_share)
             try:
-                await bot.send_message(user_id, msg, parse_mode="Markdown")
+                await bot.send_message(user_id, msg, reply_markup=markup, parse_mode="Markdown")
             except TelegramForbiddenError:
                 await handle_user_blocked_bot(user_id, db=db)
             except Exception as e:
@@ -785,6 +833,16 @@ async def purge_expired_blocked_users_job():
         logger.error("Error in purge_expired_blocked_users_job: %s", e)
 
 
+async def cleanup_operational_data_job():
+    """Daily retention job: removes operational logs older than 30 days."""
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await crud.cleanup_operational_logs(db, retention_days=30)
+            logger.info("Operational retention cleanup finished: %s", result)
+    except Exception as e:
+        logger.error("Error in cleanup_operational_data_job: %s", e)
+
+
 async def init_scheduler(bot: Bot):
     configure_scheduler_logging()
     from src.services.medications import send_medication_reminders
@@ -815,6 +873,15 @@ async def init_scheduler(bot: Bot):
         "interval",
         hours=1,
         id="purge_expired_blocked_users",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    # Register daily retention cleanup job at 03:30 UTC
+    scheduler.add_job(
+        cleanup_operational_data_job,
+        CronTrigger(hour=3, minute=30, timezone="UTC"),
+        id="cleanup_operational_data",
         replace_existing=True,
         max_instances=1,
         coalesce=True,

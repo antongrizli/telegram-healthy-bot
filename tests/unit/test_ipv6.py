@@ -21,6 +21,7 @@ async def test_bot_initialization_with_ipv6(monkeypatch):
     # Mock bot instance and session close
     mock_bot_instance = MagicMock()
     mock_bot_instance.session = AsyncMock()
+    mock_bot_instance.session.middleware = MagicMock()
     mock_bot_instance.set_chat_menu_button = AsyncMock()
     mock_bot_class.return_value = mock_bot_instance
     
@@ -84,6 +85,7 @@ async def test_bot_initialization_without_ipv6(monkeypatch):
     # Mock bot instance and session close
     mock_bot_instance = MagicMock()
     mock_bot_instance.session = AsyncMock()
+    mock_bot_instance.session.middleware = MagicMock()
     mock_bot_instance.set_chat_menu_button = AsyncMock()
     mock_bot_class.return_value = mock_bot_instance
     

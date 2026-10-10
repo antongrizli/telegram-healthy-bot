@@ -427,3 +427,31 @@ async def test_blocked_user_lifecycle(db_session):
     assert len(weight_logs) == 0
 
 
+async def test_cleanup_operational_logs(db_session):
+    from src.database.models import AiRequestAttempt, AiRequestLog, MessageStat, AiRequestQueue
+    now = datetime.now(UTC).replace(tzinfo=None)
+    old = now - timedelta(days=45)
+    recent = now - timedelta(days=5)
+
+    # Add old and recent attempts
+    db_session.add_all([
+        AiRequestAttempt(user_id=1, request_type="test", executed_at=old),
+        AiRequestAttempt(user_id=1, request_type="test", executed_at=recent),
+        AiRequestLog(user_id=1, request_type="test", executed_at=old),
+        AiRequestLog(user_id=1, request_type="test", executed_at=recent),
+        MessageStat(user_id=1, message_type="text", sent_at=old),
+        MessageStat(user_id=1, message_type="text", sent_at=recent),
+        AiRequestQueue(user_id=1, chat_id=1, request_type="test", payload={}, status="completed", created_at=old),
+        AiRequestQueue(user_id=1, chat_id=1, request_type="test", payload={}, status="pending", created_at=old),
+        AiRequestQueue(user_id=1, chat_id=1, request_type="test", payload={}, status="completed", created_at=recent),
+    ])
+    await db_session.commit()
+
+    stats = await crud.cleanup_operational_logs(db_session, retention_days=30)
+    assert stats["attempts"] == 1
+    assert stats["logs"] == 1
+    assert stats["stats"] == 1
+    assert stats["queue"] == 1  # only completed old queue item deleted, pending preserved
+
+
+

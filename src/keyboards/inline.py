@@ -103,18 +103,6 @@ def get_streak_inline(lang: str = "en") -> InlineKeyboardMarkup:
     ]
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
-def get_report_range_inline(lang: str = "en") -> InlineKeyboardMarkup:
-    """
-    Inline keyboard for switching report ranges.
-    """
-    kb = [
-        [
-            InlineKeyboardButton(text=get_text('ux_daily', lang), callback_data="report_range:daily"),
-            InlineKeyboardButton(text=get_text('ux_weekly', lang), callback_data="report_range:weekly"),
-            InlineKeyboardButton(text=get_text('ux_monthly', lang), callback_data="report_range:monthly")
-        ]
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=kb)
 
 
 def get_admin_dlq_inline(tasks: list, page: int, total_pages: int, lang: str = "en") -> InlineKeyboardMarkup:
@@ -165,3 +153,68 @@ def get_admin_dlq_task_inline(task_id: int, page: int, lang: str = "en") -> Inli
         [InlineKeyboardButton(text=cancel_label, callback_data=f"dlq:cancel:{task_id}:{page}")],
         [InlineKeyboardButton(text=back_label, callback_data=f"dlq:page:{page}")]
     ])
+
+
+def get_draft_keyboard(draft_id, language, page: int = 1) -> InlineKeyboardMarkup:
+    """Inline keyboard for an active meal draft card."""
+    from src.utils import i18n_locales
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=i18n_locales.get_text(key, language),
+                             callback_data=f"meal_draft:{action}:{draft_id}")
+        for action, key in [("accept", "btn_accept"), ("correct", "btn_correct"), ("cancel", "btn_cancel")]
+    ], [
+        InlineKeyboardButton(text=i18n_locales.get_text('ux_type', language), callback_data=f'uxdraft:type:{draft_id}')
+    ], [
+        InlineKeyboardButton(text=i18n_locales.get_text('food_drafts_back_to_list', language), callback_data=f'uxdraft:list:{page}')
+    ]])
+
+
+def correction_keyboard(draft_id, lang: str) -> InlineKeyboardMarkup:
+    """Inline keyboard with correction action options."""
+    from src.utils import i18n_locales
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=i18n_locales.get_text(key, lang), callback_data=f'uxdraft:{action}:{draft_id}')]
+        for action, key in [('portion', 'ux_portion'), ('add', 'ux_add_item'), ('remove', 'ux_remove_item'), ('manual', 'ux_manual')]
+    ] + [[InlineKeyboardButton(text=i18n_locales.get_text('ux_previous', lang), callback_data=f'uxdraft:back:{draft_id}')]])
+
+
+def get_drafts_list_keyboard(drafts: list, page: int, total_pages: int, user_language: str, paged: bool = False) -> InlineKeyboardMarkup:
+    """Inline keyboard for paginated draft list."""
+    from src.utils import i18n_locales
+    start_idx = (page - 1) * 5
+    page_drafts = drafts if paged else drafts[start_idx:start_idx + 5]
+
+    rows = []
+    select_row = [
+        InlineKeyboardButton(
+            text=str(i),
+            callback_data=f"uxdraft:view:{draft.id}:{page}"
+        )
+        for i, draft in enumerate(page_drafts, start=start_idx + 1)
+    ]
+    if select_row:
+        rows.append(select_row)
+
+    if total_pages > 1:
+        prev_btn = InlineKeyboardButton(
+            text="⬅️",
+            callback_data=f"uxdraft:list:{page - 1}" if page > 1 else "uxdraft:noop"
+        )
+        page_btn = InlineKeyboardButton(
+            text=f"{page}/{total_pages}",
+            callback_data="uxdraft:noop"
+        )
+        next_btn = InlineKeyboardButton(
+            text="➡️",
+            callback_data=f"uxdraft:list:{page + 1}" if page < total_pages else "uxdraft:noop"
+        )
+        rows.append([prev_btn, page_btn, next_btn])
+
+    close_btn = InlineKeyboardButton(
+        text=i18n_locales.get_text("food_drafts_close", user_language),
+        callback_data="uxdraft:close"
+    )
+    rows.append([close_btn])
+
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+

@@ -1,0 +1,26 @@
+[project]
+name = "telegram-healthy-bot"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "postgres: requires TEST_POSTGRES_URL",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC", "BLE", "G", "SIM"]
+ignore = [
+    "E501",
+    "BLE001",
+    "ASYNC230",
+    "ASYNC109",
+    "SIM105",
+]

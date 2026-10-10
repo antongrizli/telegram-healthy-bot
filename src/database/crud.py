@@ -1,7 +1,10 @@
 from datetime import datetime, UTC, timedelta
 from sqlalchemy import select, update, delete, func, desc, and_, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.database.models import User, FoodLog, WeightLog, MessageStat, AiRequestLog, AiRequestQueue, Streak, Achievement, HealthCard
+from src.database.models import (
+    User, FoodLog, WeightLog, MessageStat, AiRequestLog, AiRequestAttempt,
+    AiRequestQueue, Streak, Achievement, HealthCard
+)
 from src.config import settings
 
 EXECUTABLE_QUEUE_TYPES = ('analyze_food_input', 'adjust_food_analysis',
@@ -1140,3 +1143,31 @@ async def confirm_medication_photo(db, user_id, request_id):
     request.payload = {**request.payload, 'medication_id': item.id}
     await db.commit()
     return item
+
+
+async def cleanup_operational_logs(db: AsyncSession, retention_days: int = 30) -> dict[str, int]:
+    """Purges operational records older than retention_days (attempts, request logs, stats, completed queue)."""
+    cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=retention_days)
+    attempts_res = await db.execute(
+        delete(AiRequestAttempt).where(AiRequestAttempt.executed_at < cutoff)
+    )
+    logs_res = await db.execute(
+        delete(AiRequestLog).where(AiRequestLog.executed_at < cutoff)
+    )
+    stats_res = await db.execute(
+        delete(MessageStat).where(MessageStat.sent_at < cutoff)
+    )
+    queue_res = await db.execute(
+        delete(AiRequestQueue).where(
+            AiRequestQueue.status.in_(["completed", "cancelled"]),
+            AiRequestQueue.created_at < cutoff,
+        )
+    )
+    await db.commit()
+    return {
+        "attempts": attempts_res.rowcount or 0,
+        "logs": logs_res.rowcount or 0,
+        "stats": stats_res.rowcount or 0,
+        "queue": queue_res.rowcount or 0,
+    }
+

@@ -73,12 +73,8 @@ async def generate_morning_briefing(db: AsyncSession, user_id: int) -> str:
         f"Calorie Target: {user.target_calories} kcal, "
         f"Protein: {user.target_protein}g, Fat: {user.target_fat}g, Carb: {user.target_carb}g"
     )
-    
-    lang_names = {
-        "en": "English", "ru": "Russian", "uk": "Ukrainian", "pl": "Polish", 
-        "de": "German", "tr": "Turkish", "es": "Spanish"
-    }
-    lang_name = lang_names.get(user.language, "English")
+    from src.utils.languages import LANG_NAMES
+    lang_name = LANG_NAMES.get(user.language, "English")
     
     prompt = (
         f"You are a warm, supportive digital mental health and fitness coach speaking directly to {user.name}.\n"

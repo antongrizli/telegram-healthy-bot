@@ -157,3 +157,47 @@ async def test_purge_expired_blocked_users_job(mocker):
     await purge_expired_blocked_users_job()
     mock_purge.assert_awaited_once()
 
+
+@pytest.mark.asyncio
+async def test_check_worker_watchdog_auto_recovery_and_throttle(mocker, caplog):
+    import logging
+    from src.services import scheduler
+    fake_bot = AsyncMock()
+    # Reset watchdog global state
+    scheduler._last_watchdog_alert_time = None
+    scheduler._last_watchdog_status = None
+
+    # Case 1: worker is crashed -> triggers ensure_queue_worker_running
+    mock_health = mocker.patch("src.services.rate_limiter.get_worker_health", return_value={"status": "crashed", "healthy": False})
+    mock_ensure = mocker.patch("src.services.rate_limiter.ensure_queue_worker_running", return_value=MagicMock())
+
+    with caplog.at_level(logging.INFO, logger="src.services.scheduler"):
+        await scheduler.check_worker_watchdog(fake_bot)
+
+    mock_ensure.assert_called_once_with(bot=fake_bot)
+    assert any("auto-recovery task triggered" in r.message for r in caplog.records)
+
+    # Case 2: worker is still unhealthy and ensure returns None -> alerts once, then throttles
+    caplog.clear()
+    mock_ensure.return_value = None
+    mock_health.return_value = {"status": "stalled", "healthy": False}
+
+    with caplog.at_level(logging.WARNING, logger="src.services.scheduler"):
+        await scheduler.check_worker_watchdog(fake_bot)
+        # Second call immediately after should be throttled
+        await scheduler.check_worker_watchdog(fake_bot)
+
+    warning_records = [r for r in caplog.records if r.levelno == logging.WARNING and "Queue worker watchdog alert" in r.message]
+    assert len(warning_records) == 1
+
+
+@pytest.mark.asyncio
+async def test_cleanup_operational_data_job(mocker):
+    from src.services.scheduler import cleanup_operational_data_job
+    mock_cleanup = mocker.patch("src.database.crud.cleanup_operational_logs", new_callable=AsyncMock, return_value={"attempts": 5, "logs": 10, "stats": 2, "queue": 1})
+
+    await cleanup_operational_data_job()
+    mock_cleanup.assert_awaited_once()
+
+
+

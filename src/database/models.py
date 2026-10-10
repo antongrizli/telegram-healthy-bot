@@ -1,5 +1,5 @@
 from datetime import datetime, time, UTC
-from sqlalchemy import BigInteger, Column, Integer, Float, String, Boolean, DateTime, Time, ForeignKey, JSON, Date, UniqueConstraint
+from sqlalchemy import BigInteger, Column, Integer, Float, String, Boolean, DateTime, Time, ForeignKey, JSON, Date, UniqueConstraint, Index
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -53,6 +53,9 @@ class User(Base):
 
 class WaterLog(Base):
     __tablename__ = "water_logs"
+    __table_args__ = (
+        Index("ix_water_logs_user_logged", "user_id", "logged_at"),
+    )
     id = Column(Integer, primary_key=True)
     user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False, index=True)
     milliliters = Column(Integer, nullable=False)
@@ -68,6 +71,9 @@ class ProductEvent(Base):
 
 class FoodLog(Base):
     __tablename__ = "food_logs"
+    __table_args__ = (
+        Index("ix_food_logs_user_logged", "user_id", "logged_at"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False)
@@ -85,6 +91,9 @@ class FoodLog(Base):
 
 class WeightLog(Base):
     __tablename__ = "weight_logs"
+    __table_args__ = (
+        Index("ix_weight_logs_user_logged", "user_id", "logged_at"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False)
@@ -124,6 +133,9 @@ class AiRequestAttempt(Base):
 
 class AiRequestQueue(Base):
     __tablename__ = "ai_request_queue"
+    __table_args__ = (
+        Index("ix_queue_status_retry", "status", "next_retry_at"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False)

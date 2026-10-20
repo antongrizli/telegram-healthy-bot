@@ -1,6 +1,6 @@
 # Runtime dependencies pinned to the versions verified by the test suite.
 # Test tooling lives in requirements-dev.txt and is not shipped in the image.
-aiohttp==3.14.3
+aiohttp==3.14.4
 aiogram==3.29.0
 google-genai==2.8.0
 sqlalchemy[asyncio]==2.0.50

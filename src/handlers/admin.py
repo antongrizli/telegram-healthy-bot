@@ -1,7 +1,7 @@
 import unicodedata
 import re
 from html import escape
-from datetime import UTC
+from datetime import datetime, UTC
 from aiogram import Router, F
 from aiogram.filters import Command, StateFilter
 from aiogram.types import Message, CallbackQuery, LinkPreviewOptions, InlineKeyboardMarkup, InlineKeyboardButton
@@ -673,3 +673,38 @@ async def admin_dlq_callback(callback: CallbackQuery, state: FSMContext, user_la
                 if not await try_edit(callback.message.edit_text, text, reply_markup=kb, parse_mode="HTML"):
                     await callback.message.answer(text, reply_markup=kb, parse_mode="HTML")
             return
+
+
+@router.message(Command("logs"))
+@router.message(F.text.in_(i18n_locales.get_all_translations("admin_download_logs")))
+async def cmd_admin_download_logs(message: Message, state: FSMContext, user_language: str):
+    await state.clear()
+    actor_id = message.from_user.id
+    async with AsyncSessionLocal() as db:
+        actor = await crud.get_user(db, actor_id)
+        if not (actor_id in settings.ADMIN_USER_IDS or (actor and actor.is_admin and not actor.is_blocked)):
+            await message.answer(i18n_locales.get_text("admin_only", user_language))
+            return
+
+    from aiogram.types import BufferedInputFile
+    from src.utils.log_manager import get_logs_for_last_24h
+
+    status_msg = await message.answer(i18n_locales.get_text("admin_logs_preparing", user_language))
+
+    try:
+        log_bytes = get_logs_for_last_24h(hours=24)
+        now_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"healthy_bot_logs_24h_{now_str}.log"
+        input_file = BufferedInputFile(log_bytes, filename=filename)
+
+        await message.answer_document(
+            document=input_file,
+            caption=i18n_locales.get_text("admin_logs_caption", user_language),
+            parse_mode="Markdown"
+        )
+    finally:
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+

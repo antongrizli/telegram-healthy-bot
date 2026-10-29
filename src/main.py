@@ -17,6 +17,10 @@ async def main():
     )
     logging.getLogger("google_genai.models").setLevel(logging.WARNING)
     logging.getLogger("google_genai").setLevel(logging.WARNING)
+
+    from src.utils.log_manager import setup_logging
+    setup_logging()
+
     logger = logging.getLogger(__name__)
 
     from src.database.init_db import init_db

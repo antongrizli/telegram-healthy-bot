@@ -64,6 +64,9 @@ def get_admin_menu(lang: str = "en") -> ReplyKeyboardMarkup:
             KeyboardButton(text="⚠️ Failed Queue" if lang == "en" else "⚠️ Сбои очереди")
         ],
         [
+            KeyboardButton(text=get_text("admin_download_logs", lang))
+        ],
+        [
             KeyboardButton(text=get_text("ux_back", lang))
         ]
     ]

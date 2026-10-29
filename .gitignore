@@ -117,4 +117,8 @@ venv.bak/
 *.sqlite
 pgdata/
 
+# Logs
+logs/
+*.log
+
 .agents/*

@@ -79,8 +79,11 @@ async def medication_api(request):
                 if not 1 <= len(raw) <= 4 * 1024 * 1024:
                     raise ValueError('Image must be smaller than 4 MB')
                 # Always queue OCR: the existing worker applies global limits and durable retries.
-                queue_id = await rate_limiter.add_to_queue(db, user_id, user_id, 'medication_photo',
-                    dict(image=data['image'], mime_type=mime))
+                try:
+                    queue_id = await rate_limiter.add_to_queue(db, user_id, user_id, 'medication_photo',
+                        dict(image=data['image'], mime_type=mime))
+                except rate_limiter.QueueUserLimitExceeded:
+                    return web.json_response({'error': 'queue_limit_exceeded'}, status=429)
                 return web.json_response({'id': queue_id, 'status': 'pending'}, status=202)
             else:
                 raise web.HTTPNotFound()

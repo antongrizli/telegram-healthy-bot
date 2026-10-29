@@ -142,3 +142,43 @@ async def test_cmd_admin_download_logs(monkeypatch):
         assert call_kwargs["document"].filename.startswith("healthy_bot_logs_24h_")
         status_msg.delete.assert_called_once()
 
+
+def test_redact_secrets():
+    from src.utils.log_manager import redact_secrets
+
+    # Telegram bot token
+    raw_tg = "Failed request to https://api.telegram.org/bot123456789:ABCdefGhIjkLmNoPqRsTuVwXyZ012345678/sendMessage"
+    redacted = redact_secrets(raw_tg)
+    assert "123456789:ABCdefGhIjkLmNoPqRsTuVwXyZ012345678" not in redacted
+    assert "[REDACTED_TELEGRAM_TOKEN]" in redacted
+
+    # Gemini API key
+    raw_gemini = "Gemini API failed with key AIzaSyA12345678901234567890123456789012"
+    redacted_gemini = redact_secrets(raw_gemini)
+    assert "AIzaSyA12345678901234567890123456789012" not in redacted_gemini
+    assert "[REDACTED_GEMINI_KEY]" in redacted_gemini
+
+    # Database URL
+    raw_db = "Connection failed: postgresql+asyncpg://botuser:super_secret_pw@localhost:5432/botdb"
+    redacted_db = redact_secrets(raw_db)
+    assert "super_secret_pw" not in redacted_db
+    assert "botuser:***@localhost" in redacted_db
+
+
+def test_secret_redaction_filter():
+    from src.utils.log_manager import SecretRedactionFilter
+
+    f = SecretRedactionFilter()
+    rec = logging.LogRecord(
+        name="test",
+        level=logging.ERROR,
+        pathname="",
+        lineno=0,
+        msg="Error with token %s and key %s",
+        args=("123456789:ABCdefGhIjkLmNoPqRsTuVwXyZ012345678", "AIzaSyA12345678901234567890123456789012"),
+        exc_info=None
+    )
+    assert f.filter(rec) is True
+    assert "123456789:ABC" not in rec.args[0]
+    assert "AIzaSy" not in rec.args[1]
+

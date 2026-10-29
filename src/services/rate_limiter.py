@@ -23,8 +23,14 @@ from src.utils.escape import clean_md
 from src.presenters.food import format_food_analysis
 from src.states import FoodLoggingState, MealEditingState
 from src.utils.telegram_action import send_typing_action
+from src.utils.log_manager import redact_secrets
 
 logger = logging.getLogger(__name__)
+
+
+class QueueUserLimitExceeded(Exception):
+    """Raised when a user has exceeded maximum pending queue requests."""
+    pass
 
 
 async def remove_status_message(bot, chat_id, message_id):
@@ -177,8 +183,32 @@ async def log_ai_request(db: AsyncSession, user_id: Optional[int], request_type:
     await db.refresh(log_entry)
     return log_entry
 
-async def add_to_queue(db: AsyncSession, user_id: int, chat_id: int, request_type: str, payload: dict) -> int:
+async def count_user_pending(db: AsyncSession, user_id: int) -> int:
+    """Returns number of pending queue tasks for a specific user."""
+    stmt = select(func.count(AiRequestQueue.id)).where(
+        AiRequestQueue.user_id == user_id,
+        AiRequestQueue.status == "pending"
+    )
+    res = await db.execute(stmt)
+    return res.scalar() or 0
+
+
+async def add_to_queue(
+    db: AsyncSession,
+    user_id: int,
+    chat_id: int,
+    request_type: str,
+    payload: dict,
+    check_pending_limit: bool = True
+) -> int:
     """Adds a pending request to the queue and returns its ID."""
+    if check_pending_limit and getattr(settings, "AI_USER_MAX_PENDING_QUEUE", 0) > 0:
+        pending_count = await count_user_pending(db, user_id)
+        if pending_count >= settings.AI_USER_MAX_PENDING_QUEUE:
+            raise QueueUserLimitExceeded(
+                f"User {user_id} reached pending queue limit of {settings.AI_USER_MAX_PENDING_QUEUE}"
+            )
+
     queue_item = AiRequestQueue(
         user_id=user_id,
         chat_id=chat_id,
@@ -638,7 +668,7 @@ async def process_next_queue_item(bot: Bot, storage):
         except Exception as e:
             logger.error(f"Error executing queued item {item.id}: {e}", exc_info=True)
             item.retry_count += 1
-            item.last_error = str(e)
+            item.last_error = redact_secrets(str(e))
             if item.retry_count >= settings.AI_QUEUE_MAX_RETRIES:
                 item.status = "failed"
                 item.next_retry_at = None
@@ -723,7 +753,7 @@ async def start_queue_worker(bot: Bot, storage):
             except asyncio.TimeoutError:
                 pass
     except Exception as exc:
-        _worker_last_error = str(exc)
+        _worker_last_error = redact_secrets(str(exc))
         logger.critical(f"Fatal error in AI Request Queue worker: {exc}", exc_info=True)
         raise
     finally:

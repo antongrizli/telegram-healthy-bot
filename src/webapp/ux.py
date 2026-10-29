@@ -53,8 +53,11 @@ async def ux_api(request):
                 if not 1 <= len(description) <= 4000:
                     raise ValueError()
                 now = datetime.now(UTC)
-                queue_id = await rate_limiter.add_to_queue(db, user_id, user_id, 'analyze_food_input',
-                    dict(text_description=description, language=user.language, logged_at=now.isoformat(), meal_type=ux.infer_meal_type(user, now)))
+                try:
+                    queue_id = await rate_limiter.add_to_queue(db, user_id, user_id, 'analyze_food_input',
+                        dict(text_description=description, language=user.language, logged_at=now.isoformat(), meal_type=ux.infer_meal_type(user, now)))
+                except rate_limiter.QueueUserLimitExceeded:
+                    return web.json_response({'error': 'queue_limit_exceeded'}, status=429)
                 await crud.record_event(db, user_id, 'meal_submitted')
                 return web.json_response({'id': queue_id, 'queued': True}, status=202)
             elif kind == 'drafts':

@@ -58,6 +58,7 @@ async def ai_quota_exhausted(db, user_id=None, now=None):
                ("day", 86400, settings.AI_REQUESTS_PER_DAY, None)]
     if user_id is not None:
         windows.append(("user", 60, settings.AI_USER_REQUESTS_PER_MINUTE, user_id))
+        windows.append(("user_day", 86400, settings.AI_USER_REQUESTS_PER_DAY, user_id))
     for scope, seconds, limit, owner in windows:
         count, oldest = await ai_quota_usage(db, now - timedelta(seconds=seconds), owner)
         if count >= limit:

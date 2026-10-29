@@ -199,9 +199,13 @@ async def medication_name(message: Message,state: FSMContext,user_language: str=
         raw=image.read()
         if len(raw)>4*1024*1024:
             await message.answer(tr('error',user_language));return
-        async with AsyncSessionLocal() as db:
-            await rate_limiter.add_to_queue(db,message.from_user.id,message.chat.id,'medication_photo',
-                {'image':base64.b64encode(raw).decode(),'mime_type':'image/jpeg','bot_category':data['med_category']})
+        try:
+            async with AsyncSessionLocal() as db:
+                await rate_limiter.add_to_queue(db,message.from_user.id,message.chat.id,'medication_photo',
+                    {'image':base64.b64encode(raw).decode(),'mime_type':'image/jpeg','bot_category':data['med_category']})
+        except rate_limiter.QueueUserLimitExceeded:
+            await message.answer(get_text('queue_user_limit_exceeded', user_language))
+            return
         await state.clear()
         await message.answer(tr('queued',user_language));return
     try:

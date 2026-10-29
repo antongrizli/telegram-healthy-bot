@@ -59,3 +59,18 @@ async def block_scanners_middleware(request: web.Request, handler) -> web.Stream
             return web.Response(text="Access Denied", status=403)
             
     return await handler(request)
+
+
+@web.middleware
+async def security_headers_middleware(request: web.Request, handler) -> web.StreamResponse:
+    """
+    Middleware that sets protective HTTP security headers:
+    - X-Content-Type-Options: nosniff
+    - Referrer-Policy: strict-origin-when-cross-origin
+    - Content-Security-Policy: frame-ancestors to prevent clickjacking while allowing Telegram web client
+    """
+    response = await handler(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org;"
+    return response

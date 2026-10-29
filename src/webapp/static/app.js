@@ -119,7 +119,25 @@ const initLocalization = async () => {
 document.addEventListener("DOMContentLoaded", async () => {
     // 1. Setup avatar placeholder
     if (state.user && state.user.photo_url) {
-        document.getElementById("avatar-placeholder").innerHTML = `<img src="${state.user.photo_url}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+        try {
+            const parsedUrl = new URL(state.user.photo_url, window.location.origin);
+            if (parsedUrl.protocol === "https:" || parsedUrl.protocol === "http:") {
+                const placeholder = document.getElementById("avatar-placeholder");
+                if (placeholder) {
+                    placeholder.textContent = "";
+                    const img = document.createElement("img");
+                    img.src = parsedUrl.href;
+                    img.alt = "User Avatar";
+                    img.style.width = "100%";
+                    img.style.height = "100%";
+                    img.style.borderRadius = "50%";
+                    img.style.objectFit = "cover";
+                    placeholder.appendChild(img);
+                }
+            }
+        } catch (e) {
+            console.warn("Invalid avatar photo URL", e);
+        }
     }
 
     // 2. Load settings and apply localization
@@ -540,11 +558,19 @@ const loadAchievementsGrid = async () => {
         const card = document.createElement("div");
         card.className = `badge-card ${ach.unlocked ? 'unlocked' : ''}`;
 
-        card.innerHTML = `
-            <div class="badge-icon">${ach.icon}</div>
-            <h4>${ach.name}</h4>
-            <p>${ach.description}</p>
-        `;
+        const iconDiv = document.createElement("div");
+        iconDiv.className = "badge-icon";
+        iconDiv.textContent = ach.icon || "";
+
+        const title = document.createElement("h4");
+        title.textContent = ach.name || "";
+
+        const desc = document.createElement("p");
+        desc.textContent = ach.description || "";
+
+        card.appendChild(iconDiv);
+        card.appendChild(title);
+        card.appendChild(desc);
         grid.appendChild(card);
     });
 };

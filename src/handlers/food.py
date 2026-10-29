@@ -197,39 +197,54 @@ async def process_food_input(
     image_file_ids = None
     text_desc = None
     
+    MAX_IMAGE_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+    MAX_TEXT_DESC_LENGTH = 4000
+
     if album:
         images_bytes = []
         image_file_ids = []
         captions = []
         for m in album:
             if m.photo:
-                fid = m.photo[-1].file_id
+                last_photo = m.photo[-1]
+                if last_photo.file_size and last_photo.file_size > MAX_IMAGE_FILE_SIZE:
+                    continue
+                fid = last_photo.file_id
                 image_file_ids.append(fid)
                 try:
                     file_info = await message.bot.get_file(fid)
                     image_io = io.BytesIO()
                     await message.bot.download_file(file_info.file_path, image_io)
-                    images_bytes.append(image_io.getvalue())
-                except Exception as e:
+                    raw_val = image_io.getvalue()
+                    if len(raw_val) <= MAX_IMAGE_FILE_SIZE:
+                        images_bytes.append(raw_val)
+                except Exception:
                     pass
             if m.caption:
                 captions.append(m.caption.strip())
         
         if captions:
-            text_desc = "\n".join(captions)
+            text_desc = "\n".join(captions)[:MAX_TEXT_DESC_LENGTH]
         if image_file_ids:
             image_file_id = image_file_ids[0]
     else:
         if message.photo:
-            image_file_id = message.photo[-1].file_id
+            last_photo = message.photo[-1]
+            if last_photo.file_size and last_photo.file_size > MAX_IMAGE_FILE_SIZE:
+                await message.answer("⚠️ Photo exceeds 10MB limit.")
+                return
+            image_file_id = last_photo.file_id
             file_info = await message.bot.get_file(image_file_id)
             image_io = io.BytesIO()
             await message.bot.download_file(file_info.file_path, image_io)
             image_bytes = image_io.getvalue()
+            if len(image_bytes) > MAX_IMAGE_FILE_SIZE:
+                await message.answer("⚠️ Photo exceeds 10MB limit.")
+                return
             if message.caption:
-                text_desc = message.caption.strip()
+                text_desc = message.caption.strip()[:MAX_TEXT_DESC_LENGTH]
         elif message.text:
-            text_desc = message.text.strip()
+            text_desc = message.text.strip()[:MAX_TEXT_DESC_LENGTH]
         else:
             await message.answer(i18n_locales.get_text("food_prompt", user_language))
             return
@@ -247,13 +262,17 @@ async def process_food_input(
                 "language": user_language,
                 "meal_type": meal_type
             }
-            queue_id = await rate_limiter.add_to_queue(
-                db,
-                user_id=message.from_user.id,
-                chat_id=message.chat.id,
-                request_type="analyze_food_input",
-                payload=payload
-            )
+            try:
+                queue_id = await rate_limiter.add_to_queue(
+                    db,
+                    user_id=message.from_user.id,
+                    chat_id=message.chat.id,
+                    request_type="analyze_food_input",
+                    payload=payload
+                )
+            except rate_limiter.QueueUserLimitExceeded:
+                await message.answer(i18n_locales.get_text("queue_user_limit_exceeded", user_language))
+                return
             position = await rate_limiter.get_queue_position(db, queue_id)
             status_msg = await message.answer(
                 i18n_locales.get_text("rate_limit_queued", user_language, position=position)
@@ -293,13 +312,17 @@ async def process_food_input(
             "status_message_id": status_msg_id if isinstance(status_msg_id, int) else None
         }
         async with AsyncSessionLocal() as db:
-            queue_id = await rate_limiter.add_to_queue(
-                db,
-                user_id=message.from_user.id,
-                chat_id=message.chat.id,
-                request_type="analyze_food_input",
-                payload=payload
-            )
+            try:
+                queue_id = await rate_limiter.add_to_queue(
+                    db,
+                    user_id=message.from_user.id,
+                    chat_id=message.chat.id,
+                    request_type="analyze_food_input",
+                    payload=payload
+                )
+            except rate_limiter.QueueUserLimitExceeded:
+                await message.answer(i18n_locales.get_text("queue_user_limit_exceeded", user_language))
+                return
         return
 
     if not analysis:
@@ -495,13 +518,17 @@ async def process_food_correction(message: Message, state: FSMContext, user_lang
                 "correction_text": correction_text,
                 "language": user_language
             }
-            queue_id = await rate_limiter.add_to_queue(
-                db,
-                user_id=message.from_user.id,
-                chat_id=message.chat.id,
-                request_type="adjust_food_analysis",
-                payload=payload
-            )
+            try:
+                queue_id = await rate_limiter.add_to_queue(
+                    db,
+                    user_id=message.from_user.id,
+                    chat_id=message.chat.id,
+                    request_type="adjust_food_analysis",
+                    payload=payload
+                )
+            except rate_limiter.QueueUserLimitExceeded:
+                await message.answer(i18n_locales.get_text("queue_user_limit_exceeded", user_language))
+                return
             position = await rate_limiter.get_queue_position(db, queue_id)
             status_msg = await message.answer(
                 i18n_locales.get_text("rate_limit_queued", user_language, position=position)
@@ -536,13 +563,17 @@ async def process_food_correction(message: Message, state: FSMContext, user_lang
             "status_message_id": status_msg_id if isinstance(status_msg_id, int) else None
         }
         async with AsyncSessionLocal() as db:
-            queue_id = await rate_limiter.add_to_queue(
-                db,
-                user_id=message.from_user.id,
-                chat_id=message.chat.id,
-                request_type="adjust_food_analysis",
-                payload=payload
-            )
+            try:
+                queue_id = await rate_limiter.add_to_queue(
+                    db,
+                    user_id=message.from_user.id,
+                    chat_id=message.chat.id,
+                    request_type="adjust_food_analysis",
+                    payload=payload
+                )
+            except rate_limiter.QueueUserLimitExceeded:
+                await message.answer(i18n_locales.get_text("queue_user_limit_exceeded", user_language))
+                return
         return
 
     if not adjusted_analysis:
@@ -829,13 +860,17 @@ async def process_meal_edit_text(message: Message, state: FSMContext, user_langu
                 "edit_meal_id": state_data.get("edit_meal_id"),
                 "edit_date_str": state_data.get("edit_date_str")
             }
-            queue_id = await rate_limiter.add_to_queue(
-                db,
-                user_id=message.from_user.id,
-                chat_id=message.chat.id,
-                request_type="adjust_meal_edit",
-                payload=payload
-            )
+            try:
+                queue_id = await rate_limiter.add_to_queue(
+                    db,
+                    user_id=message.from_user.id,
+                    chat_id=message.chat.id,
+                    request_type="adjust_meal_edit",
+                    payload=payload
+                )
+            except rate_limiter.QueueUserLimitExceeded:
+                await message.answer(i18n_locales.get_text("queue_user_limit_exceeded", user_language))
+                return
             position = await rate_limiter.get_queue_position(db, queue_id)
             status_msg = await message.answer(
                 i18n_locales.get_text("rate_limit_queued", user_language, position=position)
@@ -871,13 +906,17 @@ async def process_meal_edit_text(message: Message, state: FSMContext, user_langu
             "status_message_id": status_msg_id if isinstance(status_msg_id, int) else None
         }
         async with AsyncSessionLocal() as db:
-            queue_id = await rate_limiter.add_to_queue(
-                db,
-                user_id=message.from_user.id,
-                chat_id=message.chat.id,
-                request_type="adjust_meal_edit",
-                payload=payload
-            )
+            try:
+                queue_id = await rate_limiter.add_to_queue(
+                    db,
+                    user_id=message.from_user.id,
+                    chat_id=message.chat.id,
+                    request_type="adjust_meal_edit",
+                    payload=payload
+                )
+            except rate_limiter.QueueUserLimitExceeded:
+                await message.answer(i18n_locales.get_text("queue_user_limit_exceeded", user_language))
+                return
         return
 
     if not adjusted_analysis:

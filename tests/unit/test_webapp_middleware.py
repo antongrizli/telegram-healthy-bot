@@ -18,6 +18,18 @@ async def test_block_scanners_middleware_allowed():
 
 
 @pytest.mark.asyncio
+async def test_security_headers_middleware():
+    from src.webapp.middlewares import security_headers_middleware
+
+    req = make_mocked_request("GET", "/")
+    resp = await security_headers_middleware(req, dummy_handler)
+    assert resp.status == 200
+    assert resp.headers.get("X-Content-Type-Options") == "nosniff"
+    assert resp.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
+    assert "frame-ancestors" in resp.headers.get("Content-Security-Policy", "")
+
+
+@pytest.mark.asyncio
 async def test_block_scanners_middleware_blocked_cortex():
     headers = {"User-Agent": "Hello from Palo Alto Networks, find out more about our scans in https://docs-cortex.paloaltonetworks.com/r/1/Cortex-Xpanse/Scanning-activity"}
     req = make_mocked_request("GET", "/", headers=headers)

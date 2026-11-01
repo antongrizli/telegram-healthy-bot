@@ -24,7 +24,7 @@ from src.services.meal_cards import finalize_card
 
 router = Router()
 
-from src.utils.escape import clean_md
+from src.utils.escape import clean_md, escape_markdown
 from src.states import (
     FoodLoggingState,
     MealEditingState,
@@ -44,7 +44,7 @@ async def send_draft_card(message: Message, draft, user_language: str, page: int
     sent_msg = await message.answer(
         text,
         reply_markup=get_draft_keyboard(draft.id, user_language, page=page),
-        parse_mode=None
+        parse_mode="HTML"
     )
     card_msg_id = getattr(sent_msg, "message_id", None)
     if isinstance(card_msg_id, int):
@@ -360,14 +360,14 @@ async def process_food_input(
     if await try_edit(wait_msg.edit_text,
             result_text,
             reply_markup=card_kb,
-            parse_mode="Markdown"
+            parse_mode="HTML"
         ):
         card_msg = wait_msg
     else:
         card_msg = await message.answer(
             result_text,
             reply_markup=card_kb,
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
 
     card_msg_id = getattr(card_msg, "message_id", None)
@@ -615,7 +615,7 @@ async def process_food_correction(message: Message, state: FSMContext, user_lang
     card_msg = await message.answer(
             result_text,
             reply_markup=markup,
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
     from aiogram.exceptions import TelegramAPIError
     try:
@@ -700,7 +700,7 @@ async def send_or_edit_meals_message(event: Message | CallbackQuery, date_str: s
         for idx, meal in enumerate(meals):
             num = idx + 1
             meal_local_time = meal.logged_at.replace(tzinfo=UTC).astimezone(user_tz).strftime("%H:%M")
-            items_desc = ", ".join([f"{item.get('name')} ({item.get('portion')})" for item in meal.items_json])
+            items_desc = escape_markdown(", ".join([f"{item.get('name')} ({item.get('portion')})" for item in meal.items_json]))
             
             meal_type_emoji = (
                 "🍳" if meal.meal_type == "breakfast" else
@@ -817,7 +817,7 @@ async def process_meals_viewing(message: Message, state: FSMContext, user_langua
             )
             items_list_str = ""
             for item in selected_meal.items_json:
-                items_list_str += f"- {item.get('name')} ({item.get('portion')}): {item.get('calories')} kcal\n"
+                items_list_str += escape_markdown(f"- {item.get('name')} ({item.get('portion')}): {item.get('calories')} kcal\n")
                 
             prompt_msg = i18n_locales.get_text(
                 "edit_meal_prompt",
@@ -939,7 +939,7 @@ async def process_meal_edit_text(message: Message, state: FSMContext, user_langu
     await message.answer(
             result_text,
             reply_markup=markup,
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
     from aiogram.exceptions import TelegramAPIError
     try:
@@ -1070,7 +1070,7 @@ async def uxdraft_view_card(callback: CallbackQuery, user_language: str):
     card_text = format_draft_card_text(new_payload, user_language)
     card_keyboard = get_draft_keyboard(draft.id, user_language, page=page)
     if hasattr(callback.message, "edit_text"):
-        if await try_edit(callback.message.edit_text, card_text, reply_markup=card_keyboard, parse_mode=None):
+        if await try_edit(callback.message.edit_text, card_text, reply_markup=card_keyboard, parse_mode="HTML"):
             return
     async with AsyncSessionLocal() as db:
         fresh = await crud.get_meal_draft(db, draft_id, callback.from_user.id)
@@ -1133,7 +1133,7 @@ async def quick_correction(callback: CallbackQuery, state: FSMContext, user_lang
                     edited = False
                     if hasattr(callback.message, 'edit_text'):
                         edited = await try_edit(callback.message.edit_text, new_text,
-                            reply_markup=get_draft_keyboard(draft_id, user_language, page=page))
+                            reply_markup=get_draft_keyboard(draft_id, user_language, page=page), parse_mode="HTML")
                     if not edited:
                         await send_draft_card(callback.message, await crud.get_meal_draft(db, draft_id, callback.from_user.id), user_language, page=page)
                     return
@@ -1168,7 +1168,7 @@ async def quick_correction(callback: CallbackQuery, state: FSMContext, user_lang
                     edited = False
                     if hasattr(callback.message, 'edit_text'):
                         edited = await try_edit(callback.message.edit_text, new_text,
-                            reply_markup=get_draft_keyboard(draft_id, user_language, page=page))
+                            reply_markup=get_draft_keyboard(draft_id, user_language, page=page), parse_mode="HTML")
                     if not edited:
                         await send_draft_card(callback.message, await crud.get_meal_draft(db, draft_id, callback.from_user.id), user_language, page=page)
                     return
@@ -1222,6 +1222,7 @@ async def local_correction(message: Message, state: FSMContext, user_language: s
                     chat_id=message.chat.id,
                     message_id=card_message_id,
                     text=new_text,
+                    parse_mode="HTML",
                     reply_markup=get_draft_keyboard(draft.id, user_language, page=page)
                 )
 

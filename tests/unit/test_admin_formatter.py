@@ -66,3 +66,16 @@ def test_pending_meals_are_available_from_add_menu_and_recovery_explains_path():
         assert label not in [button.text for row in get_main_menu(lang).keyboard for button in row]
         assert label in get_text("session_recovery", lang)
         assert label in [button.text for row in get_section_menu('add', lang).keyboard for button in row]
+
+
+def test_dict_stats_uses_html_and_escapes_labels():
+    from src.handlers.admin import format_dict_stats
+    assert format_dict_stats({'<raw_*> & label': 2}) == '  • <b>&lt;raw_*&gt; &amp; label</b>: 2'
+
+
+def test_stats_menu_uses_telegram_markdown_bold():
+    from src.utils.i18n_locales import get_text
+    for lang in ('en', 'ru'):
+        text = get_text('admin_stats_menu_welcome', lang)
+        assert '**' not in text
+        assert text.count('*') == 2

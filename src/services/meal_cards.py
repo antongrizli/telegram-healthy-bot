@@ -20,9 +20,9 @@ async def finalize_card(message, payload, language, accept):
     try:
         if isinstance(card_id, int) and hasattr(message, 'bot') and hasattr(message.bot, 'edit_message_text'):
             await try_edit(message.bot.edit_message_text, chat_id=message.chat.id,
-                message_id=card_id, text=text, reply_markup=None, parse_mode=None)
+                message_id=card_id, text=text, reply_markup=None, parse_mode="HTML")
         elif hasattr(message, 'edit_text'):
-            await try_edit(message.edit_text, text, reply_markup=None, parse_mode=None)
+            await try_edit(message.edit_text, text, reply_markup=None, parse_mode="HTML")
     except TelegramAPIError:
         logger.warning('Could not finalize meal card; database result remains saved')
 
@@ -33,7 +33,7 @@ async def deliver_card(bot, db, draft, chat_id, language, status_message_id=None
     target = draft.payload.get('card_message_id') or status_message_id
     kwargs = dict(text=format_draft_card_text(draft.payload, language),
                   reply_markup=get_draft_keyboard(draft.id, language, draft.payload.get('draft_page', 1)),
-                  parse_mode=None)
+                  parse_mode="HTML")
     edited = False
     if isinstance(target, int):
         edited = await try_edit(bot.edit_message_text, chat_id=chat_id, message_id=target, **kwargs)

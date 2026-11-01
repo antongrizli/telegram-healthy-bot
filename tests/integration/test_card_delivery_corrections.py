@@ -74,8 +74,11 @@ async def test_deleted_card_replacement_is_reused_after_reload(db_session):
     await deliver_card(bot, db_session, draft, 123, 'ru')
     await db_session.refresh(draft)
     assert draft.payload['card_message_id'] == 888
+    assert bot.send_message.call_args.kwargs['parse_mode'] == 'HTML'
+    assert '<b>' in bot.send_message.call_args.kwargs['text']
     await deliver_card(bot, db_session, draft, 123, 'ru')
     assert bot.edit_message_text.call_args.kwargs['message_id'] == 888
+    assert bot.edit_message_text.call_args.kwargs['parse_mode'] == 'HTML'
     bot.send_message.assert_awaited_once()
 
 
@@ -102,6 +105,8 @@ async def test_legacy_queue_reply_keyboard_uses_send_message_contract(db_session
     assert await rate_limiter.execute_queued_item(bot, storage, db_session, await db_session.get(AiRequestQueue, qid))
     bot.send_message.assert_awaited_once()
     assert bot.send_message.call_args.kwargs.get('reply_markup') is not None
+    assert bot.send_message.call_args.kwargs['parse_mode'] == 'HTML'
+    assert '<b>' in bot.send_message.call_args.args[1]
     for call in bot.edit_message_text.call_args_list:
         assert call.kwargs.get('reply_markup') is None
     bot.delete_message.assert_awaited_once_with(chat_id=123, message_id=900)

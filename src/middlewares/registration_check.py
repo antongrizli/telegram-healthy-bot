@@ -22,6 +22,26 @@ class RegistrationCheckMiddleware(BaseMiddleware):
         if db_user and not db_user.is_blocked:
             return await handler(event, data)
             
+        # Configured admins can process requests even before completing a profile.
+        from src.config import settings
+        actor = data.get("event_from_user") or getattr(event, "from_user", None)
+        words = (event.text or "").split() if isinstance(event, Message) else []
+        command = words[0].split("@")[0] if words else ""
+        from src.utils import i18n_locales
+        access_labels = set()
+        for key in ('btn_access_menu', 'btn_access_pending', 'btn_access_back'):
+            access_labels.update(i18n_locales.get_all_translations(key))
+        from src.keyboards.reply import is_access_button
+        is_counted_access_button = isinstance(event, Message) and any(
+            is_access_button(event.text, key) for key in ("btn_access_menu", "btn_access_pending"))
+        is_access_action = (
+            is_counted_access_button or command in ("/approve", "/reject", "/pending", "/admin")
+            or (isinstance(event, Message) and event.text in access_labels | {"👑 Admin Panel", "👑 Админ-панель"})
+            or (isinstance(event, CallbackQuery) and (getattr(event, "data", None) or "").startswith("accessreq:"))
+        )
+        if actor and actor.id in settings.ADMIN_USER_IDS and not (db_user and db_user.is_blocked) and is_access_action:
+            return await handler(event, data)
+
         # Check FSM state to see if they are in the setup flow
         state = data.get("state")
         current_state = await state.get_state() if state else None

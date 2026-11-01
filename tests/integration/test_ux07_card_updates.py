@@ -80,6 +80,7 @@ async def test_meal_type_updates_card_in_place_without_new_messages(db_session):
     # Card text edited in place to show lunch, no new message!
     mock_msg.edit_text.assert_called_once()
     assert "Обед" in mock_msg.edit_text.call_args.args[0]
+    assert mock_msg.edit_text.call_args.kwargs["parse_mode"] == "HTML"
     assert mock_msg.answer.call_count == 0
 
     # DB draft payload updated with lunch

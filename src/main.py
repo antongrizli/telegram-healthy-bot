@@ -111,6 +111,9 @@ async def main():
     dp.message.outer_middleware(MediaGroupMiddleware())
     dp.message.outer_middleware(LanguageMiddleware())
     dp.callback_query.outer_middleware(LanguageMiddleware())
+    from src.middlewares.approval import ApprovalMiddleware
+    dp.message.outer_middleware(ApprovalMiddleware())
+    dp.callback_query.outer_middleware(ApprovalMiddleware())
     dp.message.outer_middleware(RegistrationCheckMiddleware())
     dp.callback_query.outer_middleware(RegistrationCheckMiddleware())
     dp.message.outer_middleware(InteractionLoggingMiddleware())
@@ -121,6 +124,8 @@ async def main():
     admin.router.callback_query.middleware(AdminCheckMiddleware())
     
     # Register handlers routers
+    from src.handlers import admission
+    dp.include_router(admission.router)
     dp.include_router(common.recovery_router)
     dp.include_router(admin.router)
     dp.include_router(ux.router)

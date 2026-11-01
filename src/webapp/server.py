@@ -19,7 +19,8 @@ async def require_active_user(user_id, db):
     user = await crud.get_user(db, user_id)
     if not user:
         raise web.HTTPUnauthorized(text="User not found")
-    if user.is_blocked:
+    from src.database.access import has_access
+    if not await has_access(db, user_id, user):
         raise web.HTTPForbidden(text="Access denied")
     return user
 

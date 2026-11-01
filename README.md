@@ -298,3 +298,17 @@ network error, automatic redelivery is disabled to avoid duplicating a reminder 
 Check the WebApp history after delivery failures. A nonexistent time at the spring DST transition
 does not create a reminder; a repeated hour in autumn creates only one intake. The application is
 designed for a single scheduler/AI-queue process.
+
+### Administrator approval for new users
+
+New Telegram users must be approved before profile setup or bot use. Their first interaction creates a durable access request and notifies administrators from `ADMIN_USER_IDS` and existing administrator profiles.
+
+In the admin reply keyboard, open **User access → Access requests**. The **User access (N)** and **Access requests (N)** buttons show the current pending count. New requests notify administrators with a counted button that opens the list. Each applicant has **Approve / Decline** inline buttons; the list updates after a decision and supports pagination. Use **Admin panel** to return. These labels are available in all seven languages.
+
+In a private chat with the bot, administrators can also use:
+
+- `/pending` or `/pending 2` — pending requests, 5 per page.
+- `/approve TELEGRAM_ID` — approve a pending request; the user receives instructions to send `/start`.
+- `/reject TELEGRAM_ID` — decline a pending request.
+
+Requests and decisions survive restarts. Duplicate decisions do not send another notification. If an administrator notification cannot be delivered, the request remains available through `/pending`. Approval does not override an administrative block. Existing profiles retain their access during the database migration. Telegram messages, callbacks, authenticated WebApp APIs, and queued AI execution enforce the access check.

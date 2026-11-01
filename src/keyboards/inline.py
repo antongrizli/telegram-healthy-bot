@@ -218,3 +218,30 @@ def get_drafts_list_keyboard(drafts: list, page: int, total_pages: int, user_lan
 
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
+
+
+def get_access_requests_inline(data, lang):
+    rows = []
+    page = data['page']
+    for request in data['requests']:
+        name = request.display_name.replace('\n', ' ')[:24]
+        rows.append([InlineKeyboardButton(text=f"{get_text('btn_access_' + action, lang)} · {name}",
+            callback_data=f'accessreq:{action}:{request.telegram_id}:{page}')
+            for action in ('approve', 'reject')])
+    nav = []
+    if page > 1:
+        nav.append(InlineKeyboardButton(text='◀', callback_data=f'accessreq:page:{page - 1}'))
+    if data['total']:
+        nav.append(InlineKeyboardButton(text=f"{page}/{data['pages']}", callback_data=f'accessreq:page:{page}'))
+    if page < data['pages']:
+        nav.append(InlineKeyboardButton(text='▶', callback_data=f'accessreq:page:{page + 1}'))
+    if nav:
+        rows.append(nav)
+    rows.append([InlineKeyboardButton(text=get_text('access_list_back', lang), callback_data='accessreq:menu')])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_access_notification_inline(language, pending_count):
+    from src.keyboards.reply import access_count_label
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=access_count_label('btn_access_pending', language, pending_count), callback_data='accessreq:page:1')]])

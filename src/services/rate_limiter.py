@@ -274,7 +274,8 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
     payload = item.payload
 
     user = await crud.get_user(db, user_id)
-    if not user or user.is_blocked:
+    from src.database.access import has_access
+    if not user or not await has_access(db, user_id, user):
         logger.warning(f"Queue item {item.id} has no user in database.")
         return False
 
@@ -479,24 +480,24 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
                     chat_id,
                     result_text,
                     reply_markup=reply_markup,
-                    parse_mode="Markdown"
+                    parse_mode="HTML"
                 )
             await remove_status_message(bot, chat_id, status_msg_id)
         else:
-            text_out = f"ℹ️ *Queued Food Analysis Adjustment Ready* (you are no longer in the correction flow):\n\n{result_text}"
+            text_out = f"ℹ️ <b>Queued Food Analysis Adjustment Ready</b> (you are no longer in the correction flow):\n\n{result_text}"
             delivered = False
             if isinstance(status_msg_id, int) and hasattr(bot, "edit_message_text"):
                 delivered = await try_edit(bot.edit_message_text,
                         chat_id=chat_id,
                         message_id=status_msg_id,
                         text=text_out,
-                        parse_mode="Markdown"
+                        parse_mode="HTML"
                     )
             if not delivered:
                 await bot.send_message(
                     chat_id,
                     text_out,
-                    parse_mode="Markdown"
+                    parse_mode="HTML"
                 )
         return True
 
@@ -567,24 +568,24 @@ async def execute_queued_item(bot: Bot, storage, db: AsyncSession, item: AiReque
                     chat_id,
                     result_text,
                     reply_markup=reply_markup,
-                    parse_mode="Markdown"
+                    parse_mode="HTML"
                 )
             await remove_status_message(bot, chat_id, status_msg_id)
         else:
-            text_out = f"ℹ️ *Queued Meal Edit Ready* (you are no longer in the editing flow):\n\n{result_text}"
+            text_out = f"ℹ️ <b>Queued Meal Edit Ready</b> (you are no longer in the editing flow):\n\n{result_text}"
             delivered = False
             if isinstance(status_msg_id, int) and hasattr(bot, "edit_message_text"):
                 delivered = await try_edit(bot.edit_message_text,
                         chat_id=chat_id,
                         message_id=status_msg_id,
                         text=text_out,
-                        parse_mode="Markdown"
+                        parse_mode="HTML"
                     )
             if not delivered:
                 await bot.send_message(
                     chat_id,
                     text_out,
-                    parse_mode="Markdown"
+                    parse_mode="HTML"
                 )
         return True
 

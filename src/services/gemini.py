@@ -1,5 +1,4 @@
 import json
-import io
 import asyncio
 import logging
 from typing import List, Optional
@@ -8,6 +7,7 @@ from google import genai
 from google.genai import types, errors
 from src.config import settings
 from src.utils.languages import LANG_NAMES
+from src.services.ai_payload import food_contents, log_api_error
 
 import re
 
@@ -215,6 +215,8 @@ async def call_gemini_with_retry(
                 or "400" in err_str
                 or "INVALID_ARGUMENT" in err_str
             )
+            if is_400:
+                log_api_error(e, model=model, operation="generateContent", config=config)
             # Automatic fallback if the model rejects structured schema or mime type
             if is_400 and config is not None:
                 if getattr(config, "response_schema", None) is not None:
@@ -290,45 +292,42 @@ async def analyze_food_input(
         f"}}"
     )
     
+    raw_images = images_bytes or ([image_bytes] if image_bytes is not None else [])
     target_model = settings.GEMINI_MODEL
-    gemma = is_gemma_model(target_model)
+    logger.info("Food analysis model=%s images=%d", target_model, len(raw_images))
     config_args = {"temperature": 0.2}
-    if not gemma:
+    if not is_gemma_model(target_model):
         config_args.update(response_mime_type="application/json", response_schema=FoodAnalysisResponse)
 
-    # Gemma's hosted image API uses file references. Keep uploads alive through
-    # generation (including retries), and remove them even if analysis fails.
-    uploaded_files = []
-    contents = []
-    try:
-        for raw_image in images_bytes or ([image_bytes] if image_bytes else []):
-            if gemma:
-                uploaded = await client.aio.files.upload(
-                    file=io.BytesIO(raw_image),
-                    config=types.UploadFileConfig(mime_type="image/jpeg"),
-                )
-                uploaded_files.append(uploaded)
-                contents.append(types.Part.from_uri(file_uri=uploaded.uri, mime_type="image/jpeg"))
-            else:
-                contents.append(types.Part.from_bytes(data=raw_image, mime_type="image/jpeg"))
+    contents = food_contents(raw_images, [text_description, prompt])
+    if raw_images:
+        for index, part in enumerate(contents[0].parts[:len(raw_images)]):
+            logger.info("AI attachment index=%d mime=%s bytes=%d", index,
+                        part.inline_data.mime_type, len(part.inline_data.data))
+    if raw_images and settings.AI_COUNT_TOKENS:
+        from src.services.ai_quota import reserve_attempt
+        await reserve_attempt(user_id, "count_tokens")
+        try:
+            count = await asyncio.wait_for(
+                client.aio.models.count_tokens(model=target_model, contents=contents), timeout=30.0)
+            total = count.total_tokens
+            logger.info("AI payload model=%s messages=1 parts=%d images=%d total_tokens=%s",
+                        target_model, len(contents[0].parts), len(raw_images), total)
+            if isinstance(total, int) and total <= 6:
+                # A small count is suspicious, but not proof of a missing image:
+                # countTokens may itself mishandle image inputs. Bytes are checked above.
+                logger.warning("Suspicious image token count=%d; attachment bytes are present in payload", total)
+        except Exception as exc:
+            log_api_error(exc, model=target_model, operation="countTokens")
+            # Counting failures must not disable models that can still generate.
 
-        if text_description:
-            contents.append(text_description)
-        contents.append(prompt)
-
-        response = await call_gemini_with_retry(
-            user_id=user_id, request_type="analyze_food_input",
-            contents=contents,
-            model=target_model,
-            config=types.GenerateContentConfig(**config_args)
-        )
-        return parse_food_analysis_data(response.text)
-    finally:
-        for uploaded in uploaded_files:
-            try:
-                await client.aio.files.delete(name=uploaded.name)
-            except Exception:
-                logger.warning("Failed to delete uploaded food image", exc_info=True)
+    response = await call_gemini_with_retry(
+        user_id=user_id, request_type="analyze_food_input",
+        contents=contents,
+        model=target_model,
+        config=types.GenerateContentConfig(**config_args)
+    )
+    return parse_food_analysis_data(response.text)
 
 async def adjust_food_analysis(
     original_data: dict,

@@ -51,7 +51,11 @@ def mock_gemini_client(monkeypatch):
     mock_client.aio = MagicMock()
     mock_client.aio.models = MagicMock()
     mock_client.aio.models.generate_content = AsyncMock(side_effect=aio_generate_content)
+    from google.genai import types
+    mock_client.aio.models.count_tokens = AsyncMock(return_value=types.CountTokensResponse(total_tokens=256))
     
+    monkeypatch.setattr("src.config.settings.AI_COUNT_TOKENS", False)
+
     # Patch the client in gemini service
     monkeypatch.setattr("src.services.gemini.client", mock_client)
     return mock_client

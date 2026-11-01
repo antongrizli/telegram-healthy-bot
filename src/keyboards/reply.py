@@ -1,5 +1,6 @@
+import re
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-from src.utils.i18n_locales import get_text
+from src.utils.i18n_locales import get_text, get_all_translations
 
 def get_main_menu(lang: str = "en", is_admin: bool = False) -> ReplyKeyboardMarkup:
     """
@@ -50,7 +51,7 @@ def get_report_keyboard(lang: str, report_id: int) -> ReplyKeyboardMarkup:
 
 
 
-def get_admin_menu(lang: str = "en") -> ReplyKeyboardMarkup:
+def get_admin_menu(lang: str = "en", pending_count: int = 0) -> ReplyKeyboardMarkup:
     kb = [
         [
             KeyboardButton(text="📊 Stats" if lang == "en" else "📊 Статистика"),
@@ -60,6 +61,7 @@ def get_admin_menu(lang: str = "en") -> ReplyKeyboardMarkup:
             KeyboardButton(text="👥 Active Users" if lang == "en" else "👥 Активные пользователи"),
             KeyboardButton(text="🚫 Blocked Users" if lang == "en" else "🚫 Заблокированные")
         ],
+        [KeyboardButton(text=access_count_label("btn_access_menu", lang, pending_count))],
         [
             KeyboardButton(text="⚠️ Failed Queue" if lang == "en" else "⚠️ Сбои очереди")
         ],
@@ -333,3 +335,21 @@ def get_monthly_report_day_keyboard(lang: str = "en", current_val: int = None) -
     ])
     kb.append([KeyboardButton(text=get_text("btn_cancel", lang))])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+
+def get_access_menu(lang: str = 'en', pending_count: int = 0) -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(keyboard=[
+        [KeyboardButton(text=access_count_label('btn_access_pending', lang, pending_count))],
+        [KeyboardButton(text=get_text('btn_access_back', lang))],
+    ], resize_keyboard=True)
+
+
+def access_count_label(key, language, count):
+    return f"{get_text(key, language)} ({count})"
+
+
+def is_access_button(text, key):
+    if not isinstance(text, str):
+        return False
+    labels = get_all_translations(key)
+    return any(text == label or re.fullmatch(re.escape(label) + r" \(\d+\)", text) is not None for label in labels)

@@ -229,3 +229,18 @@ class MedicationIntake(Base):
     notified_at = Column(DateTime, nullable=True)
     marked_at = Column(DateTime, nullable=True)
     reminder = relationship("MedicationReminder", back_populates="intakes")
+
+
+class UserAccess(Base):
+    """Admission is independent of profile completion and survives profile deletion."""
+    __tablename__ = 'user_access'
+    __table_args__ = (Index('ix_user_access_status_created', 'status', 'created_at'),)
+
+    telegram_id = Column(BigInteger, primary_key=True)
+    username = Column(String, nullable=True)
+    display_name = Column(String, nullable=False)
+    language = Column(String(5), nullable=False, default='en')
+    status = Column(String(20), nullable=False, default='pending', server_default='pending')
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+    decided_at = Column(DateTime, nullable=True)
+    decided_by = Column(BigInteger, nullable=True)

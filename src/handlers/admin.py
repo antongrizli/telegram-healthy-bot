@@ -13,6 +13,7 @@ from src.utils import i18n_locales
 from src.keyboards import reply, inline
 from src.config import settings
 from src.utils.telegram_edit import try_edit
+from src.services import admin_navigation
 
 router = Router()
 
@@ -27,7 +28,7 @@ async def cmd_admin(message: Message, state: FSMContext, user_language: str):
     await state.clear()
     await message.answer(
         i18n_locales.get_text("admin_welcome", user_language),
-        reply_markup=reply.get_admin_menu(user_language),
+        reply_markup=await admin_navigation.admin_menu(user_language),
         parse_mode="Markdown"
     )
 
@@ -37,7 +38,7 @@ async def cancel_admin_action(message: Message, state: FSMContext, user_language
     await state.clear()
     await message.answer(
         i18n_locales.get_text("admin_welcome", user_language),
-        reply_markup=reply.get_admin_menu(user_language),
+        reply_markup=await admin_navigation.admin_menu(user_language),
         parse_mode="Markdown"
     )
 
@@ -49,7 +50,7 @@ def format_dict_stats(stats_dict: dict, label_map: dict = None) -> str:
         if k is None:
             continue
         label = label_map.get(k, k) if label_map else k
-        lines.append(f"  • **{label}**: {v}")
+        lines.append(f"  • <b>{escape(str(label))}</b>: {v}")
     return "\n".join(lines)
 
 
@@ -108,25 +109,25 @@ async def cmd_admin_stats_demographics(message: Message, user_language: str):
 
     if user_language == "ru":
         stats_text = (
-            "👥 **Демография пользователей**:\n\n"
-            f"🌐 **Языки**:\n{format_dict_stats(stats['languages'], lang_labels)}\n\n"
-            f"🎯 **Цели**:\n{format_dict_stats(stats['goals'], goal_labels)}\n\n"
-            f"👤 **Пол**:\n{format_dict_stats(stats['genders'], sex_labels)}\n\n"
-            f"🔔 **Уведомления отключены**: {stats['notifications_disabled_count']} пользователей\n"
+            "👥 <b>Демография пользователей</b>:\n\n"
+            f"🌐 <b>Языки</b>:\n{format_dict_stats(stats['languages'], lang_labels)}\n\n"
+            f"🎯 <b>Цели</b>:\n{format_dict_stats(stats['goals'], goal_labels)}\n\n"
+            f"👤 <b>Пол</b>:\n{format_dict_stats(stats['genders'], sex_labels)}\n\n"
+            f"🔔 <b>Уведомления отключены</b>: {stats['notifications_disabled_count']} пользователей\n"
         )
     else:
         stats_text = (
-            "👥 **User Demographics**:\n\n"
-            f"🌐 **Languages**:\n{format_dict_stats(stats['languages'], lang_labels)}\n\n"
-            f"🎯 **Fitness Goals**:\n{format_dict_stats(stats['goals'], goal_labels)}\n\n"
-            f"👤 **Genders**:\n{format_dict_stats(stats['genders'], sex_labels)}\n\n"
-            f"🔔 **Notifications Disabled**: {stats['notifications_disabled_count']} users\n"
+            "👥 <b>User Demographics</b>:\n\n"
+            f"🌐 <b>Languages</b>:\n{format_dict_stats(stats['languages'], lang_labels)}\n\n"
+            f"🎯 <b>Fitness Goals</b>:\n{format_dict_stats(stats['goals'], goal_labels)}\n\n"
+            f"👤 <b>Genders</b>:\n{format_dict_stats(stats['genders'], sex_labels)}\n\n"
+            f"🔔 <b>Notifications Disabled</b>: {stats['notifications_disabled_count']} users\n"
         )
 
     await message.answer(
         stats_text,
         reply_markup=reply.get_admin_stats_keyboard(user_language),
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
 
 def format_recent_user_activity(users: list[dict], language: str) -> str:
@@ -161,31 +162,31 @@ async def cmd_admin_stats_engagement(message: Message, user_language: str):
 
     if user_language == "ru":
         stats_text = (
-            "⚡ **Активность пользователей**:\n\n"
-            f"👤 **Всего зарегистрированных**: {stats['total_users']}\n"
-            f"🔥 **Активные (24ч / 7д / 30д)**: {stats['active_users_24h']} / {stats['active_users_7d']} / {stats['active_users_30d']}\n"
-            f"📈 **Новые регистрации (24ч / 7д / 30д)**: {stats['new_users_24h']} / {stats['new_users_7d']} / {stats['new_users_30d']}\n"
-            f"✉️ **Сообщений обработано (24ч)**: {stats['messages_24h']}\n"
-            f"🍽️ **Записей еды (24ч)**: {stats['food_logs_24h']}\n"
-            f"🍽️ **Ср. число приемов пищи (на активного 24ч)**: {avg_meals:.1f}\n"
-            f"⚖️ **Записей веса (7д)**: {stats['weight_logs_7d']}\n"
+            "⚡ <b>Активность пользователей</b>:\n\n"
+            f"👤 <b>Всего зарегистрированных</b>: {stats['total_users']}\n"
+            f"🔥 <b>Активные (24ч / 7д / 30д)</b>: {stats['active_users_24h']} / {stats['active_users_7d']} / {stats['active_users_30d']}\n"
+            f"📈 <b>Новые регистрации (24ч / 7д / 30д)</b>: {stats['new_users_24h']} / {stats['new_users_7d']} / {stats['new_users_30d']}\n"
+            f"✉️ <b>Сообщений обработано (24ч)</b>: {stats['messages_24h']}\n"
+            f"🍽️ <b>Записей еды (24ч)</b>: {stats['food_logs_24h']}\n"
+            f"🍽️ <b>Ср. число приемов пищи (на активного 24ч)</b>: {avg_meals:.1f}\n"
+            f"⚖️ <b>Записей веса (7д)</b>: {stats['weight_logs_7d']}\n"
         )
     else:
         stats_text = (
-            "⚡ **User Engagement & Retention**:\n\n"
-            f"👤 **Total Users**: {stats['total_users']}\n"
-            f"🔥 **Active Users (24h / 7d / 30d)**: {stats['active_users_24h']} / {stats['active_users_7d']} / {stats['active_users_30d']}\n"
-            f"📈 **New Registrations (24h / 7d / 30d)**: {stats['new_users_24h']} / {stats['new_users_7d']} / {stats['new_users_30d']}\n"
-            f"✉️ **Messages Processed (24h)**: {stats['messages_24h']}\n"
-            f"🍽️ **Food Logs Recorded (24h)**: {stats['food_logs_24h']}\n"
-            f"🍽️ **Avg Meals Logged (per Active User 24h)**: {avg_meals:.1f}\n"
-            f"⚖️ **Weight Logs Recorded (7d)**: {stats['weight_logs_7d']}\n"
+            "⚡ <b>User Engagement &amp; Retention</b>:\n\n"
+            f"👤 <b>Total Users</b>: {stats['total_users']}\n"
+            f"🔥 <b>Active Users (24h / 7d / 30d)</b>: {stats['active_users_24h']} / {stats['active_users_7d']} / {stats['active_users_30d']}\n"
+            f"📈 <b>New Registrations (24h / 7d / 30d)</b>: {stats['new_users_24h']} / {stats['new_users_7d']} / {stats['new_users_30d']}\n"
+            f"✉️ <b>Messages Processed (24h)</b>: {stats['messages_24h']}\n"
+            f"🍽️ <b>Food Logs Recorded (24h)</b>: {stats['food_logs_24h']}\n"
+            f"🍽️ <b>Avg Meals Logged (per Active User 24h)</b>: {avg_meals:.1f}\n"
+            f"⚖️ <b>Weight Logs Recorded (7d)</b>: {stats['weight_logs_7d']}\n"
         )
 
     await message.answer(
         stats_text,
         reply_markup=reply.get_admin_stats_keyboard(user_language),
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
 
     await message.answer(format_recent_user_activity(recent_users, user_language), parse_mode=None)
@@ -212,29 +213,29 @@ async def cmd_admin_stats_ai(message: Message, user_language: str):
 
     if user_language == "ru":
         stats_text = (
-            "🤖 **Статистика ИИ (24ч)**:\n\n"
-            f"⚡ **Частота запросов (1м / 24ч)**: {stats['api_calls_1m']} / {stats['api_calls_24h']}\n"
-            f"📸 **Типы ввода (Фото vs. Текст)**:\n"
+            "🤖 <b>Статистика ИИ (24ч)</b>:\n\n"
+            f"⚡ <b>Частота запросов (1м / 24ч)</b>: {stats['api_calls_1m']} / {stats['api_calls_24h']}\n"
+            f"📸 <b>Типы ввода (Фото vs. Текст)</b>:\n"
             f"  • По фото: {stats['modality_photo_24h']}\n"
             f"  • Только текст: {stats['modality_text_24h']}\n"
-            f"✏️ **Частота корректировок ИИ**: {stats['correction_rate_24h']:.1f}%\n"
-            f"📋 **Типы запросов**:\n{format_dict_stats(stats['ai_request_types_24h'], ai_types_labels)}\n"
+            f"✏️ <b>Частота корректировок ИИ</b>: {stats['correction_rate_24h']:.1f}%\n"
+            f"📋 <b>Типы запросов</b>:\n{format_dict_stats(stats['ai_request_types_24h'], ai_types_labels)}\n"
         )
     else:
         stats_text = (
-            "🤖 **AI & Prompt Statistics (24h)**:\n\n"
-            f"⚡ **API Call Rate (1m / 24h)**: {stats['api_calls_1m']} / {stats['api_calls_24h']}\n"
-            f"📸 **Modality (Photo vs. Text logs)**:\n"
+            "🤖 <b>AI &amp; Prompt Statistics (24h)</b>:\n\n"
+            f"⚡ <b>API Call Rate (1m / 24h)</b>: {stats['api_calls_1m']} / {stats['api_calls_24h']}\n"
+            f"📸 <b>Modality (Photo vs. Text logs)</b>:\n"
             f"  • Photo logs: {stats['modality_photo_24h']}\n"
             f"  • Text-only logs: {stats['modality_text_24h']}\n"
-            f"✏️ **Correction Rate**: {stats['correction_rate_24h']:.1f}%\n"
-            f"📋 **Request Types breakdown**:\n{format_dict_stats(stats['ai_request_types_24h'], ai_types_labels)}\n"
+            f"✏️ <b>Correction Rate</b>: {stats['correction_rate_24h']:.1f}%\n"
+            f"📋 <b>Request Types breakdown</b>:\n{format_dict_stats(stats['ai_request_types_24h'], ai_types_labels)}\n"
         )
 
     await message.answer(
         stats_text,
         reply_markup=reply.get_admin_stats_keyboard(user_language),
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
 
 @router.message(F.text.in_(i18n_locales.get_all_translations("btn_stats_queue")))
@@ -266,7 +267,7 @@ async def cmd_admin_stats_queue(message: Message, user_language: str):
         )
     else:
         stats_text = (
-            "⚙️ <b>Queue & Reliability (24h)</b>:\n\n"
+            "⚙️ <b>Queue &amp; Reliability (24h)</b>:\n\n"
             f"🤖 <b>Queue Worker</b>: {worker_icon} {worker_status}{worker_hb_str}\n"
             f"⏳ <b>Active / Pending Requests in Queue</b>: {stats['queued_requests']}\n"
             f"⌛ <b>Oldest Pending Task Age</b>: {oldest_pending_str}\n"
@@ -299,7 +300,7 @@ async def cmd_admin_stats_queue(message: Message, user_language: str):
 async def cmd_admin_stats_back(message: Message, user_language: str):
     await message.answer(
         i18n_locales.get_text("admin_welcome", user_language),
-        reply_markup=reply.get_admin_menu(user_language),
+        reply_markup=await admin_navigation.admin_menu(user_language),
         parse_mode="Markdown"
     )
 
@@ -343,7 +344,7 @@ async def process_admin_broadcast(message: Message, state: FSMContext, user_lang
     # Send the admin panel menu again
     await message.answer(
         i18n_locales.get_text("admin_welcome", user_language),
-        reply_markup=reply.get_admin_menu(user_language),
+        reply_markup=await admin_navigation.admin_menu(user_language),
         parse_mode="Markdown"
     )
 
@@ -425,7 +426,7 @@ async def admin_users_callback(callback: CallbackQuery, state: FSMContext, user_
             await callback.answer()
             await callback.message.edit_reply_markup(reply_markup=None)
             await callback.message.answer(i18n_locales.get_text('admin_welcome', user_language),
-                                          reply_markup=reply.get_admin_menu(user_language))
+                                          reply_markup=await admin_navigation.admin_menu(user_language), parse_mode="Markdown")
             return
         if len(parts) != 4 or parts[1] not in ('page', 'block', 'unblock'):
             await callback.answer(i18n_locales.get_text('ux_invalid', user_language), show_alert=True)

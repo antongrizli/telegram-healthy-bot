@@ -30,6 +30,8 @@ async def test_legacy_confirmation_after_restart_finalizes_persisted_card(db_ses
         bot=bot, answer=AsyncMock(), text=i18n_locales.get_text('btn_accept' if accept else 'btn_cancel', 'ru'))
     await process_food_confirm(message, state, 'ru', user)
     kwargs = bot.edit_message_text.call_args.kwargs
+    assert kwargs['parse_mode'] == 'HTML'
+    assert '<b>' in kwargs['text'] and '*' not in kwargs['text']
     assert kwargs['message_id'] == 777
     assert kwargs['reply_markup'] is None
     assert '?' not in kwargs['text']

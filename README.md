@@ -78,6 +78,10 @@ GEMINI_API_KEY=your-gemini-api-key
 ADMIN_USER_IDS=your-telegram-id,another-admin-id
 ```
 
+Photo analysis determines JPEG/PNG/WebP MIME types from the image bytes and sends images and text in one user message. To enable token-count diagnostics before each photo analysis, set `AI_COUNT_TOKENS=true` (disabled by default). This adds an API request, latency, and a quota reservation.
+
+For a manual check of the configured model, run `docker compose exec -T bot python -m src.services.diagnose_gemini`. It sends a synthetic image and text, checks the serialized payload and token counts, and prints API errors with credentials redacted.
+
 ### 3. Build & Run
 Start the application and database containers using Docker Compose:
 

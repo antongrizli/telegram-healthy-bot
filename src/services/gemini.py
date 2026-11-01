@@ -84,6 +84,9 @@ class FoodItem(BaseModel):
 class FoodAnalysisResponse(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
     food_items: List[FoodItem] = Field(min_length=1, max_length=100, description="List of all identified food items in the input")
+    nutrition_notes: str = Field(default="", max_length=650, description="Plain text: composition, satiety, protein, fiber and limitations")
+    goal_assessment: str = Field(default="", max_length=450, description="Conclusion: whether this portion fits the user goal and why")
+    alternatives: str = Field(default="", max_length=450, description="Concrete replacements or additions with portions and reasons")
     total_calories: int = Field(default=0, ge=0, le=20000, description="Sum of all calories in kcal")
     total_protein: float = Field(default=0.0, ge=0, le=2000, description="Sum of all protein in grams")
     total_fat: float = Field(default=0.0, ge=0, le=2000, description="Sum of all fat in grams")
@@ -382,6 +385,31 @@ async def call_gemini_with_retry(
             else:
                 raise e
 
+async def food_coaching_prompt(user_id):
+    """Current profile for direct, queued and corrected analyses."""
+    context = {"goal": None}
+    if user_id is not None:
+        from src.database.connection import AsyncSessionLocal
+        from src.database import crud
+        async with AsyncSessionLocal() as db:
+            user = await crud.get_user(db, user_id)
+            if user:
+                context = {"goal": user.goal, "daily_calories": user.target_calories,
+                           "daily_protein_g": user.target_protein}
+    return (
+        "\nInclude JSON string fields nutrition_notes, goal_assessment, alternatives in the same object, "
+        "all in the requested language without markup, each under 400 characters. "
+        "nutrition_notes: 2-3 informative sentences about composition, satiety, protein, fiber and "
+        "preparation tradeoffs. Distinguish estimates from label facts; never invent ingredients, "
+        "micronutrient amounts or health effects. goal_assessment: conclude whether this portion "
+        "fits the goal and why, with conditions. A single food cannot determine daily balance. "
+        "If no goal is available, acknowledge that limitation. alternatives: 1-2 specific replacements "
+        "or additions with practical portions and reasons tied to the goal. If suitable, say no replacement "
+        "is needed and offer an optional pairing. Recompute all three after corrections. Profile: "
+        + json.dumps(context) + "\n"
+    )
+
+
 async def analyze_food_input(
     text_description: Optional[str] = None,
     image_bytes: Optional[bytes] = None,
@@ -418,6 +446,7 @@ async def analyze_food_input(
         f"}}"
     )
     
+    prompt += await food_coaching_prompt(user_id)
     raw_images = images_bytes or ([image_bytes] if image_bytes is not None else [])
     target_model = settings.OPENROUTER_MODEL if getattr(settings, "AI_PROVIDER", "gemini") == "openrouter" else settings.GEMINI_MODEL
     logger.info("Food analysis model=%s images=%d provider=%s", target_model, len(raw_images), getattr(settings, "AI_PROVIDER", "gemini"))
@@ -492,6 +521,7 @@ async def adjust_food_analysis(
         f"}}"
     )
     
+    prompt += await food_coaching_prompt(user_id)
     target_model = settings.OPENROUTER_MODEL if getattr(settings, "AI_PROVIDER", "gemini") == "openrouter" else settings.GEMINI_MODEL
     config_args = {"temperature": 0.2}
     if getattr(settings, "AI_PROVIDER", "gemini") != "openrouter" and not is_gemma_model(target_model):

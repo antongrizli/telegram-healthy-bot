@@ -43,7 +43,8 @@ async def test_access_reply_layout_and_all_localized_labels(lang):
     submenu = reply.get_access_menu(lang)
     assert submenu.resize_keyboard
     assert [[b.text for b in row] for row in submenu.keyboard] == [
-        [reply.access_count_label('btn_access_pending', lang, 0)], [get_text('btn_access_back', lang)]]
+        [reply.access_count_label('btn_access_pending', lang, 0)],
+        [get_text('btn_auto_approval_off', lang)], [get_text('btn_access_back', lang)]]
     for key in ('btn_access_menu', 'btn_access_pending', 'btn_access_back',
                 'btn_access_approve', 'btn_access_reject', 'access_list_back'):
         assert key in LOCALES[lang]
@@ -261,3 +262,61 @@ async def test_counted_buttons_work_for_admin_without_profile(monkeypatch):
     for key in ('btn_access_menu', 'btn_access_pending'):
         message = make_mock_message(reply.access_count_label(key, 'ru', 23), 999)
         assert await RegistrationCheckMiddleware()(AsyncMock(return_value='allowed'), message, context(message)) == 'allowed'
+
+
+@pytest.mark.parametrize('lang', list(LOCALES))
+async def test_auto_approval_keyboard_hides_queue(lang):
+    menu = reply.get_access_menu(lang, 7, True)
+    assert [[button.text for button in row] for row in menu.keyboard] == [
+        [get_text('btn_auto_approval_on', lang)], [get_text('btn_access_back', lang)]]
+    assert 'btn_auto_approval_on' in LOCALES[lang]
+    assert 'btn_auto_approval_off' in LOCALES[lang]
+
+
+async def test_toggle_approves_entire_queue_and_restores_manual_mode(db_session, monkeypatch):
+    from src.database import access
+    from src.handlers.admission import toggle_auto_approval
+    monkeypatch.setattr(settings, 'ADMIN_USER_IDS', [999])
+    await seed_requests(db_session, 12)
+    db_session.add(UserAccess(telegram_id=2000, display_name='Rejected', language='ru', status='rejected'))
+    await db_session.commit()
+    message = make_mock_message(get_text('btn_auto_approval_off', 'ru'), 999)
+    await toggle_auto_approval(message, state(), 'ru')
+    assert await access.auto_approval_enabled(db_session)
+    assert await access.pending_access_count(db_session) == 0
+    for user_id in range(1000, 1012):
+        record = await db_session.get(UserAccess, user_id)
+        assert record.status == 'approved' and record.decided_by == 999
+    assert (await db_session.get(UserAccess, 2000)).status == 'rejected'
+    assert message.bot.send_message.await_count == 12
+    assert message.answer.call_args.kwargs['reply_markup'] == reply.get_access_menu('ru', 0, True)
+    # Read current durable policy even when the administrator presses an older label.
+    await toggle_auto_approval(message, state(), 'ru')
+    assert not await access.auto_approval_enabled(db_session)
+    assert message.bot.send_message.await_count == 12
+    assert message.answer.call_args.kwargs['reply_markup'] == reply.get_access_menu('ru')
+
+
+@pytest.mark.parametrize('actor_id,blocked,chat_type', [(123, False, 'private'), (999, True, 'private'), (999, False, 'group')])
+async def test_toggle_rechecks_authority_and_private_chat(db_session, monkeypatch, actor_id, blocked, chat_type):
+    from src.database import access
+    from src.handlers.admission import toggle_auto_approval
+    monkeypatch.setattr(settings, 'ADMIN_USER_IDS', [999])
+    if blocked:
+        user = await make_user(db_session)
+        user.telegram_id = 999
+        user.is_blocked = True
+        await db_session.commit()
+    message = make_mock_message(get_text('btn_auto_approval_off', 'ru'), actor_id)
+    message.chat = message.chat.model_copy(update={"type": chat_type})
+    await toggle_auto_approval(message, state(), 'ru')
+    assert not await access.auto_approval_enabled(db_session)
+
+
+async def test_unregistered_configured_admin_can_use_auto_approval_button(monkeypatch):
+    monkeypatch.setattr(settings, 'ADMIN_USER_IDS', [999])
+    message = make_mock_message(get_text('btn_auto_approval_off', 'ru'), 999)
+    handler = AsyncMock()
+    data = context(message)
+    await RegistrationCheckMiddleware()(handler, message, data)
+    handler.assert_awaited_once_with(message, data)

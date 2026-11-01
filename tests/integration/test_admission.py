@@ -235,3 +235,33 @@ async def test_pending_pages_are_stable_and_decisions_remove_entries(db_session)
     assert len(await access.pending_access(db_session, 2)) == 2
     assert await access.decide_access(db_session, 1000, 999, False)
     assert 1000 not in [row.telegram_id for row in await access.pending_access(db_session, 1)]
+
+
+async def test_auto_approval_defaults_off_approves_pending_and_keeps_rejected(db_session, monkeypatch):
+    monkeypatch.setattr(settings, 'ADMIN_USER_IDS', [])
+    assert not await access.auto_approval_enabled(db_session)
+    pending = make_mock_message('/start', 8001)
+    rejected = make_mock_message('/start', 8002)
+    await access.request_access(db_session, pending.from_user, 'ru')
+    await access.request_access(db_session, rejected.from_user, 'ru')
+    await access.decide_access(db_session, 8002, 999, False)
+    await access.set_auto_approval(db_session, True)
+    assert await access.auto_approval_enabled(db_session)
+    assert await access.has_access(db_session, 8001)
+    for message in (rejected,):
+        handler = AsyncMock()
+        await ApprovalMiddleware()(handler, message, context(message))
+        handler.assert_not_awaited()
+    new = make_mock_message('/start', 8003)
+    handler = AsyncMock()
+    data = context(new)
+    await ApprovalMiddleware()(handler, new, data)
+    handler.assert_awaited_once_with(new, data)
+    new.bot.send_message.assert_not_awaited()
+    record = await db_session.get(UserAccess, 8003)
+    assert record.status == 'approved' and record.decided_at is not None
+    assert record.decided_by is None
+    await access.set_auto_approval(db_session, False)
+    assert await access.has_access(db_session, 8003)
+    record, created = await access.request_access(db_session, make_mock_message('/start', 8004).from_user, 'ru')
+    assert created and record.status == 'pending'

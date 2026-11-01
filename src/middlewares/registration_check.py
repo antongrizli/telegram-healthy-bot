@@ -29,7 +29,8 @@ class RegistrationCheckMiddleware(BaseMiddleware):
         command = words[0].split("@")[0] if words else ""
         from src.utils import i18n_locales
         access_labels = set()
-        for key in ('btn_access_menu', 'btn_access_pending', 'btn_access_back'):
+        for key in ('btn_access_menu', 'btn_access_pending', 'btn_access_back',
+                    'btn_auto_approval_on', 'btn_auto_approval_off'):
             access_labels.update(i18n_locales.get_all_translations(key))
         from src.keyboards.reply import is_access_button
         is_counted_access_button = isinstance(event, Message) and any(

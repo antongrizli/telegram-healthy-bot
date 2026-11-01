@@ -14,6 +14,12 @@ def _food_result(lang: str, items: str, calories, protein, fat, carb) -> str:
         for key, value in dict(calories=calories, protein=protein, fat=fat, carb=carb).items()})
 
 
+def _coaching_text(analysis):
+    data = analysis if isinstance(analysis, dict) else analysis.model_dump()
+    return "".join("\n\n" + escape(str(data[key]), quote=False)
+                   for key in ("nutrition_notes", "goal_assessment", "alternatives") if data.get(key))
+
+
 def format_food_analysis(analysis: Any, lang: str) -> str:
     """
     Formats a FoodAnalysisResponse (or dict representation) into Telegram HTML with
@@ -50,26 +56,13 @@ def format_food_analysis(analysis: Any, lang: str) -> str:
         protein=total_protein,
         fat=total_fat,
         carb=total_carb,
-    )
+    ) + _coaching_text(analysis)
 
 
 def format_draft_card_text(payload: dict, user_language: str) -> str:
     """Render the draft as Telegram HTML; callers must use parse_mode=HTML."""
     data = payload.get("analysis", {})
-    def _item_str(item):
-        name = escape(str(item.get('name', '')), quote=False)
-        portion = item.get('portion') or (f"{item['weight_grams']}g" if 'weight_grams' in item else "")
-        portion = escape(str(portion), quote=False)
-        return f"- {name} ({portion})" if portion else f"- {name}"
-    items = "\n".join(_item_str(item) for item in data.get("food_items", []))
-    text = _food_result(
-        user_language,
-        items=items,
-        calories=data.get("total_calories", 0),
-        protein=data.get("total_protein", 0),
-        fat=data.get("total_fat", 0),
-        carb=data.get("total_carb", 0)
-    )
+    text = format_food_analysis(data, user_language)
     text += '\n' + escape(i18n_locales.get_text('meal_type_' + payload.get('meal_type', 'food'), user_language), quote=False)
     text += '\n' + escape(i18n_locales.get_text('ux_estimate', user_language), quote=False)
     return text

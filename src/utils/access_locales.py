@@ -3,6 +3,30 @@
 
 def install(locales):
     messages = {
+        'btn_auto_approval_off': (
+            '🤖 Auto-approval: off', '🤖 Автоподтверждение: выключено',
+            '🤖 Автопідтвердження: вимкнено', '🤖 Automatyczne zatwierdzanie: wyłączone',
+            '🤖 Automatische Freigabe: aus', '🤖 Otomatik onay: kapalı', '🤖 Aprobación automática: desactivada'),
+        'btn_auto_approval_on': (
+            '🤖 Auto-approval: on', '🤖 Автоподтверждение: включено',
+            '🤖 Автопідтвердження: увімкнено', '🤖 Automatyczne zatwierdzanie: włączone',
+            '🤖 Automatische Freigabe: an', '🤖 Otomatik onay: açık', '🤖 Aprobación automática: activada'),
+        'access_auto_enabled': (
+            'Automatic approval enabled. Pending requests approved: {count}.',
+            'Автоподтверждение включено. Одобрено ожидающих заявок: {count}.',
+            'Автопідтвердження увімкнено. Схвалено заявок: {count}.',
+            'Automatyczne zatwierdzanie włączone. Zatwierdzone wnioski: {count}.',
+            'Automatische Freigabe aktiviert. Freigegebene Anfragen: {count}.',
+            'Otomatik onay açıldı. Onaylanan bekleyen istekler: {count}.',
+            'Aprobación automática activada. Solicitudes pendientes aprobadas: {count}.'),
+        'access_auto_disabled': (
+            'Automatic approval disabled. New users require administrator approval.',
+            'Автоподтверждение выключено. Новых пользователей подтверждает администратор.',
+            'Автопідтвердження вимкнено. Нових користувачів схвалює адміністратор.',
+            'Automatyczne zatwierdzanie wyłączone. Nowych użytkowników zatwierdza administrator.',
+            'Automatische Freigabe deaktiviert. Neue Nutzer benötigen die Freigabe eines Administrators.',
+            'Otomatik onay kapatıldı. Yeni kullanıcıları yönetici onaylar.',
+            'Aprobación automática desactivada. Los nuevos usuarios requieren aprobación del administrador.'),
         'access_pending': (
             'Your access request is waiting for administrator approval.',
             'Заявка на доступ отправлена. Дождитесь одобрения администратора.',

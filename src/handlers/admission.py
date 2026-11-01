@@ -76,6 +76,27 @@ async def open_access_menu(message, state, user_language: str):
         reply_markup=await admin_navigation.access_menu(user_language), parse_mode=None)
 
 
+@router.message(StateFilter('*'), F.text.in_(
+    i18n_locales.get_all_translations('btn_auto_approval_on') +
+    i18n_locales.get_all_translations('btn_auto_approval_off')))
+async def toggle_auto_approval(message, state, user_language: str):
+    from src.database.connection import AsyncSessionLocal
+    if not await allowed_message(message, user_language):
+        return
+    async with AsyncSessionLocal() as db:
+        if not await is_admin(db, message.from_user.id):
+            await message.answer(get_text('admin_only', user_language))
+            return
+        enabled = not await access.auto_approval_enabled(db)
+        approved = await access.set_auto_approval(db, enabled, message.from_user.id)
+    await state.clear()
+    await message.answer(get_text('access_auto_enabled' if enabled else 'access_auto_disabled',
+        user_language, count=len(approved)),
+        reply_markup=await admin_navigation.access_menu(user_language), parse_mode=None)
+    for record in approved:
+        await notify_decision(message.bot, record.telegram_id, record.language, True)
+
+
 @router.message(StateFilter('*'), F.text.in_(i18n_locales.get_all_translations('btn_access_back')))
 async def back_to_admin(message, state, user_language: str):
     if not await allowed_message(message, user_language):

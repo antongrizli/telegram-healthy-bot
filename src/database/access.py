@@ -5,7 +5,7 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
 from src.config import settings
-from src.database.models import User, UserAccess
+from src.database.models import User, UserAccess, AdmissionSettings
 
 
 async def has_access(db, user_id, user=None):
@@ -21,12 +21,34 @@ async def has_access(db, user_id, user=None):
     return user is not None
 
 
+async def auto_approval_enabled(db):
+    policy = await db.get(AdmissionSettings, 1)
+    return bool(policy and policy.auto_approve)
+
+
+async def set_auto_approval(db, enabled, admin_id=None):
+    policy = await db.get(AdmissionSettings, 1)
+    if policy is None:
+        db.add(AdmissionSettings(id=1, auto_approve=bool(enabled)))
+    else:
+        policy.auto_approve = bool(enabled)
+    approved = []
+    if enabled:
+        approved = list((await db.scalars(update(UserAccess).where(
+            UserAccess.status == 'pending').values(status='approved', decided_by=admin_id,
+            decided_at=datetime.now(UTC).replace(tzinfo=None)).returning(UserAccess))).all())
+    await db.commit()
+    return approved
+
+
 async def request_access(db, telegram_user, language):
     record = await db.get(UserAccess, telegram_user.id)
     if record:
         return record, False
+    automatic = await auto_approval_enabled(db)
     record = UserAccess(telegram_id=telegram_user.id, username=telegram_user.username,
-        display_name=telegram_user.full_name[:128], language=language, status='pending')
+        display_name=telegram_user.full_name[:128], language=language, status='approved' if automatic else 'pending',
+        decided_at=datetime.now(UTC).replace(tzinfo=None) if automatic else None)
     db.add(record)
     try:
         await db.commit()

@@ -35,7 +35,9 @@ async def test_legacy_confirmation_after_restart_finalizes_persisted_card(db_ses
     assert kwargs['message_id'] == 777
     assert kwargs['reply_markup'] is None
     assert '?' not in kwargs['text']
-    assert ('записан' if accept else 'отмен') in kwargs['text'].lower()
+    assert 'записан' not in kwargs['text'].lower()
+    assert 'отмен' not in kwargs['text'].lower()
+    assert message.answer.call_count == 1
 
 
 @pytest.mark.asyncio
@@ -104,6 +106,7 @@ async def test_handle_meal_draft_accept_single_message_and_cleans_card(db_sessio
     mock_message.edit_text.assert_called_once()
     cleaned_card_call = mock_message.edit_text.call_args
     assert "?" not in cleaned_card_call.args[0]
+    assert "записан" not in cleaned_card_call.args[0]
     assert cleaned_card_call.kwargs.get("reply_markup") is None
 
     # 2. Exactly ONE response message sent
@@ -165,3 +168,16 @@ async def test_process_food_confirm_legacy_button_single_message(db_session):
     assert len(food_logs) == 1
     assert food_logs[0].meal_type == "lunch"
     assert food_logs[0].calories == 550
+
+
+@pytest.mark.asyncio
+async def test_food_coaching_reads_current_goal(db_session):
+    from src.services.gemini import food_coaching_prompt, FoodAnalysisResponse
+    user = await make_user(db_session)
+    prompt = await food_coaching_prompt(user.telegram_id)
+    assert user.goal in prompt
+    assert str(user.target_calories) in prompt
+    assert 'goal_assessment' in prompt and 'alternatives' in prompt
+    analysis = FoodAnalysisResponse.model_validate({**ANALYSIS,
+        'nutrition_notes': 'Описание', 'goal_assessment': 'Вывод', 'alternatives': 'Замена'})
+    assert analysis.model_dump()['goal_assessment'] == 'Вывод'

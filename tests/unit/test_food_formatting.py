@@ -58,3 +58,16 @@ def test_model_or_user_text_cannot_inject_markup(draft):
     parser = BoldHTML()
     parser.feed(text)
     assert not parser.open_tags
+
+
+@pytest.mark.parametrize('draft', [True, False])
+def test_coaching_survives_rendering_and_escapes_markup(draft):
+    analysis = {**ANALYSIS, 'nutrition_notes': 'Клетчатка < 5 г & белок',
+                'goal_assessment': 'Подходит для снижения веса в этой порции.',
+                'alternatives': 'Замена не нужна; дополните йогуртом 150 г.'}
+    text = (format_draft_card_text({'analysis': analysis}, 'ru')
+            if draft else format_food_analysis(analysis, 'ru'))
+    assert 'Клетчатка &lt; 5 г &amp; белок' in text
+    assert text.index(analysis['goal_assessment']) < text.index(analysis['alternatives'])
+    assert analysis['alternatives'] in text
+    assert 'P: 1.8g' in text

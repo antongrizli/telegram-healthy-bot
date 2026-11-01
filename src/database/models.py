@@ -1,5 +1,5 @@
 from datetime import datetime, time, UTC
-from sqlalchemy import BigInteger, Column, Integer, Float, String, Boolean, DateTime, Time, ForeignKey, JSON, Date, UniqueConstraint, Index
+from sqlalchemy import BigInteger, Column, Integer, Float, String, Boolean, DateTime, Time, ForeignKey, JSON, Date, UniqueConstraint, Index, false
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -244,3 +244,10 @@ class UserAccess(Base):
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(UTC).replace(tzinfo=None))
     decided_at = Column(DateTime, nullable=True)
     decided_by = Column(BigInteger, nullable=True)
+
+
+class AdmissionSettings(Base):
+    """One durable global admission policy; absence means manual approval."""
+    __tablename__ = 'admission_settings'
+    id = Column(Integer, primary_key=True)
+    auto_approve = Column(Boolean, nullable=False, default=False, server_default=false())

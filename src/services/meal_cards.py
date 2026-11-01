@@ -12,10 +12,6 @@ async def finalize_card(message, payload, language, accept):
     from src.presenters.food import format_draft_card_text
     from src.utils import i18n_locales
     text = i18n_locales.strip_food_confirmation_question(format_draft_card_text(payload, language))
-    status = (i18n_locales.format_food_logged(payload.get('meal_type', 'food'),
-        payload['analysis']['total_calories'], language) if accept
-        else i18n_locales.get_text('food_cancelled', language))
-    text += '\n\n' + status
     card_id = payload.get('card_message_id')
     try:
         if isinstance(card_id, int) and hasattr(message, 'bot') and hasattr(message.bot, 'edit_message_text'):

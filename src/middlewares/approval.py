@@ -27,8 +27,9 @@ class ApprovalMiddleware(BaseMiddleware):
                     record, created, admins = None, False, {}
                 else:
                     record, created = await access.request_access(db, actor, language)
-                    admins = await access.admin_recipients(db) if created else {}
-                    pending_count = await access.pending_access_count(db) if created else 0
+                    allowed = record.status == 'approved'
+                    admins = await access.admin_recipients(db) if created and not allowed else {}
+                    pending_count = await access.pending_access_count(db) if created and not allowed else 0
         if allowed:
             data['access_approved'] = True
             return await handler(event, data)

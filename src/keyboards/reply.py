@@ -337,11 +337,14 @@ def get_monthly_report_day_keyboard(lang: str = "en", current_val: int = None) -
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 
-def get_access_menu(lang: str = 'en', pending_count: int = 0) -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(keyboard=[
-        [KeyboardButton(text=access_count_label('btn_access_pending', lang, pending_count))],
-        [KeyboardButton(text=get_text('btn_access_back', lang))],
-    ], resize_keyboard=True)
+def get_access_menu(lang: str = 'en', pending_count: int = 0, auto_approve: bool = False) -> ReplyKeyboardMarkup:
+    rows = []
+    if not auto_approve:
+        rows.append([KeyboardButton(text=access_count_label('btn_access_pending', lang, pending_count))])
+    rows.append([KeyboardButton(text=get_text(
+        'btn_auto_approval_on' if auto_approve else 'btn_auto_approval_off', lang))])
+    rows.append([KeyboardButton(text=get_text('btn_access_back', lang))])
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
 
 
 def access_count_label(key, language, count):

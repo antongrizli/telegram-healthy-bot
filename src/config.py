@@ -4,8 +4,11 @@ from typing import List
 
 class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str
-    GEMINI_API_KEY: str
+    AI_PROVIDER: str = "gemini"
+    GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemma-4-31b-it"
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_MODEL: str = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
     ADMIN_USER_IDS: List[int] = Field(default_factory=list)
     DATABASE_URL: str
     WEBAPP_URL: str

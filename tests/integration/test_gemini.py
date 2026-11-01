@@ -270,3 +270,36 @@ async def test_text_keeps_gemma_model(mock_gemini_client, monkeypatch):
     call = mock_gemini_client.models.generate_content.call_args.kwargs
     assert call["model"] == "gemma-4-31b-it"
     assert call["config"].response_mime_type is None
+
+
+async def test_openrouter_analyze_food_input(monkeypatch):
+    monkeypatch.setattr(gemini.settings, "AI_PROVIDER", "openrouter")
+    monkeypatch.setattr(gemini.settings, "OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr(gemini.settings, "OPENROUTER_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "choices": [
+            {
+                "message": {
+                    "content": '{"food_items": [{"name": "boiled egg", "portion": 2, "calories": 156, "protein": 12.6, "fat": 10.6, "carb": 1.2}], "total_calories": 156, "total_protein": 12.6, "total_fat": 10.6, "total_carb": 1.2}'
+                }
+            }
+        ]
+    }
+
+    from unittest.mock import AsyncMock, patch
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_response
+        res = await gemini.analyze_food_input(text_description="2 boiled eggs")
+
+        assert res is not None
+        assert res.total_calories == 156
+        assert len(res.food_items) == 1
+        assert res.food_items[0].name == "boiled egg"
+        assert res.food_items[0].portion == "2"
+        mock_post.assert_called_once()
+        args, kwargs = mock_post.call_args
+        assert kwargs["json"]["model"] == "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+

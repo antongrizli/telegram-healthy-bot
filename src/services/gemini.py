@@ -1,5 +1,6 @@
 import json
 import asyncio
+import base64
 import logging
 from typing import List, Optional
 from pydantic import BaseModel, Field, ConfigDict, model_validator, field_validator
@@ -47,6 +48,13 @@ class FoodItem(BaseModel):
     protein: float = Field(ge=0, le=2000, description="Protein in grams")
     fat: float = Field(ge=0, le=2000, description="Fat in grams")
     carb: float = Field(ge=0, le=2000, description="Carbohydrates in grams")
+
+    @field_validator("portion", mode="before")
+    @classmethod
+    def coerce_portion(cls, v):
+        if v is not None:
+            return str(v)
+        return ""
 
     @field_validator("calories", mode="before")
     @classmethod
@@ -137,6 +145,8 @@ def parse_food_analysis_data(raw_text: str) -> FoodAnalysisResponse:
                     item["carb"] = item["carbs"]
                 if "weight" in item and "portion" not in item:
                     item["portion"] = str(item["weight"])
+                elif "portion" in item and item["portion"] is not None:
+                    item["portion"] = str(item["portion"])
                 if "calories" in item and isinstance(item["calories"], (int, float, str)):
                     try:
                         item["calories"] = int(round(float(item["calories"])))
@@ -162,12 +172,118 @@ if settings.FORCE_IPV6:
     async_client_args["transport"] = httpx.AsyncHTTPTransport(local_address="::")
 
 client = genai.Client(
-    api_key=settings.GEMINI_API_KEY,
+    api_key=settings.GEMINI_API_KEY or "dummy_key",
     http_options=types.HttpOptions(
         client_args=client_args,
         async_client_args=async_client_args
     )
 )
+
+class ModelResponse:
+    def __init__(self, text: str):
+        self.text = text
+
+def contents_to_openrouter_messages(contents) -> List[dict]:
+    content_parts = []
+
+    def handle_part(p):
+        if isinstance(p, str):
+            if p.strip():
+                content_parts.append({"type": "text", "text": p})
+        elif hasattr(p, "text") and p.text:
+            content_parts.append({"type": "text", "text": p.text})
+        elif hasattr(p, "inline_data") and p.inline_data:
+            mime = getattr(p.inline_data, "mime_type", "image/jpeg") or "image/jpeg"
+            raw_data = p.inline_data.data
+            b64_str = raw_data if isinstance(raw_data, str) else base64.b64encode(raw_data).decode("utf-8")
+            content_parts.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:{mime};base64,{b64_str}"}
+            })
+
+    if isinstance(contents, list):
+        for item in contents:
+            if hasattr(item, "parts"):
+                for part in item.parts:
+                    handle_part(part)
+            else:
+                handle_part(item)
+    elif hasattr(contents, "parts"):
+        for part in contents.parts:
+            handle_part(part)
+    elif isinstance(contents, str):
+        handle_part(contents)
+
+    return [{"role": "user", "content": content_parts}]
+
+async def call_openrouter_with_retry(
+    contents,
+    config=None,
+    model: Optional[str] = None,
+    max_retries=4,
+    initial_delay=1.0,
+    backoff_factor=2.0,
+    user_id=None,
+    request_type="ai",
+):
+    if model is None:
+        model = settings.OPENROUTER_MODEL
+    delay = initial_delay
+    messages = contents_to_openrouter_messages(contents)
+    temperature = getattr(config, "temperature", 0.2) if config is not None else 0.2
+
+    headers = {
+        "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+        "HTTP-Referer": "https://healthy-bot.local",
+        "X-Title": "HealthyBot",
+    }
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+    }
+
+    async with httpx.AsyncClient(timeout=60.0) as client_http:
+        for attempt in range(max_retries):
+            from src.services.ai_quota import reserve_attempt
+            await reserve_attempt(user_id, request_type)
+            try:
+                resp = await client_http.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers=headers,
+                    json=payload,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    content = ""
+                    choices = data.get("choices")
+                    if choices and isinstance(choices, list):
+                        msg = choices[0].get("message", {})
+                        content = msg.get("content") or ""
+                    return ModelResponse(text=content)
+
+                is_transient = resp.status_code in (429, 500, 502, 503, 504)
+                if is_transient and attempt < max_retries - 1:
+                    logger.warning(
+                        f"OpenRouter API transient error {resp.status_code} (attempt {attempt + 1}/{max_retries}): {resp.text}. "
+                        f"Retrying in {delay:.2f}s..."
+                    )
+                    await asyncio.sleep(delay)
+                    delay *= backoff_factor
+                else:
+                    logger.error("OpenRouter API error status=%d: %s", resp.status_code, resp.text)
+                    resp.raise_for_status()
+            except (httpx.RequestError, httpx.HTTPStatusError) as e:
+                is_transient = isinstance(e, httpx.RequestError) or (isinstance(e, httpx.HTTPStatusError) and e.response.status_code in (429, 500, 502, 503, 504))
+                if is_transient and attempt < max_retries - 1:
+                    logger.warning(
+                        f"OpenRouter network/status error (attempt {attempt + 1}/{max_retries}): {e}. "
+                        f"Retrying in {delay:.2f}s..."
+                    )
+                    await asyncio.sleep(delay)
+                    delay *= backoff_factor
+                else:
+                    raise e
 
 async def call_gemini_with_retry(
     contents,
@@ -180,9 +296,19 @@ async def call_gemini_with_retry(
     request_type="ai",
 ):
     """
-    Calls Gemini generate_content in a non-blocking thread,
-    retrying with exponential backoff on transient errors (like 503 UNAVAILABLE or 429).
+    Calls Gemini generate_content or OpenRouter with retries on transient errors.
     """
+    if getattr(settings, "AI_PROVIDER", "gemini") == "openrouter":
+        return await call_openrouter_with_retry(
+            contents=contents,
+            config=config,
+            model=model if (model and model != settings.GEMINI_MODEL) else settings.OPENROUTER_MODEL,
+            max_retries=max_retries,
+            initial_delay=initial_delay,
+            backoff_factor=backoff_factor,
+            user_id=user_id,
+            request_type=request_type,
+        )
     if model is None:
         model = settings.GEMINI_MODEL
     delay = initial_delay
@@ -293,10 +419,10 @@ async def analyze_food_input(
     )
     
     raw_images = images_bytes or ([image_bytes] if image_bytes is not None else [])
-    target_model = settings.GEMINI_MODEL
-    logger.info("Food analysis model=%s images=%d", target_model, len(raw_images))
+    target_model = settings.OPENROUTER_MODEL if getattr(settings, "AI_PROVIDER", "gemini") == "openrouter" else settings.GEMINI_MODEL
+    logger.info("Food analysis model=%s images=%d provider=%s", target_model, len(raw_images), getattr(settings, "AI_PROVIDER", "gemini"))
     config_args = {"temperature": 0.2}
-    if not is_gemma_model(target_model):
+    if getattr(settings, "AI_PROVIDER", "gemini") != "openrouter" and not is_gemma_model(target_model):
         config_args.update(response_mime_type="application/json", response_schema=FoodAnalysisResponse)
 
     contents = food_contents(raw_images, [text_description, prompt])
@@ -304,7 +430,7 @@ async def analyze_food_input(
         for index, part in enumerate(contents[0].parts[:len(raw_images)]):
             logger.info("AI attachment index=%d mime=%s bytes=%d", index,
                         part.inline_data.mime_type, len(part.inline_data.data))
-    if raw_images and settings.AI_COUNT_TOKENS:
+    if raw_images and settings.AI_COUNT_TOKENS and getattr(settings, "AI_PROVIDER", "gemini") != "openrouter":
         from src.services.ai_quota import reserve_attempt
         await reserve_attempt(user_id, "count_tokens")
         try:
@@ -366,9 +492,9 @@ async def adjust_food_analysis(
         f"}}"
     )
     
-    target_model = settings.GEMINI_MODEL
+    target_model = settings.OPENROUTER_MODEL if getattr(settings, "AI_PROVIDER", "gemini") == "openrouter" else settings.GEMINI_MODEL
     config_args = {"temperature": 0.2}
-    if not is_gemma_model(target_model):
+    if getattr(settings, "AI_PROVIDER", "gemini") != "openrouter" and not is_gemma_model(target_model):
         config_args.update(response_mime_type="application/json", response_schema=FoodAnalysisResponse)
 
     response = await call_gemini_with_retry(

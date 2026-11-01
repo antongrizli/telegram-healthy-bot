@@ -1,4 +1,5 @@
 import json
+import io
 import asyncio
 import logging
 from typing import List, Optional
@@ -289,38 +290,45 @@ async def analyze_food_input(
         f"}}"
     )
     
-    contents = []
-    if images_bytes:
-        for img_bytes in images_bytes:
-            image_part = types.Part.from_bytes(
-                data=img_bytes,
-                mime_type="image/jpeg"
-            )
-            contents.append(image_part)
-    elif image_bytes:
-        image_part = types.Part.from_bytes(
-            data=image_bytes,
-            mime_type="image/jpeg"
-        )
-        contents.append(image_part)
-    
-    if text_description:
-        contents.append(text_description)
-        
-    contents.append(prompt)
-    
     target_model = settings.GEMINI_MODEL
-    config_args = {"temperature": 0.2, "response_mime_type": "application/json"}
-    if not is_gemma_model(target_model):
-        config_args["response_schema"] = FoodAnalysisResponse
+    gemma = is_gemma_model(target_model)
+    config_args = {"temperature": 0.2}
+    if not gemma:
+        config_args.update(response_mime_type="application/json", response_schema=FoodAnalysisResponse)
 
-    response = await call_gemini_with_retry(
-        user_id=user_id, request_type="analyze_food_input",
-        contents=contents,
-        model=target_model,
-        config=types.GenerateContentConfig(**config_args)
-    )
-    return parse_food_analysis_data(response.text)
+    # Gemma's hosted image API uses file references. Keep uploads alive through
+    # generation (including retries), and remove them even if analysis fails.
+    uploaded_files = []
+    contents = []
+    try:
+        for raw_image in images_bytes or ([image_bytes] if image_bytes else []):
+            if gemma:
+                uploaded = await client.aio.files.upload(
+                    file=io.BytesIO(raw_image),
+                    config=types.UploadFileConfig(mime_type="image/jpeg"),
+                )
+                uploaded_files.append(uploaded)
+                contents.append(types.Part.from_uri(file_uri=uploaded.uri, mime_type="image/jpeg"))
+            else:
+                contents.append(types.Part.from_bytes(data=raw_image, mime_type="image/jpeg"))
+
+        if text_description:
+            contents.append(text_description)
+        contents.append(prompt)
+
+        response = await call_gemini_with_retry(
+            user_id=user_id, request_type="analyze_food_input",
+            contents=contents,
+            model=target_model,
+            config=types.GenerateContentConfig(**config_args)
+        )
+        return parse_food_analysis_data(response.text)
+    finally:
+        for uploaded in uploaded_files:
+            try:
+                await client.aio.files.delete(name=uploaded.name)
+            except Exception:
+                logger.warning("Failed to delete uploaded food image", exc_info=True)
 
 async def adjust_food_analysis(
     original_data: dict,
@@ -360,9 +368,9 @@ async def adjust_food_analysis(
     )
     
     target_model = settings.GEMINI_MODEL
-    config_args = {"temperature": 0.2, "response_mime_type": "application/json"}
+    config_args = {"temperature": 0.2}
     if not is_gemma_model(target_model):
-        config_args["response_schema"] = FoodAnalysisResponse
+        config_args.update(response_mime_type="application/json", response_schema=FoodAnalysisResponse)
 
     response = await call_gemini_with_retry(
         user_id=user_id, request_type="adjust_food_analysis",

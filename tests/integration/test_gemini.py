@@ -98,7 +98,8 @@ async def test_generate_report_failure(mock_gemini_client):
         await gemini.generate_report(profile, [], [], "daily", "en")
 
 
-async def test_analyze_food_input_multiple_images(mock_gemini_client):
+async def test_analyze_food_input_multiple_images(mock_gemini_client, monkeypatch):
+    monkeypatch.setattr(gemini.settings, "GEMINI_MODEL", "gemini-test")
     mock_response = MagicMock()
     mock_response.text = (
         '{"food_items": [{"name": "Eggs", "portion": "2 eggs", "calories": 140, "protein": 12.0, "fat": 10.0, "carb": 1.0}],'
@@ -139,7 +140,7 @@ async def test_gemma_model_omits_response_schema(mock_gemini_client, monkeypatch
     config = call_args[1].get("config")
     # For Gemma models, response_schema must NOT be sent to avoid 400 INVALID_ARGUMENT
     assert getattr(config, "response_schema", None) is None
-    assert getattr(config, "response_mime_type", None) == "application/json"
+    assert getattr(config, "response_mime_type", None) is None
 
 
 async def test_gemma_thought_tags_and_markdown_stripping(mock_gemini_client):
@@ -229,3 +230,41 @@ async def test_analyze_food_input_float_calories_coercion(mock_gemini_client):
     assert res.total_calories == 232
 
 
+@pytest.mark.parametrize("images", [[b"photo"], [b"first", b"second"]])
+@pytest.mark.parametrize("failure", [None, "generation", "upload"])
+async def test_gemma_images_use_files_and_cleanup(mock_gemini_client, monkeypatch, images, failure):
+    from unittest.mock import AsyncMock
+    from google.genai import types
+
+    monkeypatch.setattr(gemini.settings, "GEMINI_MODEL", "gemma-4-31b-it")
+    files = [types.File(name=f"files/photo{i}", uri=f"https://example.com/photo{i}") for i in range(len(images))]
+    uploads = list(files)
+    if failure == "upload":
+        uploads[-1] = RuntimeError("upload failed")
+    mock_gemini_client.aio.files.upload = AsyncMock(side_effect=uploads)
+    mock_gemini_client.aio.files.delete = AsyncMock()
+    response = MagicMock(text='{"food_items":[{"name":"Egg","portion":"1","calories":70,"protein":6,"fat":5,"carb":0.5}]}')
+    mock_gemini_client.models.generate_content.return_value = response
+    if failure == "generation":
+        mock_gemini_client.models.generate_content.side_effect = RuntimeError("generation failed")
+
+    kwargs = {"image_bytes": images[0]} if len(images) == 1 else {"images_bytes": images}
+    if failure:
+        with pytest.raises(RuntimeError, match=f"{failure} failed"):
+            await gemini.analyze_food_input(text_description="meal", **kwargs)
+    else:
+        result = await gemini.analyze_food_input(text_description="meal", **kwargs)
+        assert result.total_calories == 70
+        call = mock_gemini_client.models.generate_content.call_args.kwargs
+        assert call["model"] == "gemma-4-31b-it"
+        assert call["config"].response_mime_type is None
+        assert call["config"].response_schema is None
+        for part, uploaded in zip(call["contents"], files):
+            assert part.file_data.file_uri == uploaded.uri
+            assert part.inline_data is None
+
+    for call, raw in zip(mock_gemini_client.aio.files.upload.call_args_list, images):
+        assert call.kwargs["file"].getvalue() == raw
+        assert call.kwargs["config"].mime_type == "image/jpeg"
+    expected = files[:-1] if failure == "upload" else files
+    assert [call.kwargs["name"] for call in mock_gemini_client.aio.files.delete.call_args_list] == [f.name for f in expected]

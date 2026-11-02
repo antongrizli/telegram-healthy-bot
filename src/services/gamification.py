@@ -65,6 +65,9 @@ ACHIEVEMENTS = {
     "hydration": {"icon": "💧", "name_key": "ach_hydration_name", "desc_key": "ach_hydration_desc"},
 }
 
+from src.services.workout_progress import install_achievements
+install_achievements(ACHIEVEMENTS, i18n_locales.LOCALES)
+
 async def process_food_log_streak(db: AsyncSession, user: User) -> tuple[int, bool, int]:
     """
     Updates the food logging streak for the user.

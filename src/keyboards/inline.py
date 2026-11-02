@@ -245,3 +245,17 @@ def get_access_notification_inline(language, pending_count):
     from src.keyboards.reply import access_count_label
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
         text=access_count_label('btn_access_pending', language, pending_count), callback_data='accessreq:page:1')]])
+
+
+def get_workout_hub_inline(lang, frequency=None):
+    from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+    from src.utils.workout_locales import tr
+    parts = urlsplit(settings.WEBAPP_URL)
+    query = dict(parse_qsl(parts.query))
+    query['tab'] = 'workouts'
+    url = urlunsplit(parts._replace(query=urlencode(query), fragment=''))
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=tr('today_plan', lang), callback_data='wd:open')],
+        [InlineKeyboardButton(text=tr('frequency', lang, count=frequency or '?'), callback_data='wf:open')],
+        [InlineKeyboardButton(text=tr('history', lang), web_app=WebAppInfo(url=url))],
+    ])

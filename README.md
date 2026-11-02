@@ -15,6 +15,8 @@ The bot helps users track their nutrition logs (via photo or text), record perio
 
 ## Features
 
+**Workout logging:** the main-menu Workout button records per-set weights/repetitions and cardio minutes/intensity, restores durable drafts, supports named A/B templates, bodyweight exercises, weekly frequency and training priorities/time budgets, and generates an explicitly accepted plan for today from the user’s own library. The WebApp includes workout cards, history, per-exercise progress and shared medals. See [workout scenarios, migration and limits](docs/workouts.md).
+
 1. **Food Logging (Multimodal & Multi-image Input)**:
    * Send a text description (e.g., *"A plate of rice, 150g salmon, and broccoli"*), a single photo, or **multiple images (media groups/albums)** representing a meal.
    * Media group updates are automatically bundled by a custom middleware to trigger only a single AI processing request.

@@ -111,6 +111,7 @@ const initLocalization = async () => {
 
     // Run translation
     translatePage(state.userLanguage);
+    if (typeof wtr === "function") document.getElementById("workout-nav-label").textContent = wtr("title").replace("🏋️ ", "");
     if (typeof mt === "function") document.getElementById("med-nav-label").textContent = mt("title");
 
 };
@@ -148,11 +149,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     const tabParam = urlParams.get("tab");
     const hash = window.location.hash;
 
-    if (tabParam && ["dashboard", "charts", "achievements", "health-card", "medications"].includes(tabParam)) {
+    if (tabParam && ["dashboard", "charts", "achievements", "health-card", "medications", "workouts"].includes(tabParam)) {
         switchTab(tabParam);
     } else if (hash) {
         const route = hash.replace("#/", "");
-        if (["dashboard", "charts", "achievements", "health-card", "medications"].includes(route)) {
+        if (["dashboard", "charts", "achievements", "health-card", "medications", "workouts"].includes(route)) {
             switchTab(route);
         } else {
             loadTab("dashboard");
@@ -185,7 +186,7 @@ const switchTab = (tabName) => {
     const navItems = document.querySelectorAll(".nav-item");
     navItems.forEach(item => item.classList.remove("active"));
 
-    const indexMap = { "dashboard": 0, "charts": 1, "achievements": 2, "health-card": 3, "medications": 4 };
+    const indexMap = { "dashboard": 0, "charts": 1, "achievements": 2, "health-card": 3, "medications": 4, "workouts": 5 };
     if (navItems[indexMap[tabName]]) {
         navItems[indexMap[tabName]].classList.add("active");
     }
@@ -221,7 +222,9 @@ const loadTab = async (tabName) => {
         // Load streaks data on every tab to keep header updated
         await loadStreaksData();
 
-        if (tabName === "medications") {
+        if (tabName === "workouts") {
+            await loadWorkouts();
+        } else if (tabName === "medications") {
             await loadMedications();
         } else if (tabName === "dashboard") {
             await loadTodayActions();

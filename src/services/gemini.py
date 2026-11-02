@@ -219,7 +219,13 @@ def contents_to_openrouter_messages(contents) -> List[dict]:
 
     return [{"role": "user", "content": content_parts}]
 
-async def call_openrouter_with_retry(
+async def call_openrouter_with_retry(*args, **kwargs):
+    # HTTP read timeouts reset on incoming bytes; bound the entire operation too.
+    async with asyncio.timeout(settings.OPENROUTER_REQUEST_TIMEOUT):
+        return await _call_openrouter_with_retry(*args, **kwargs)
+
+
+async def _call_openrouter_with_retry(
     contents,
     config=None,
     model: Optional[str] = None,
@@ -244,6 +250,9 @@ async def call_openrouter_with_retry(
         "model": model,
         "messages": messages,
         "temperature": temperature,
+        "max_tokens": settings.OPENROUTER_MAX_TOKENS,
+        "reasoning": ({"max_tokens": settings.OPENROUTER_REASONING_TOKENS}
+                      if settings.OPENROUTER_REASONING_TOKENS else {"enabled": False}),
     }
 
     async with httpx.AsyncClient(timeout=60.0) as client_http:
@@ -263,6 +272,20 @@ async def call_openrouter_with_retry(
                     if choices and isinstance(choices, list):
                         msg = choices[0].get("message", {})
                         content = msg.get("content") or ""
+                    finish_reason = choices[0].get("finish_reason") if choices else None
+                    if finish_reason == "length" or not isinstance(content, str) or not content.strip():
+                        logger.warning(
+                            "OpenRouter unusable response model=%s finish_reason=%s output_tokens=%s attempt=%s",
+                            payload["model"], finish_reason,
+                            data.get("usage", {}).get("completion_tokens"), attempt + 1,
+                        )
+                        if attempt < min(max_retries, 2) - 1:
+                            # Do not repeat the same reasoning loop, including in queue calls.
+                            payload["reasoning"] = {"enabled": False}
+                            if settings.OPENROUTER_FALLBACK_MODEL:
+                                payload["model"] = settings.OPENROUTER_FALLBACK_MODEL
+                            continue
+                        raise ValueError(f"OpenRouter returned unusable output (finish_reason={finish_reason})")
                     return ModelResponse(text=content)
 
                 is_transient = resp.status_code in (429, 500, 502, 503, 504)
@@ -496,7 +519,7 @@ async def adjust_food_analysis(
     lang_name = LANG_NAMES.get(language, "English")
     prompt = (
         f"You are a professional nutrition expert. The user previously logged food, and it was analyzed as follows:\n"
-        f"{json.dumps(original_data, indent=2)}\n\n"
+        f"{json.dumps(original_data, ensure_ascii=False, separators=(",", ":"))}\n\n"
         f"The user has now provided the following corrections:\n"
         f"'{correction_text}'\n\n"
         f"Please adjust the food items list, portion sizes, calories, and macros based on these corrections. "

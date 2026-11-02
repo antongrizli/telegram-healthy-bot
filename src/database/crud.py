@@ -208,6 +208,8 @@ async def create_or_update_user(db: AsyncSession, telegram_id: int, **kwargs) ->
     if user:
         for key, value in kwargs.items():
             setattr(user, key, value)
+        if "goal" in kwargs:
+            user.additional_goals = [g for g in (user.additional_goals or []) if g != user.goal]
         user.is_admin = is_admin
         if "blocked_at" not in kwargs:
             user.blocked_at = None
@@ -761,7 +763,9 @@ async def get_admin_stats(db: AsyncSession) -> dict:
     }
 
 async def delete_user(db: AsyncSession, telegram_id: int) -> bool:
-    from src.database.models import ProductEvent, AiRequestAttempt
+    from src.database.models import ProductEvent, AiRequestAttempt, WorkoutPlan, WorkoutEntry, Workout, Exercise, WorkoutTemplate, DailyWorkoutPlan
+    for model in (WorkoutPlan, WorkoutEntry, Workout, WorkoutTemplate, DailyWorkoutPlan, Exercise):
+        await db.execute(delete(model).where(model.user_id == telegram_id))
     await db.execute(delete(ProductEvent).where(ProductEvent.user_id == telegram_id))
     # Retain anonymous 24-hour quota usage without retaining a deleted identity.
     for model in (AiRequestAttempt, AiRequestLog):

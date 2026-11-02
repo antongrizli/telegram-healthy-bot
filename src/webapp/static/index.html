@@ -192,6 +192,7 @@
                 </div>
             </div>
             <div class="tab-content hidden" id="medications-tab"></div>
+            <div class="tab-content hidden" id="workouts-tab" aria-live="polite"></div>
         </main>
 
         <!-- Tab Bar Navigation -->
@@ -215,6 +216,9 @@
             <button class="nav-item" onclick="switchTab('medications')">
                 <i class="fa-solid fa-pills"></i><span id="med-nav-label">Preparations</span>
             </button>
+            <button class="nav-item" onclick="switchTab('workouts')">
+                <i class="fa-solid fa-dumbbell"></i><span id="workout-nav-label">Workouts</span>
+            </button>
         </nav>
     </div>
 
@@ -223,6 +227,8 @@
     <script src="app.js"></script>
     <script src="medication-locales.js"></script>
     <script src="medications.js"></script>
+    <script src="workout-locales.js"></script>
+    <script src="workouts.js"></script>
     <script src="ux.js"></script>
 </body>
 </html>

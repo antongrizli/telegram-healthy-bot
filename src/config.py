@@ -9,10 +9,15 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemma-4-31b-it"
     OPENROUTER_API_KEY: str = ""
     OPENROUTER_MODEL: str = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+    OPENROUTER_FALLBACK_MODEL: str = ""
+    OPENROUTER_REQUEST_TIMEOUT: float = Field(default=90.0, gt=0)
+    OPENROUTER_MAX_TOKENS: int = Field(default=8192, ge=256)
+    OPENROUTER_REASONING_TOKENS: int = Field(default=1024, ge=0)
     ADMIN_USER_IDS: List[int] = Field(default_factory=list)
     DATABASE_URL: str
     WEBAPP_URL: str
     FORCE_IPV6: bool = False
+    WORKOUT_HISTORY_WEEKS: int = Field(default=6, ge=4, le=6)
     AI_COUNT_TOKENS: bool = False
     AI_REQUESTS_PER_MINUTE: int = Field(default=15, gt=0)
     AI_REQUESTS_PER_DAY: int = Field(default=1500, gt=0)

@@ -7,7 +7,7 @@ def get_main_menu(lang: str = "en", is_admin: bool = False) -> ReplyKeyboardMark
     Returns the main menu keyboard based on user's selected language.
     """
     kb = [[KeyboardButton(text=get_text(key, lang)) for key in row]
-          for row in [('ux_add', 'ux_today'), ('ux_progress', 'ux_more')]]
+          for row in [('ux_add', 'ux_today'), ('ux_progress', 'ux_more'), ('btn_workout',)]]
     if is_admin:
         kb.append([KeyboardButton(text="👑 Admin Panel" if lang == "en" else "👑 Админ-панель")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
@@ -81,12 +81,14 @@ def get_cancel_keyboard(lang: str = "en", current_val: str = None) -> ReplyKeybo
     kb.append([KeyboardButton(text=get_text("btn_cancel", lang))])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-def get_setup_profile_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:
+def get_setup_profile_keyboard(lang: str = "en", registered: bool = False) -> ReplyKeyboardMarkup:
     kb = [
         [KeyboardButton(text=get_text("btn_setup_profile", lang))],
         [KeyboardButton(text=get_text("btn_delete_profile", lang))],
         [KeyboardButton(text=get_text("ux_back", lang))]
     ]
+    if registered:
+        kb.insert(1, [KeyboardButton(text=get_text("btn_workout_goals", lang))])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_delete_confirm_keyboard(lang: str = "en") -> ReplyKeyboardMarkup:

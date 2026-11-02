@@ -1,5 +1,5 @@
 from datetime import datetime, time, UTC
-from sqlalchemy import BigInteger, Column, Integer, Float, String, Boolean, DateTime, Time, ForeignKey, JSON, Date, UniqueConstraint, Index, false
+from sqlalchemy import BigInteger, Column, Integer, Float, String, Boolean, DateTime, Time, ForeignKey, JSON, Date, UniqueConstraint, Index, false, text
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -16,6 +16,8 @@ class User(Base):
     weight_kg = Column(Float, nullable=False)
     activity_level = Column(String(20), nullable=False) # 'sedentary', 'light', 'moderate', 'active'
     goal = Column(String(20), nullable=False) # 'lose_weight', 'maintain', 'gain_weight', 'gain_muscle'
+    additional_goals = Column(JSON, nullable=False, default=list)
+    training_preferences = Column(JSON, nullable=False, default=dict)
     language = Column(String(5), nullable=False, default="en") # 'en', 'ru'
     timezone = Column(String(50), nullable=False, default="UTC")
     notifications_enabled = Column(Boolean, default=True)
@@ -251,3 +253,89 @@ class AdmissionSettings(Base):
     __tablename__ = 'admission_settings'
     id = Column(Integer, primary_key=True)
     auto_approve = Column(Boolean, nullable=False, default=False, server_default=false())
+
+
+class Exercise(Base):
+    __tablename__ = "exercises"
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_exercise_owner_name"),)
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    weight_step = Column(Float, nullable=False, default=2.5)
+    kind = Column(String(12), nullable=False, default="strength")
+    load_type = Column(String(12), nullable=False, default="external")
+
+
+class Workout(Base):
+    __tablename__ = "workouts"
+    __table_args__ = (
+        Index("uq_workout_active_owner", "user_id", unique=True,
+              postgresql_where=text("status = 'active'"),
+              sqlite_where=text("status = 'active'")),
+    )
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False, index=True)
+    status = Column(String(20), nullable=False, default="active")
+    revision = Column(Integer, nullable=False, default=0)
+    started_at = Column(DateTime, nullable=False, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+    finished_at = Column(DateTime)
+    template_snapshot = Column(JSON)
+    available_minutes = Column(Integer)
+    pending = Column(JSON, nullable=False, default=dict)
+    feedback = Column(JSON, nullable=False, default=dict)
+    goals = Column(JSON, nullable=False, default=dict)
+    analysis_state = Column(String(20), nullable=False, default="idle")
+    analysis_started_at = Column(DateTime)
+    analysis = Column(JSON)
+
+
+class WorkoutEntry(Base):
+    __tablename__ = "workout_entries"
+    __table_args__ = (UniqueConstraint("workout_id", "exercise_id", name="uq_workout_exercise"),)
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False, index=True)
+    workout_id = Column(Integer, ForeignKey("workouts.id", ondelete="CASCADE"), nullable=False, index=True)
+    exercise_id = Column(Integer, ForeignKey("exercises.id", ondelete="CASCADE"), nullable=False)
+    draft = Column(JSON, nullable=False)
+    actual = Column(JSON)  # Only this snapshot counts as performed.
+    selected = Column(Integer, nullable=False, default=0)
+
+
+class WorkoutPlan(Base):
+    __tablename__ = "workout_plans"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False, index=True)
+    workout_id = Column(Integer, ForeignKey("workouts.id", ondelete="CASCADE"), nullable=False, unique=True)
+    revision = Column(Integer, nullable=False, default=0)
+    status = Column(String(20), nullable=False, default="proposed")
+    goals = Column(JSON, nullable=False)
+    items = Column(JSON, nullable=False)
+    explanation = Column(String(2000), nullable=False, default="")
+    target_template = Column(JSON)
+
+
+class WorkoutTemplate(Base):
+    __tablename__ = "workout_templates"
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_workout_template_name"),)
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(80), nullable=False)
+    revision = Column(Integer, nullable=False, default=0)
+    items = Column(JSON, nullable=False)
+    minutes_min = Column(Integer)
+    minutes_max = Column(Integer)
+
+
+class DailyWorkoutPlan(Base):
+    __tablename__ = "daily_workout_plans"
+    __table_args__ = (UniqueConstraint("user_id", "local_date", name="uq_daily_workout_owner_date"),)
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False, index=True)
+    local_date = Column(Date, nullable=False)
+    revision = Column(Integer, nullable=False, default=0)
+    status = Column(String(20), nullable=False, default="draft")
+    preferences = Column(JSON, nullable=False, default=dict)
+    goals = Column(JSON, nullable=False, default=dict)
+    items = Column(JSON, nullable=False, default=list)
+    summary = Column(String(3000), nullable=False, default="")
+    generation_started_at = Column(DateTime)

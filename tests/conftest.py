@@ -72,6 +72,10 @@ def patch_async_session_local(monkeypatch, db_session):
     modules = [
         "src.database.connection",
         "src.handlers.weight",
+        "src.handlers.workouts",
+        "src.handlers.workout_daily",
+        "src.webapp.workouts",
+        "src.middlewares.workouts",
         "src.handlers.profile",
         "src.handlers.food",
         "src.handlers.common",

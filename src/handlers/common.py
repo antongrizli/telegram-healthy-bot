@@ -96,7 +96,24 @@ async def view_profile(message: Message, state: FSMContext, user_language: str, 
         monthly_day=monthly_day
     )
     
-    markup = reply.get_setup_profile_keyboard(user_language)
+    from src.services.workouts import goals, GOALS
+    goal_keys = dict(zip(GOALS, ('goal_lose', 'goal_maintain', 'goal_gain_w', 'goal_gain_m'), strict=True))
+    additional = goals(db_user)['additional']
+    if additional:
+        profile_text += "\n" + i18n_locales.get_text('btn_workout_goals', user_language) + ": " + ", ".join(
+            i18n_locales.get_text(goal_keys[g], user_language) for g in additional)
+    from src.services.workout_templates import training_preferences
+    from src.utils.workout_locales import tr as workout_text
+    training = training_preferences(db_user)
+    priorities = ([training['primary']] if training['primary'] else []) + training['additional']
+    if priorities:
+        profile_text += "\n" + workout_text('training', user_language) + ": " + ", ".join(
+            workout_text(p, user_language) for p in priorities)
+    if training['minutes']:
+        profile_text += "\n" + workout_text('budget', user_language, minutes=training['minutes'])
+    if training.get('sessions_per_week'):
+        profile_text += '\n' + workout_text('frequency', user_language, count=training['sessions_per_week'])
+    markup = reply.get_setup_profile_keyboard(user_language, registered=True)
     await message.answer(profile_text, reply_markup=markup, parse_mode="Markdown")
 
 @recovery_router.message(F.text.in_(i18n_locales.get_all_translations("btn_daily_report")))

@@ -298,6 +298,8 @@ def create_app(bot) -> web.Application:
     )
     from src.webapp.medications import register_routes
     register_routes(app)
+    from src.webapp.workouts import register_routes as register_workout_routes
+    register_workout_routes(app)
     from src.webapp.ux import register_routes as register_ux_routes, BOT_KEY
     app[BOT_KEY] = bot
     register_ux_routes(app)

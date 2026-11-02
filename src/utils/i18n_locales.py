@@ -2338,3 +2338,6 @@ LOCALES['es'].update({'med_title': 'Preparados', 'med_medicine': 'Medicamento', 
 
 from src.utils.access_locales import install as install_access_copy
 install_access_copy(LOCALES)
+
+from src.utils.workout_locales import install as install_workout_copy
+install_workout_copy(LOCALES)

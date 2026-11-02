@@ -639,3 +639,23 @@ h2 {
     .grid-2 { grid-template-columns: minmax(0, 1fr); }
     .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Workouts share the dashboard cards and palette, with mobile-safe text wrapping. */
+.wo-field { display:flex; flex-direction:column; gap:8px; margin:14px 0; overflow-wrap:anywhere; }
+.wo-field input,.wo-field select,.wo-field textarea { width:100%; max-width:100%; min-width:0; box-sizing:border-box; padding:12px; border-radius:10px; background:var(--bg-card, #182236); color:inherit; border:1px solid #496176; font:inherit; }
+.wo-field textarea { min-height:90px; resize:vertical; }
+.wo-button { margin:6px 6px 6px 0; min-height:44px; white-space:normal; overflow-wrap:anywhere; max-width:100%; }
+.wo-history { margin:14px 0; }
+.wo-history summary { cursor:pointer; display:flex; flex-direction:column; gap:6px; min-height:44px; overflow-wrap:anywhere; }
+.wo-history p,.wo-exercise,.wo-medal { overflow-wrap:anywhere; white-space:pre-wrap; }
+.wo-exercise { padding:12px 0; border-bottom:1px solid #334155; }
+.wo-exercise p { margin:5px 0; }
+.wo-chart { position:relative; height:220px; margin:18px 0; }
+.wo-badges { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.wo-medal { min-width:0; opacity:.65; }
+.wo-medal.unlocked { opacity:1; border-color:#5ddbc3; }
+.wo-medal-icon { font-size:32px; }
+.wo-pagination { display:flex; align-items:center; justify-content:center; gap:12px; }
+.wo-button:focus-visible,.wo-field :focus-visible { outline:3px solid #5ddbc3; outline-offset:3px; }
+@media(max-width:350px) { .wo-badges { grid-template-columns:minmax(0,1fr); } .nav-item { padding:0 2px; } .nav-item span { font-size:10px; } }
+.wo-chart canvas { max-width:100%; }

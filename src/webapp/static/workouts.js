@@ -42,7 +42,7 @@ const woDate = value => new Intl.DateTimeFormat(state.userLanguage, {
     dateStyle: 'medium', timeZone: workoutData.timezone || 'UTC'
 }).format(new Date(value));
 const woSet = s => {
-    if (s.kind === 'cardio') return `${s.minutes ?? `${s.minutes_min ?? '?'}–${s.minutes_max ?? '?'}?`} ${wtr('minute_unit')} · ${wtr(s.intensity)}`;
+    if (s.kind === 'cardio') return `${s.minutes ?? (s.minutes_min === undefined ? '?' : `${s.minutes_min}–${s.minutes_max}?`)} ${wtr('minute_unit')} · ${wtr(s.intensity || 'unknown_intensity')}`;
     const reps = s.reps === null || s.reps === undefined ? '?' : `${s.reps}${s.confirmed ? '' : '?'}`;
     if (s.load_type === 'bodyweight') return `${wtr('bodyweight')} × ${reps}`;
     const weight = s.weight ?? (s.weight_min === undefined ? '?' : `${s.weight_min}–${s.weight_max}?`);

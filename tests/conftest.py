@@ -5,6 +5,11 @@ from unittest.mock import AsyncMock, MagicMock
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from src.database.models import Base
 
+@pytest.fixture(autouse=True)
+def default_ai_provider(monkeypatch):
+    """Ensure tests default to gemini provider and do not make accidental live calls to other providers."""
+    monkeypatch.setattr("src.config.settings.AI_PROVIDER", "gemini")
+
 @pytest_asyncio.fixture(scope="function")
 async def db_session():
     """Fixture to provide an async in-memory SQLite database session."""
@@ -55,6 +60,7 @@ def mock_gemini_client(monkeypatch):
     mock_client.aio.models.count_tokens = AsyncMock(return_value=types.CountTokensResponse(total_tokens=256))
     
     monkeypatch.setattr("src.config.settings.AI_COUNT_TOKENS", False)
+    monkeypatch.setattr("src.config.settings.AI_PROVIDER", "gemini")
 
     # Patch the client in gemini service
     monkeypatch.setattr("src.services.gemini.client", mock_client)
@@ -74,6 +80,18 @@ def patch_async_session_local(monkeypatch, db_session):
         "src.handlers.weight",
         "src.handlers.workouts",
         "src.handlers.workout_daily",
+        "src.handlers.training",
+        "src.handlers.training.hub",
+        "src.handlers.training.log_text",
+        "src.handlers.training.live",
+        "src.handlers.training.plan",
+        "src.handlers.training.repeat",
+        "src.handlers.training.settings",
+        "src.handlers.training.progress",
+        "src.services.training.sessions",
+        "src.services.training.history",
+        "src.services.training.library",
+        "src.services.training_coach",
         "src.webapp.workouts",
         "src.middlewares.workouts",
         "src.handlers.profile",

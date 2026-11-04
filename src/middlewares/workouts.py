@@ -19,12 +19,19 @@ class WorkoutNavigationMiddleware(BaseMiddleware):
                     user.ux_preferences = {**user.ux_preferences, 'workout_budget_input': False}
                 if user and (user.ux_preferences or {}).get('daily_workout_input'):
                     user.ux_preferences = {**user.ux_preferences, 'daily_workout_input': None}
-                rows = (await db.scalars(select(Workout).where(Workout.user_id == event.from_user.id)
-                                         .order_by(Workout.id.desc()).limit(2))).all()
-                for workout in rows:
-                    if workout.pending:
-                        await db.execute(update(Workout).where(
-                            Workout.id == workout.id, Workout.revision == workout.revision
-                        ).values(pending={}, revision=Workout.revision + 1))
+                if user and (user.ux_preferences or {}).get('workout_frequency_input'):
+                    user.ux_preferences = {**user.ux_preferences, 'workout_frequency_input': False}
+                # Done is the parser lease's confirmation action; preserve its revision/state
+                # so duplicate taps cannot start concurrent model calls.
+                done_labels = {v for locale in LOCALES.values() for k, v in locale.items()
+                               if k == 'btn_workout_done' and isinstance(v, str)}
+                if text not in done_labels:
+                    rows = (await db.scalars(select(Workout).where(Workout.user_id == event.from_user.id)
+                                             .order_by(Workout.id.desc()).limit(2))).all()
+                    for workout in rows:
+                        if workout.pending and workout.pending.get('mode') not in ('manual_entries', 'collecting', 'parsing', 'needs_clarification'):
+                            await db.execute(update(Workout).where(
+                                Workout.id == workout.id, Workout.revision == workout.revision
+                            ).values(pending={}, revision=Workout.revision + 1))
                 await db.commit()
         return await handler(event, data)

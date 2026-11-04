@@ -763,8 +763,8 @@ async def get_admin_stats(db: AsyncSession) -> dict:
     }
 
 async def delete_user(db: AsyncSession, telegram_id: int) -> bool:
-    from src.database.models import ProductEvent, AiRequestAttempt, WorkoutPlan, WorkoutEntry, Workout, Exercise, WorkoutTemplate, DailyWorkoutPlan
-    for model in (WorkoutPlan, WorkoutEntry, Workout, WorkoutTemplate, DailyWorkoutPlan, Exercise):
+    from src.database.models import ProductEvent, AiRequestAttempt, WorkoutPlan, WorkoutEntry, Workout, Exercise, WorkoutTemplate, DailyWorkoutPlan, CanonicalExercise, ExerciseAlias, WorkoutSession, WorkoutSessionEntry
+    for model in (WorkoutPlan, WorkoutEntry, Workout, WorkoutTemplate, DailyWorkoutPlan, Exercise, ExerciseAlias, CanonicalExercise, WorkoutSession):
         await db.execute(delete(model).where(model.user_id == telegram_id))
     await db.execute(delete(ProductEvent).where(ProductEvent.user_id == telegram_id))
     # Retain anonymous 24-hour quota usage without retaining a deleted identity.

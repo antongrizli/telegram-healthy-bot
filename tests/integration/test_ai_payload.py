@@ -59,7 +59,8 @@ async def test_real_sdk_wire_payload_and_token_preflight(monkeypatch, count_enab
         assert message['role'] == 'user'
         assert len(message['parts']) == 3
         blob = message['parts'][0]['inlineData']
-        assert blob['mimeType'] == 'image/png'
+        mime = blob.get('mimeType') or blob.get('mime_type')
+        assert mime == 'image/png'
         assert base64.b64decode(blob['data'], altchars=b'-_', validate=True) == image
         assert message['parts'][1]['text'] == 'caption'
         assert 'nutrition' in message['parts'][2]['text']

@@ -2,17 +2,20 @@
 # Test tooling lives in requirements-dev.txt and is not shipped in the image.
 aiohttp==3.14.5
 aiogram==3.31.0
-google-genai==2.8.0
-sqlalchemy[asyncio]==2.0.50
+google-genai==2.34.0
+sqlalchemy[asyncio]==2.0.55
 asyncpg==0.32.0
 aiosqlite==0.22.1
 alembic==1.20.1
 apscheduler==3.11.3
-pydantic==2.13.4
-pydantic-settings==2.14.2
+pydantic==2.13.5
+pydantic-settings==2.16.2
 tzlocal==5.4.5
 tzdata==2026.6
 matplotlib==3.11.2
+pyyaml>=6.0.2
 # Security floors for transitive dependencies included in the production image.
+cryptography>=50.0.2
+pillow>=13.0.0
 msgpack>=1.2.1
 setuptools>=83.0.0

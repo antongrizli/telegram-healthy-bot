@@ -136,6 +136,48 @@ async def test_daily_lease_failure_retry_stale_profile_and_foreign_equipment(db_
         await daily.generate(db, p, user, p.revision, 'ru')
 
 
+async def test_daily_plan_resilient_to_cardio_intensity_and_extra_sets(db_session, monkeypatch):
+    """When LLM returns localized/Russian intensity for cardio without prior intensity,
+    or proposes 3 sets for a library exercise without history, generation succeeds safely."""
+    db = db_session
+    user = await make_user(db)
+    _, bench, run, pull = await manual(db, user)
+    p = await configured(db, user)
+
+    # In user's history, cardio had no intensity recorded (intensity=None)
+    # Model returns Russian intensity 'умеренно' with weight=0, and bench with 3 sets
+    raw_ai_response = {
+        "summary": "Отличный план на сегодня",
+        "explanation": "Сбалансированная нагрузка на всё тело.",
+        "items": [
+            {
+                "exercise_id": run.id,
+                "sets": [{"weight": 0, "reps": None, "minutes": 20, "intensity": "умеренно"}]
+            },
+            {
+                "exercise_id": bench.id,
+                "sets": [
+                    {"weight": 50.0, "reps": 10, "minutes": None, "intensity": None},
+                    {"weight": 50.0, "reps": 10, "minutes": None, "intensity": None},
+                    {"weight": 50.0, "reps": 10, "minutes": None, "intensity": None},
+                ]
+            }
+        ]
+    }
+    monkeypatch.setattr(gemini, 'call_gemini_with_retry', AsyncMock(return_value=SimpleNamespace(text=json.dumps(raw_ai_response))))
+
+    success = await daily.generate(db, p, user, p.revision, 'ru')
+    assert success is True
+    await db.refresh(p)
+    assert p.status == 'proposed'
+    assert len(p.items) == 2
+    # Cardio intensity normalized to 'moderate' and weight cleared
+    cardio_item = next(i for i in p.items if i['exercise_id'] == run.id)
+    assert cardio_item['sets'][0]['intensity'] == 'moderate'
+    assert cardio_item['sets'][0].get('weight') is None
+    assert cardio_item['sets'][0]['minutes'] <= 20
+
+
 async def test_empty_library_and_pain_do_not_call_model(db_session, monkeypatch):
     user = await make_user(db_session)
     p = await configured(db_session, user)

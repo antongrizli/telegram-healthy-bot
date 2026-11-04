@@ -254,7 +254,7 @@ async def test_upgrade_from_previous_revision_preserves_primary_goal(monkeypatch
         async with engine.connect() as conn:
             row = (await conn.execute(sa.text('SELECT goal, additional_goals FROM users'))).one()
             assert row == ('gain_muscle', '[]')
-            assert (await conn.execute(sa.text('SELECT version_num FROM alembic_version'))).scalar() == '0008_daily_workout_plans'
+            assert (await conn.execute(sa.text('SELECT version_num FROM alembic_version'))).scalar() == '0010_training_v2'
             assert {'workouts', 'workout_entries', 'workout_plans', 'exercises'} <= set(
                 await conn.run_sync(lambda c: sa.inspect(c).get_table_names()))
     finally:
@@ -274,3 +274,27 @@ async def test_pain_feedback_invalidates_old_accepted_template_even_without_new_
     next_entry = await svc.open_entry(db, next_workout, ex.id, user)
     assert next_entry.draft[0]['weight'] == 80
     assert await svc.previous_pain(db, next_workout)
+
+
+async def test_cancel_discards_active_entries_and_cannot_delete_finished_workout(db_session):
+    db = db_session
+    user, workout, exercise, entry = await prepared(db)
+    await save_three(db, workout, entry)
+    workout_id = workout.id
+    revision = workout.revision
+    await svc.cancel_workout(db, workout, revision)
+    assert await svc.current(db, user.telegram_id) is None
+    assert await db.scalar(select(WorkoutEntry).where(WorkoutEntry.workout_id == workout_id)) is None
+    await db.refresh(workout)
+    assert workout.status == 'cancelled'
+    with pytest.raises(svc.StaleWorkout):
+        await svc.cancel_workout(db, workout, revision)
+
+    finished = await svc.start(db, user)
+    actual = await svc.open_entry(db, finished, exercise.id, user)
+    await save_three(db, finished, actual)
+    await svc.finish(db, finished)
+    await db.commit()
+    with pytest.raises(svc.StaleWorkout):
+        await svc.cancel_workout(db, finished, finished.revision)
+    assert (await svc.entries(db, finished))[0].actual is not None

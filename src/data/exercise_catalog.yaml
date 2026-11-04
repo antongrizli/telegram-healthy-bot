@@ -1,0 +1,888 @@
+- key: lat_pulldown
+  names:
+    en: [Lat pulldown, Lat pull-down, Cable pulldown]
+    de: [Latzug, Latziehen, Latzugmaschine]
+    ru: [Тяга верхнего блока, Верхняя тяга, Тяга к груди на блоке]
+    uk: [Тяга верхнього блоку, Верхня тяга]
+    pl: [Ściąganie drążka wyciągu górnego, Ściąganie wyciągu]
+    tr: [Lat pulldown, Göğse çekiş]
+    es: [Jalón al pecho, Jalón dorsal]
+  kind: strength
+  muscle_primary: back_lats
+  muscles_secondary: [biceps, back_upper]
+  pattern: pull_v
+  equipment: cable
+  weight_step: 2.5
+  cues:
+    ru: ["Тяните локтями вниз к рёбрам", "Грудь вперёд, не отклоняйтесь больше 15°"]
+    en: ["Drive elbows down to ribs", "Chest up, lean back max 15°"]
+    de: ["Ellbogen nach unten zu den Rippen ziehen", "Brust raus, max. 15° zurücklehnen"]
+  alternatives: [assisted_pullup, single_arm_pulldown, pullup]
+
+- key: chest_press_machine
+  names:
+    en: [Chest press machine, Machine chest press, Seated chest press]
+    de: [Brustpresse, Brustdrücken Maschine, Brustmaschine]
+    ru: [Жим в тренажёре сидя, Жим от груди в тренажере, Брустпресс, Жим в хамере]
+    uk: [Жим у тренажері сидячи, Жим від грудей]
+    pl: [Wyciskanie na maszynie siedząc, Maszyna do klatki]
+    tr: [Chest press makinesi, Göğüs presi makine]
+    es: [Press de pecho en máquina, Máquina de pecho]
+  kind: strength
+  muscle_primary: chest
+  muscles_secondary: [triceps, shoulders_front]
+  pattern: push_h
+  equipment: machine
+  weight_step: 2.5
+  cues:
+    ru: ["Сведите лопатки и прижмите спину", "Не блокируйте локти впереди"]
+    en: ["Retract shoulder blades, keep back flat", "Do not lock elbows at full extension"]
+    de: ["Schulterblätter zusammen, Rücken anlehnen", "Ellbogen vorne nicht durchdrücken"]
+  alternatives: [bench_press_barbell, dumbbell_bench_press, pushup]
+
+- key: seated_cable_row
+  names:
+    en: [Seated cable row, Machine row, Cable row]
+    de: [Rudermaschine, Rudern am Kabelzug, Rudern sitzend]
+    ru: [Тяга горизонтального блока, Тяга к поясу в тренажере, Гребной тренажер тяга]
+    uk: [Тяга горизонтального блоку, Тяга до пояса]
+    pl: [Przyciąganie linki wyciągu dolnego, Wiosłowanie na maszynie]
+    tr: [Seated cable row, Kürek çekme makinesi]
+    es: [Remo en polea baja, Remo en máquina]
+  kind: strength
+  muscle_primary: back_upper
+  muscles_secondary: [back_lats, biceps]
+  pattern: pull_h
+  equipment: cable
+  weight_step: 2.5
+  cues:
+    ru: ["Тяните к низу живота, сводя лопатки", "Не раскачивайтесь корпусом"]
+    en: ["Pull handle to lower abdomen, squeeze shoulder blades", "Keep torso upright without swinging"]
+    de: ["Griff zum unteren Bauch ziehen, Schulterblätter zusammen", "Oberkörper ruhig halten"]
+  alternatives: [t_bar_row, dumbbell_row, chest_supported_row]
+
+- key: leg_extension
+  names:
+    en: [Leg extension, Leg extension machine]
+    de: [Beinstrecker, Beinstreckermaschine]
+    ru: [Разгибание ног в тренажере, Разгибания ног, Разгибатель ног]
+    uk: [Розгинання ніг у тренажері, Розгинання ніг]
+    pl: [Prostowanie nóg na maszynie]
+    tr: [Leg extension, Bacak açma]
+    es: [Extensión de piernas en máquina, Extensión de cuádriceps]
+  kind: strength
+  muscle_primary: quads
+  muscles_secondary: []
+  pattern: isolation
+  equipment: machine
+  weight_step: 2.5
+  cues:
+    ru: ["Колени на одной линии с осью вращения", "Пауза в верхней точке на 1 сек"]
+    en: ["Align knees with machine pivot point", "Hold peak contraction for 1 sec"]
+    de: ["Knie auf Höhe der Drehachse ausrichten", "1 Sekunde oben halten"]
+  alternatives: [goblet_squat, leg_press, hack_squat]
+
+- key: leg_curl
+  names:
+    en: [Leg curl, Seated leg curl, Lying leg curl]
+    de: [Beinbeuger, Beinbeugemaschine, Beincurls]
+    ru: [Сгибание ног в тренажере, Сгибания ног, Сгибатель ног]
+    uk: [Згинання ніг у тренажері, Згинання ніг]
+    pl: [Uginanie nóg leżąc/siedząc]
+    tr: [Leg curl, Bacak bükme]
+    es: [Curl femoral, Flexión de piernas en máquina]
+  kind: strength
+  muscle_primary: hamstrings
+  muscles_secondary: [calves]
+  pattern: isolation
+  equipment: machine
+  weight_step: 2.5
+  cues:
+    ru: ["Держите таз прижатым к скамье", "Контролируйте опускание веса"]
+    en: ["Keep hips planted against pad", "Control the eccentric descent"]
+    de: ["Becken fest am Polster halten", "Gewicht kontrolliert absenken"]
+  alternatives: [romanian_deadlift, swiss_ball_leg_curl]
+
+- key: hip_abduction
+  names:
+    en: [Hip abduction, Abductor machine, Seated hip abduction]
+    de: [Abduktion, Abduktionsmaschine, Abduktoren]
+    ru: [Разведение ног в тренажере, Разведения ног, Абдукция]
+    uk: [Розведення ніг у тренажері, Абдукція]
+    pl: [Odwodzenie nóg na maszynie, Abduktor]
+    tr: [Hip abduction, Dış bacak makinesi]
+    es: [Abducción de cadera en máquina, Abductores]
+  kind: strength
+  muscle_primary: abductors
+  muscles_secondary: [glutes]
+  pattern: isolation
+  equipment: machine
+  weight_step: 2.5
+  cues:
+    ru: ["Держите спину ровно, разводите с паузой", "Движение за счёт боковой поверхности ягодиц"]
+    en: ["Keep back flat, pause at full open", "Drive outward using lateral glutes"]
+    de: ["Rücken gerade, kurz halten bei voller Spreizung", "Aus den Gesäßmuskeln arbeiten"]
+  alternatives: [cable_abduction, side_plank_abduction]
+
+- key: hip_adduction
+  names:
+    en: [Hip adduction, Adductor machine, Seated hip adduction]
+    de: [Adduktion, Adduktionsmaschine, Adduktoren]
+    ru: [Сведение ног в тренажере, Сведения ног, Аддукция]
+    uk: [Зведення ніг у тренажері, Аддукція]
+    pl: [Przywodzenie nóg na maszynie, Adduktor]
+    tr: [Hip adduction, İç bacak makinesi]
+    es: [Aducción de cadera en máquina, Aductores]
+  kind: strength
+  muscle_primary: adductors
+  muscles_secondary: []
+  pattern: isolation
+  equipment: machine
+  weight_step: 2.5
+  cues:
+    ru: ["Сводите плавно, не ударяя плиты", "Ощущайте внутреннюю поверхность бедра"]
+    en: ["Bring pads together smoothly without slamming", "Focus tension on inner thighs"]
+    de: ["Gleichmäßig zusammenführen, kein Zusammenschlagen", "Auf die Innenseite der Oberschenkel achten"]
+  alternatives: [copenhagen_plank, cable_adduction]
+
+- key: bicep_curl_machine
+  names:
+    en: [Bicep curl machine, Machine preacher curl, Biceps machine]
+    de: [Bizepsmaschine, Bizepscurls Maschine, Armbeuger Maschine]
+    ru: [Сгибание рук в тренажере на бицепс, Бицепс машина, Сгибания на скамье Скотта в тренажере]
+    uk: [Згинання рук у тренажері, Біцепс-машина]
+    pl: [Uginanie ramion na maszynie, Maszyna na biceps]
+    tr: [Bicep curl makinesi, Ön kol makinesi]
+    es: [Curl de bíceps en máquina, Máquina de bíceps]
+  kind: strength
+  muscle_primary: biceps
+  muscles_secondary: []
+  pattern: isolation
+  equipment: machine
+  weight_step: 2.5
+  cues:
+    ru: ["Локти зафиксированы на подушке", "Не поднимайте плечи"]
+    en: ["Keep elbows pinned to arm rest", "Avoid shrugging shoulders up"]
+    de: ["Ellbogen fest auf der Ablage lassen", "Schultern unten halten"]
+  alternatives: [dumbbell_curl, cable_bicep_curl, ez_bar_curl]
+
+- key: tricep_extension_machine
+  names:
+    en: [Tricep extension machine, Seated tricep machine]
+    de: [Trizepsmaschine, Trizepsdrücken Maschine]
+    ru: [Разгибание рук в тренажере на трицепс, Трицепс машина, Разгибания на трицепс сидя]
+    uk: [Розгинання рук у тренажері, Трицепс-машина]
+    pl: [Prostowanie ramion na maszynie, Maszyna na triceps]
+    tr: [Tricep extension makinesi, Arka kol makinesi]
+    es: [Extensión de tríceps en máquina, Máquina de tríceps]
+  kind: strength
+  muscle_primary: triceps
+  muscles_secondary: []
+  pattern: isolation
+  equipment: machine
+  weight_step: 2.5
+  cues:
+    ru: ["Локти прижаты к корпусу или подушке", "Полное разгибание с фиксацией"]
+    en: ["Keep elbows stable", "Full extension with 1 sec squeeze"]
+    de: ["Ellbogen stabil am Polster", "Vollständig strecken und anspannen"]
+  alternatives: [cable_tricep_pushdown, skull_crusher, dips]
+
+- key: back_extension_machine
+  names:
+    en: [Back extension machine, Hyperextension, Lower back machine]
+    de: [Rückenstrecker, Rückenstreckermaschine, Hyperextension]
+    ru: [Гиперэкстензия, Разгибание спины в тренажере, Разгибатель спины, Поясничный тренажер]
+    uk: [Гіперекстензія, Розгинання спини в тренажері]
+    pl: [Wznosy tułowia na ławce rzymskiej, Prostowniki grzbietu na maszynie]
+    tr: [Back extension, Hiperekstansiyon]
+    es: [Hiperextensiones, Extensión lumbar en máquina]
+  kind: strength
+  muscle_primary: lower_back
+  muscles_secondary: [glutes, hamstrings]
+  pattern: hinge
+  equipment: machine
+  weight_step: 2.5
+  cues:
+    ru: ["Не переразгибайте поясницу выше прямой линии", "Поднимайтесь за счёт ягодиц и бицепса бедра"]
+    en: ["Do not hyperextend past a straight line", "Drive up with glutes and hamstrings"]
+    de: ["Nicht überstrecken, gerade Linie halten", "Aus dem Gesäß hochdrücken"]
+  alternatives: [romanian_deadlift, good_morning]
+
+- key: shoulder_press_machine
+  names:
+    en: [Shoulder press machine, Overhead press machine]
+    de: [Schulterpresse, Schulterdrücken Maschine]
+    ru: [Жим вверх в тренажере, Жим на плечи в тренажере, Плечевой жим сидя]
+    uk: [Жим у тренажері на плечі, Жим вгору сидячи]
+    pl: [Wyciskanie na barki na maszynie]
+    tr: [Shoulder press makinesi, Omuz pres makinesi]
+    es: [Press de hombros en máquina, Press militar en máquina]
+  kind: strength
+  muscle_primary: shoulders_front
+  muscles_secondary: [shoulders_side, triceps]
+  pattern: push_v
+  equipment: machine
+  weight_step: 2.5
+  cues:
+    ru: ["Прижмите спину к спинке", "Локти направлены слегка вперёд, не разводите широко"]
+    en: ["Keep back pressed to backrest", "Keep elbows slightly forward in scapular plane"]
+    de: ["Rücken fest an die Lehne", "Ellbogen leicht nach vorne gerichtet halten"]
+  alternatives: [dumbbell_shoulder_press, overhead_press, landmine_press]
+
+- key: pec_deck_fly
+  names:
+    en: [Pec deck fly, Machine fly, Butterfly]
+    de: [Butterfly, Pec Deck, Schmetterling]
+    ru: [Баттерфляй, Сведение рук в тренажере Бабочка, Бабочка тренажер]
+    uk: [Метелик, Зведення рук у тренажері Батерфляй]
+    pl: [Rozpiętki na maszynie, Butterfly]
+    tr: [Pec deck fly, Kelebek makinesi]
+    es: [Pec deck, Aperturas en máquina]
+  kind: strength
+  muscle_primary: chest
+  muscles_secondary: [shoulders_front]
+  pattern: isolation
+  equipment: machine
+  weight_step: 2.5
+  cues:
+    ru: ["Локти слегка согнуты, сводите грудными мышцами", "Растягивайте грудь на вдохе без рывка"]
+    en: ["Slight elbow bend, bring arms together focusing on chest", "Stretch chest gently without overextending shoulders"]
+    de: ["Ellbogen leicht gebeugt, aus der Brust zusammenführen", "Kontrolliert dehnen"]
+  alternatives: [cable_crossover, dumbbell_fly]
+
+- key: reverse_pec_deck
+  names:
+    en: [Reverse pec deck, Rear delt fly machine, Reverse fly]
+    de: [Butterfly Reverse, Reverse Flys Maschine, Hintere Schulter Maschine]
+    ru: [Разведение на заднюю дельту в тренажере, Обратная бабочка, Задняя дельта баттерфляй]
+    uk: [Розведення на задню дельту, Зворотний метелик]
+    pl: [Odwrotny butterfly, Rozpiętki w tył na maszynie]
+    tr: [Reverse pec deck, Ters kelebek]
+    es: [Pájaro en máquina, Aperturas invertidas]
+  kind: strength
+  muscle_primary: shoulders_rear
+  muscles_secondary: [back_upper]
+  pattern: isolation
+  equipment: machine
+  weight_step: 2.5
+  cues:
+    ru: ["Разводите руки параллельно полу", "Не сводите лопатки в начале движения"]
+    en: ["Keep arms horizontal", "Lead with elbows, isolate rear delts"]
+    de: ["Arme parallel zum Boden", "Mit den Ellbogen führen, hintere Schulter spüren"]
+  alternatives: [face_pull, rear_delt_dumbbell_fly]
+
+- key: face_pull
+  names:
+    en: [Face pull, Cable face pull]
+    de: [Face Pull, Facepulls, Seilzug zum Gesicht]
+    ru: [Фейс пул, Тяга каната к лицу, Тяга на заднюю дельту на блоке]
+    uk: [Фейс пул, Тяга канату до обличчя]
+    pl: [Face pull, Przyciąganie linki do twarzy]
+    tr: [Face pull, Yüze çekiş]
+    es: [Face pull, Tirón a la cara con polea]
+  kind: strength
+  muscle_primary: shoulders_rear
+  muscles_secondary: [back_upper, shoulders_side]
+  pattern: pull_h
+  equipment: cable
+  weight_step: 2.5
+  cues:
+    ru: ["Тяните канат к уровню глаз, разводя кулаки наружу", "Локти выше запястий"]
+    en: ["Pull rope to eye level, rotating knuckles back", "Keep elbows high and wide"]
+    de: ["Seil auf Augenhöhe ziehen, Daumen nach hinten rotieren", "Ellbogen hochhalten"]
+  alternatives: [reverse_pec_deck, rear_delt_dumbbell_fly]
+
+- key: leg_press
+  names:
+    en: [Leg press, 45 degree leg press, Seated leg press]
+    de: [Beinpresse, Beinpresse 45 Grad, Beinpresse sitzend]
+    ru: [Жим ногами в тренажере, Жим ногами 45, Жим платформы]
+    uk: [Жим ногами в тренажері, Жим ногами]
+    pl: [Wyciskanie nóg na suwnicy, Prasa do nóg]
+    tr: [Leg press, Bacak presi]
+    es: [Prensa de piernas, Prensa inclinada]
+  kind: strength
+  muscle_primary: quads
+  muscles_secondary: [glutes, hamstrings]
+  pattern: squat
+  equipment: machine
+  weight_step: 5.0
+  cues:
+    ru: ["Не отрывайте поясницу от сиденья", "Не выпрямляйте колени до щелчка в верхней точке"]
+    en: ["Keep lower back pinned to backrest", "Do not lock out knees at top"]
+    de: ["Kreuz fest an der Lehne lassen", "Knie oben niemals durchstrecken"]
+  alternatives: [goblet_squat, barbell_squat, hack_squat]
+
+- key: calf_raise_machine
+  names:
+    en: [Calf raise machine, Standing calf raise, Seated calf raise]
+    de: [Wadenheben, Wadenheben Maschine, Wadenpresse]
+    ru: [Подъем на носки в тренажере, Икры в тренажере, Подъемы на голень]
+    uk: [Підйом на носки в тренажері, Гомілка в тренажері]
+    pl: [Wspięcia na palce na maszynie]
+    tr: [Calf raise makinesi, Kalf makinesi]
+    es: [Elevación de talones en máquina, Gemelos en máquina]
+  kind: strength
+  muscle_primary: calves
+  muscles_secondary: []
+  pattern: isolation
+  equipment: machine
+  weight_step: 2.5
+  cues:
+    ru: ["Полная растяжка внизу и фиксация на носках вверху на 1 сек", "Без пружинящих движений"]
+    en: ["Full deep stretch at bottom, 1s squeeze on tiptoes", "Control motion without bouncing"]
+    de: ["Volle Dehnung unten, 1 Sekunde oben halten", "Kein Federn"]
+  alternatives: [standing_calf_raise_dumbbell]
+
+- key: assisted_pullup
+  names:
+    en: [Assisted pull-up, Gravitron pull-up, Assisted chin-up]
+    de: [Klimmzugmaschine, Gravitron, Klimmzüge mit Unterstützung]
+    ru: [Подтягивания в гравитроне, Гравитрон подтягивания, Подтягивания с компенсацией]
+    uk: [Підтягування в гравітроні, Підтягування з підтримкою]
+    pl: [Podciąganie na maszynie z przeciwwagą, Gravitron]
+    tr: [Assisted pull-up makinesi, Destekli barfiks]
+    es: [Dominadas asistidas en máquina, Gravitrón]
+  kind: strength
+  muscle_primary: back_lats
+  muscles_secondary: [biceps, back_upper]
+  pattern: pull_v
+  equipment: machine
+  weight_step: 2.5
+  cues:
+    ru: ["Грудь направлена к перекладине", "Не раскачивайтесь, контролируйте спуск"]
+    en: ["Lead with chest up toward bar", "Do not swing, smooth descent"]
+    de: ["Brust zur Stange führen", "Körper ruhig halten, kontrolliert ablassen"]
+  alternatives: [lat_pulldown, pullup]
+
+- key: assisted_dip
+  names:
+    en: [Assisted dip, Gravitron dip, Machine dip]
+    de: [Dipsmaschine, Dips mit Unterstützung, Gravitron Dips]
+    ru: [Отжимания на брусьях в гравитроне, Гравитрон брусья, Отжимания на брусьях с компенсацией]
+    uk: [Віджимання на брусах у гравітроні]
+    pl: [Pompki na poręczach z asystą, Dipy na maszynie]
+    tr: [Assisted dip, Destekli dip]
+    es: [Fondos asistidos en máquina]
+  kind: strength
+  muscle_primary: triceps
+  muscles_secondary: [chest, shoulders_front]
+  pattern: push_v
+  equipment: machine
+  weight_step: 2.5
+  cues:
+    ru: ["Локти направлены назад, опускайтесь до прямого угла в локтях", "Корпус слегка наклонен"]
+    en: ["Elbows point back, lower to 90 degrees", "Slight forward torso lean"]
+    de: ["Ellbogen nach hinten, bis 90 Grad absenken", "Oberkörper leicht vornüber"]
+  alternatives: [dips, tricep_extension_machine]
+
+- key: cable_crossover
+  names:
+    en: [Cable crossover, Cable fly, Standing cable fly]
+    de: [Kabelzug Brust, Cable Cross, Kabelzug Flys]
+    ru: [Кроссовер на грудь, Сведение рук на блоках, Кроссовер]
+    uk: [Кросовер на груди, Зведення рук у кросовері]
+    pl: [Krzyżowanie linek wyciągu, Rozpiętki na bramie]
+    tr: [Cable crossover, Makara ile göğüs]
+    es: [Cruce de poleas, Aperturas en polea]
+  kind: strength
+  muscle_primary: chest
+  muscles_secondary: [shoulders_front]
+  pattern: isolation
+  equipment: cable
+  weight_step: 1.25
+  cues:
+    ru: ["Обнимающее движение перед собой", "Локти зафиксированы в полусогнутом положении"]
+    en: ["Embrace motion meeting in front of chest", "Maintain fixed slight bend in elbows"]
+    de: ["Umarmebewegung vor der Brust", "Ellbogen leicht fixiert gebeugt"]
+  alternatives: [pec_deck_fly, dumbbell_fly]
+
+- key: cable_lateral_raise
+  names:
+    en: [Cable lateral raise, Single-arm cable lateral raise]
+    de: [Kabelzug Seitheben, Seitheben am Kabel]
+    ru: [Махи на среднюю дельту в кроссовере, Махи на блоке, Боковой подъем на блоке]
+    uk: [Махи на середню дельту на блоці]
+    pl: [Wznosy ramion bokiem z linką wyciągu]
+    tr: [Cable lateral raise, Makara ile yana açış]
+    es: [Elevaciones laterales en polea]
+  kind: strength
+  muscle_primary: shoulders_side
+  muscles_secondary: [shoulders_front]
+  pattern: isolation
+  equipment: cable
+  weight_step: 1.25
+  cues:
+    ru: ["Ведите локтем вверх, кисть не выше локтя", "Постоянное натяжение троса"]
+    en: ["Lead with elbow up, don't let wrist rise above elbow", "Maintain constant tension throughout"]
+    de: ["Mit dem Ellbogen führen, Handgelenk nicht höher als Ellbogen", "Gleichmäßige Spannung"]
+  alternatives: [dumbbell_lateral_raise]
+
+- key: cable_tricep_pushdown
+  names:
+    en: [Cable tricep pushdown, Rope pushdown, Straight bar pushdown]
+    de: [Trizepsdrücken am Kabel, Trizepsdrücken Seil, Kabelzug Trizeps]
+    ru: [Разгибание на трицепс на блоке с канатом, Разгибания на блоке, Трицепс на блоке]
+    uk: [Розгинання на трицепс на блоці, Трицепс з канатом]
+    pl: [Prostowanie ramion na wyciągu z linką/drążkiem]
+    tr: [Tricep pushdown, Halat ile arka kol]
+    es: [Extensión de tríceps en polea, Jalón de tríceps]
+  kind: strength
+  muscle_primary: triceps
+  muscles_secondary: []
+  pattern: isolation
+  equipment: cable
+  weight_step: 2.5
+  cues:
+    ru: ["Прижмите локти к бокам, разгибайте только предплечья", "Внизу разведите концы каната"]
+    en: ["Pin elbows to sides, move only forearms", "Spread rope ends apart at bottom"]
+    de: ["Ellbogen fest an den Rippen, nur Unterarme bewegen", "Unten Seil auseinanderziehen"]
+  alternatives: [tricep_extension_machine, skull_crusher]
+
+- key: cable_bicep_curl
+  names:
+    en: [Cable bicep curl, Standing cable curl]
+    de: [Bizepscurls am Kabel, Kabelzug Bizeps]
+    ru: [Сгибание на бицепс на нижнем блоке, Бицепс на блоке стоя]
+    uk: [Згинання на біцепс на нижньому блоці]
+    pl: [Uginanie przedramion z linką wyciągu dolnego]
+    tr: [Cable bicep curl, Makara ile ön kol]
+    es: [Curl de bíceps en polea baja]
+  kind: strength
+  muscle_primary: biceps
+  muscles_secondary: []
+  pattern: isolation
+  equipment: cable
+  weight_step: 2.5
+  cues:
+    ru: ["Локти прижаты к ребрам", "Пиковое сокращение в верхней точке"]
+    en: ["Keep elbows tucked into sides", "Peak squeeze at top"]
+    de: ["Ellbogen an der Seite fixiert", "Oben bewusst anspannen"]
+  alternatives: [bicep_curl_machine, dumbbell_curl]
+
+- key: abdominal_crunch_machine
+  names:
+    en: [Abdominal crunch machine, Machine crunch, Seated ab machine]
+    de: [Bauchpresse, Bauchmaschine, Crunches Maschine]
+    ru: [Скручивания в тренажере, Пресс машина, Скручивания на пресс сидя]
+    uk: [Скручування в тренажері на прес, Прес-машина]
+    pl: [Spięcia brzucha na maszynie]
+    tr: [Abdominal crunch makinesi, Karın makinesi]
+    es: [Crunch en máquina, Máquina de abdominales]
+  kind: strength
+  muscle_primary: abs
+  muscles_secondary: []
+  pattern: core
+  equipment: machine
+  weight_step: 2.5
+  cues:
+    ru: ["Скручивайте рёбра к тазу, выдыхайте при сокращении", "Не тяните шеей"]
+    en: ["Curl ribs toward pelvis, exhale deeply on crunch", "Do not pull with neck"]
+    de: ["Rippen zum Becken einrollen, ausatmen beim Beugen", "Nicht mit dem Nacken ziehen"]
+  alternatives: [cable_woodchopper, plank, hanging_leg_raise]
+
+- key: bench_press_barbell
+  names:
+    en: [Bench press, Barbell bench press, Flat barbell bench press]
+    de: [Bankdrücken, Langhantel Bankdrücken, Flachbankdrücken]
+    ru: [Жим лёжа, Жим штанги лёжа, Классический жим лежа]
+    uk: [Жим лежачи, Жим штанги лежачи]
+    pl: [Wyciskanie sztangi leżąc]
+    tr: [Bench press, Düz bench pres]
+    es: [Press de banca con barra, Press banca plano]
+  kind: strength
+  muscle_primary: chest
+  muscles_secondary: [triceps, shoulders_front]
+  pattern: push_h
+  equipment: barbell
+  weight_step: 2.5
+  cues:
+    ru: ["Сведите лопатки, опускайте гриф к низу груди", "Локти под углом 45–60° к корпусу"]
+    en: ["Retract shoulder blades, touch bar to mid/lower sternum", "Elbows at 45-60 degree angle to torso"]
+    de: ["Schulterblätter zusammen, Stange zur unteren Brust absenken", "Ellbogen 45–60° zum Rumpf"]
+  alternatives: [chest_press_machine, dumbbell_bench_press]
+
+- key: dumbbell_bench_press
+  names:
+    en: [Dumbbell bench press, Flat dumbbell press, DB bench press]
+    de: [Kurzhantel Bankdrücken, Kurzhanteldrücken Flachbank]
+    ru: [Жим гантелей лёжа, Жим гантелей на горизонтальной скамье]
+    uk: [Жим гантелей лежачи]
+    pl: [Wyciskanie hantli leżąc na ławce poziomej]
+    tr: [Dumbbell bench press, Dambıl bench pres]
+    es: [Press con mancuernas plano, Press de banca con mancuernas]
+  kind: strength
+  muscle_primary: chest
+  muscles_secondary: [triceps, shoulders_front]
+  pattern: push_h
+  equipment: dumbbell
+  weight_step: 2.0
+  per_side: true
+  cues:
+    ru: ["Опускайте гантели глубоко до растяжения груди", "Вверху не соударяйте гантели"]
+    en: ["Lower dumbbells to full chest stretch", "Press up smoothly without clinking bells together"]
+    de: ["Tief absenken bis zur Brustdehnung", "Oben Hanteln nicht zusammenschlagen"]
+  alternatives: [chest_press_machine, bench_press_barbell]
+
+- key: dumbbell_incline_bench_press
+  names:
+    en: [Incline dumbbell bench press, Incline DB press]
+    de: [Kurzhantel Schrägbankdrücken, Schrägbankdrücken Kurzhantel]
+    ru: [Жим гантелей на наклонной скамье, Наклонный жим гантелей]
+    uk: [Жим гантелей на похилій лаві]
+    pl: [Wyciskanie hantli na ławce skośnej dodatniej]
+    tr: [Incline dumbbell press, Eğimli dambıl pres]
+    es: [Press inclinado con mancuernas]
+  kind: strength
+  muscle_primary: chest
+  muscles_secondary: [shoulders_front, triceps]
+  pattern: push_h
+  equipment: dumbbell
+  weight_step: 2.0
+  per_side: true
+  cues:
+    ru: ["Угол скамьи 30°, жмите вверх над верхом груди", "Лопатки сведены"]
+    en: ["Bench at 30 degrees, press above upper chest", "Shoulder blades retracted"]
+    de: ["Bank auf ca. 30 Grad, über die obere Brust drücken", "Schulterblätter zusammen"]
+  alternatives: [dumbbell_bench_press, chest_press_machine]
+
+- key: dumbbell_shoulder_press
+  names:
+    en: [Dumbbell shoulder press, Seated dumbbell press, DB overhead press]
+    de: [Kurzhantel Schulterdrücken, Schulterdrücken Kurzhantel sitzend]
+    ru: [Жим гантелей сидя, Жим гантелей на плечи, Жим гантелей над головой]
+    uk: [Жим гантелей сидячи на плечі]
+    pl: [Wyciskanie hantli siedząc nad głowę]
+    tr: [Dumbbell shoulder press, Oturarak dambıl omuz pres]
+    es: [Press de hombros con mancuernas sentado]
+  kind: strength
+  muscle_primary: shoulders_front
+  muscles_secondary: [shoulders_side, triceps]
+  pattern: push_v
+  equipment: dumbbell
+  weight_step: 2.0
+  per_side: true
+  cues:
+    ru: ["Локти слегка направлены вперёд", "Жмите над головой, не прогибая поясницу"]
+    en: ["Elbows slightly in front, press straight overhead", "Do not excessively arch lower back"]
+    de: ["Ellbogen leicht nach vorne, gerade nach oben drücken", "Kein starkes Hohlkreuz"]
+  alternatives: [shoulder_press_machine, overhead_press]
+
+- key: dumbbell_lateral_raise
+  names:
+    en: [Dumbbell lateral raise, Side lateral raise, DB lateral raise]
+    de: [Seitheben Kurzhantel, Kurzhantel Seitheben stehend]
+    ru: [Махи гантелями в стороны, Разведение гантелей стоя, Подъемы через стороны]
+    uk: [Махи гантелями в сторони, Підйоми через сторони]
+    pl: [Wznosy hantli bokiem stojąc]
+    tr: [Lateral raise, Dambıl ile yana açış]
+    es: [Elevaciones laterales con mancuernas]
+  kind: strength
+  muscle_primary: shoulders_side
+  muscles_secondary: [shoulders_front]
+  pattern: isolation
+  equipment: dumbbell
+  weight_step: 1.0
+  per_side: true
+  cues:
+    ru: ["Ведите локтями вверх до уровня плеч", "Не поднимайте трапеции к ушам"]
+    en: ["Lead with elbows up to shoulder level", "Keep traps relaxed and down"]
+    de: ["Mit den Ellbogen bis auf Schulterhöhe führen", "Nacken entspannt lassen"]
+  alternatives: [cable_lateral_raise]
+
+- key: dumbbell_row
+  names:
+    en: [Dumbbell row, Single-arm dumbbell row, One-arm DB row]
+    de: [Kurzhantelrudern, Einarmiges Kurzhantelrudern]
+    ru: [Тяга гантели к поясу одной рукой, Тяга гантели в наклоне]
+    uk: [Тяга гантелі в нахилі однією рукою]
+    pl: [Wiosłowanie hantlem w opadzie tułowia jednorącz]
+    tr: [Dumbbell row, Tek kol dambıl çekiş]
+    es: [Remo con mancuerna a una mano]
+  kind: strength
+  muscle_primary: back_upper
+  muscles_secondary: [back_lats, biceps]
+  pattern: pull_h
+  equipment: dumbbell
+  weight_step: 2.0
+  per_side: true
+  cues:
+    ru: ["Тяните гантель к карману брюк, сводя лопатку", "Спина параллельна полу и прямая"]
+    en: ["Pull dumbbell toward hip crease, retracting scapula", "Keep spine flat and parallel to floor"]
+    de: ["Hantel zur Hüfte ziehen, Schulterblatt anziehen", "Rücken gerade und stabil halten"]
+  alternatives: [seated_cable_row, chest_supported_row]
+
+- key: dumbbell_curl
+  names:
+    en: [Dumbbell curl, Standing bicep curl, DB curls]
+    de: [Kurzhantel Curls, Bizepscurls Kurzhantel stehend]
+    ru: [Подъем гантелей на бицепс, Сгибания рук с гантелями стоя]
+    uk: [Підйом гантелей на біцепс стоячи]
+    pl: [Uginanie ramion z hantlami stojąc]
+    tr: [Dumbbell curl, Dambıl bicep curl]
+    es: [Curl de bíceps con mancuernas]
+  kind: strength
+  muscle_primary: biceps
+  muscles_secondary: []
+  pattern: isolation
+  equipment: dumbbell
+  weight_step: 1.0
+  per_side: true
+  cues:
+    ru: ["Супинация кисти в верхней точке (разворот ладони наружу)", "Не раскачивайтесь корпусом"]
+    en: ["Supinate wrist at peak, turning palm outward", "Do not swing hips or torso"]
+    de: ["Handgelenk oben leicht nach außen drehen", "Oberkörper ohne Schwung halten"]
+  alternatives: [bicep_curl_machine, cable_bicep_curl]
+
+- key: dumbbell_hammer_curl
+  names:
+    en: [Hammer curl, Dumbbell hammer curl]
+    de: [Hammercurls, Kurzhantel Hammercurls]
+    ru: [Молотковые сгибания, Молотки с гантелями, Молотковый бицепс]
+    uk: [Молотки з гантелями, Згинання молот]
+    pl: [Uginanie ramion chwytem młotkowym]
+    tr: [Hammer curl, Çekiç curl]
+    es: [Curl martillo con mancuernas]
+  kind: strength
+  muscle_primary: biceps
+  muscles_secondary: []
+  pattern: isolation
+  equipment: dumbbell
+  weight_step: 1.0
+  per_side: true
+  cues:
+    ru: ["Ладони смотрят друг на друга всё движение", "Локти плотно прижаты к бокам"]
+    en: ["Palms face each other throughout motion", "Keep elbows tight to ribs"]
+    de: ["Handflächen zeigen zueinander", "Ellbogen am Körper halten"]
+  alternatives: [dumbbell_curl, cable_bicep_curl]
+
+- key: barbell_squat
+  names:
+    en: [Barbell squat, Back squat, Barbell back squat]
+    de: [Kniebeugen, Langhantel Kniebeugen, Kniebeuge]
+    ru: [Приседания со штангой, Присед со штангой, Приседания со штангой на спине]
+    uk: [Присідання зі штангою на спині, Присід]
+    pl: [Przysiad ze sztangą na plecach]
+    tr: [Squat, Halter ile squat]
+    es: [Sentadilla con barra trasera, Sentadillas]
+  kind: strength
+  muscle_primary: quads
+  muscles_secondary: [glutes, lower_back, hamstrings]
+  pattern: squat
+  equipment: barbell
+  weight_step: 2.5
+  cues:
+    ru: ["Опускайтесь до параллели бёдер с полом", "Колени направлены по линии носков, упор на всю стопу"]
+    en: ["Descend until thighs parallel to floor", "Track knees over toes, tripod foot pressure"]
+    de: ["Bis mindestens Oberschenkel parallel zum Boden beugen", "Knie in Richtung Fußspitzen führen"]
+  alternatives: [leg_press, goblet_squat, hack_squat]
+
+- key: romanian_deadlift
+  names:
+    en: [Romanian deadlift, RDL, Dumbbell romanian deadlift]
+    de: [Rumänisches Kreuzheben, RDL Kurzhantel/Langhantel]
+    ru: [Румынская тяга, Румынская становая тяга, Мертвая тяга на прямых ногах]
+    uk: [Румунська тяга, Румунська станова тяга]
+    pl: [Rumuński martwy ciąg, RDL]
+    tr: [Romanian deadlift, Romen deadlift]
+    es: [Peso muerto rumano, RDL]
+  kind: strength
+  muscle_primary: hamstrings
+  muscles_secondary: [glutes, lower_back]
+  pattern: hinge
+  equipment: barbell
+  weight_step: 2.5
+  cues:
+    ru: ["Отводите таз назад, колени слегка согнуты и зафиксированы", "Гриф скользит по ногам, спина прямая"]
+    en: ["Hinge hips far back, slight soft bend in knees", "Keep bar close against shins, neutral spine"]
+    de: ["Hüfte weit nach hinten schieben, Knie leicht gebeugt", "Hantel nah an den Schienbeinen führen"]
+  alternatives: [leg_curl, back_extension_machine]
+
+- key: deadlift_barbell
+  names:
+    en: [Deadlift, Conventional deadlift, Barbell deadlift]
+    de: [Kreuzheben, Konventionelles Kreuzheben]
+    ru: [Становая тяга, Классическая становая тяга]
+    uk: [Станова тяга, Класична станова тяга]
+    pl: [Martwy ciąg klasyczny]
+    tr: [Deadlift, Konvansiyonel deadlift]
+    es: [Peso muerto convencional, Peso muerto con barra]
+  kind: strength
+  muscle_primary: lower_back
+  muscles_secondary: [glutes, hamstrings, back_upper, quads]
+  pattern: hinge
+  equipment: barbell
+  weight_step: 2.5
+  cues:
+    ru: ["Гриф над серединой стопы, натяните спину перед срывом", "Толкайте пол ногами"]
+    en: ["Bar over midfoot, build lat tension before pull", "Push floor away through feet"]
+    de: ["Stange über dem Mittelfuß, Lat anspannen vor dem Anheben", "Den Boden mit den Beinen wegdrücken"]
+  alternatives: [romanian_deadlift, back_extension_machine]
+
+- key: pullup
+  names:
+    en: [Pull-up, Chin-up, Wide-grip pullup]
+    de: [Klimmzüge, Klimmzug breiter Griff, Klimmzug]
+    ru: [Подтягивания, Подтягивания широким хватом, Подтягивания на турнике]
+    uk: [Підтягування на перекладині]
+    pl: [Podciąganie na drążku]
+    tr: [Barfiks, Pull-up]
+    es: [Dominadas, Dominadas pronas]
+  kind: bodyweight
+  muscle_primary: back_lats
+  muscles_secondary: [biceps, back_upper]
+  pattern: pull_v
+  equipment: bodyweight
+  weight_step: 2.5
+  cues:
+    ru: ["Начинайте движение с опускания лопаток", "Подтягивайтесь до подбородка выше перекладины"]
+    en: ["Initiate by depressing scapulae downward", "Pull until chin clears bar"]
+    de: ["Bewegung mit Absenken der Schulterblätter einleiten", "Kinn über die Stange bringen"]
+  alternatives: [assisted_pullup, lat_pulldown]
+
+- key: dips
+  names:
+    en: [Dips, Parallel bar dips, Bodyweight dips]
+    de: [Dips, Barrenstütz, Dips am Barren]
+    ru: [Отжимания на брусьях, Брусья]
+    uk: [Віджимання на брусах]
+    pl: [Pompki na poręczach, Dipy]
+    tr: [Dips, Paralel barda dips]
+    es: [Fondos en paralelas, Dips]
+  kind: bodyweight
+  muscle_primary: triceps
+  muscles_secondary: [chest, shoulders_front]
+  pattern: push_v
+  equipment: bodyweight
+  weight_step: 2.5
+  cues:
+    ru: ["Опускайтесь до угла 90° в локтях", "Локти не разводите широко в стороны"]
+    en: ["Lower to 90 degree elbow bend", "Do not flare elbows excessively"]
+    de: ["Bis zu 90 Grad im Ellbogen absenken", "Ellbogen nicht weit abspreizen"]
+  alternatives: [assisted_dip, tricep_extension_machine]
+
+- key: pushup
+  names:
+    en: [Push-up, Push up, Floor push-up]
+    de: [Liegestütze, Liegestütz]
+    ru: [Отжимания от пола, Отжимания]
+    uk: [Віджимання від підлоги]
+    pl: [Pompki klasyczne]
+    tr: [Şınav, Push-up]
+    es: [Flexiones de pecho, Lagartijas]
+  kind: bodyweight
+  muscle_primary: chest
+  muscles_secondary: [triceps, shoulders_front, abs]
+  pattern: push_h
+  equipment: bodyweight
+  weight_step: 0.0
+  cues:
+    ru: ["Тело в одну прямую линию от макушки до пяток", "Грудь касается пола, локти под 45°"]
+    en: ["Keep body in straight rigid plank line", "Chest touches floor, elbows at 45 degrees"]
+    de: ["Körper als gerade Linie von Kopf bis Fuß", "Brust berührt fast den Boden"]
+  alternatives: [chest_press_machine, bench_press_barbell]
+
+- key: plank
+  names:
+    en: [Plank, Forearm plank, Core plank]
+    de: [Plank, Unterarmstütz]
+    ru: [Планка, Планка на локтях]
+    uk: [Планка, Планка на ліктях]
+    pl: [Deska, Plank]
+    tr: [Plank, Karın plankı]
+    es: [Plancha abdominal, Plancha frontal]
+  kind: timed
+  muscle_primary: abs
+  muscles_secondary: [glutes, shoulders_front]
+  pattern: core
+  equipment: bodyweight
+  weight_step: 0.0
+  cues:
+    ru: ["Напрягите ягодицы и пресс, таз не провисает", "Дышите ровно, локти строго под плечами"]
+    en: ["Squeeze glutes and abs, don't let pelvis sag", "Breathe steadily, elbows directly under shoulders"]
+    de: ["Gesäß und Bauch fest anspannen, Becken nicht durchhängen lassen", "Ruhig atmen"]
+  alternatives: [abdominal_crunch_machine, side_plank]
+
+- key: elliptical_trainer
+  names:
+    en: [Elliptical trainer, Cross trainer, Elliptical]
+    de: [Ellipsentrainer, Crosstrainer, Ellipsen-Trainer]
+    ru: [Эллиптический тренажер, Эллипс, Кросстренинг на эллипсе]
+    uk: [Орбітрек, Еліптичний тренажер]
+    pl: [Orbitrek, Trenażer eliptyczny]
+    tr: [Eliptik bisiklet, Cross trainer]
+    es: [Bicicleta elíptica, Elíptica]
+  kind: cardio
+  muscle_primary: cardio
+  muscles_secondary: [quads, glutes, calves]
+  pattern: cardio
+  equipment: cardio_machine
+  weight_step: 0.0
+  cues:
+    ru: ["Держите ровный каденс, пятки прижаты к педалям", "Используйте рукояти для включения плечевого пояса"]
+    en: ["Maintain steady cadence, keep heels pressed down", "Use handles actively for full body engagement"]
+    de: ["Gleichmäßige Schrittfrequenz, Fersen am Pedal lassen", "Griffe aktiv mitnutzen"]
+  alternatives: [treadmill, stationary_bike, rowing_machine]
+
+- key: treadmill_running
+  names:
+    en: [Treadmill running, Treadmill, Running, Jogging]
+    de: [Laufband, Laufen, Joggen am Laufband]
+    ru: [Бег на беговой дорожке, Беговая дорожка, Бег]
+    uk: [Бігова доріжка, Біг]
+    pl: [Bieżnia, Bieganie na bieżni]
+    tr: [Koşu bandı, Koşu]
+    es: [Cinta de correr, Carrera en cinta]
+  kind: cardio
+  muscle_primary: cardio
+  muscles_secondary: [quads, calves, hamstrings]
+  pattern: cardio
+  equipment: cardio_machine
+  weight_step: 0.0
+  cues:
+    ru: ["Приземляйтесь на среднюю часть стопы под центром тяжести", "Не держитесь за поручни во время бега"]
+    en: ["Land midfoot directly under center of mass", "Do not grip handrails while running"]
+    de: ["Mittelfußaufsatz unter dem Körperschwerpunkt", "Nicht am Handlauf festhalten"]
+  alternatives: [elliptical_trainer, stationary_bike]
+
+- key: stationary_bike
+  names:
+    en: [Stationary bike, Exercise bike, Ergometer, Spinning bike]
+    de: [Fahrradergometer, Ergometer, Heimtrainer, Fahrradergometer Cardio]
+    ru: [Велотренажер, Велоэргометр, Велосипед в зале]
+    uk: [Велотренажер, Велоергометр]
+    pl: [Rower stacjonarny, Ergometr rowerowy]
+    tr: [Kondisyon bisikleti, Egzersiz bisikleti]
+    es: [Bicicleta estática, Ergómetro]
+  kind: cardio
+  muscle_primary: cardio
+  muscles_secondary: [quads, calves]
+  pattern: cardio
+  equipment: cardio_machine
+  weight_step: 0.0
+  cues:
+    ru: ["Отрегулируйте седло: при нижнем положении педали колено слегка согнуто", "Держите каденс 80–90 об/мин"]
+    en: ["Adjust saddle height so knee has slight soft bend at bottom", "Maintain cadence 80-90 RPM"]
+    de: ["Sattelhöhe einstellen: Knie unten leicht gebeugt", "Trittfrequenz ca. 80–90 U/min"]
+  alternatives: [elliptical_trainer, treadmill_running]
+
+- key: rowing_machine
+  names:
+    en: [Rowing machine, Rower, Row ergometer, Concept2]
+    de: [Rudergerät, Ruderergometer, Rudern Cardio]
+    ru: [Гребной тренажер, Гребля кардио, Гребной эргометр]
+    uk: [Веслувальний тренажер, Веслування]
+    pl: [Wioślarz, Ergometr wioślarski]
+    tr: [Kürek ergometresi, Kürek makinesi]
+    es: [Remoergómetro, Máquina de remo cardio]
+  kind: cardio
+  muscle_primary: cardio
+  muscles_secondary: [back_upper, quads, hamstrings, back_lats]
+  pattern: cardio
+  equipment: cardio_machine
+  weight_step: 0.0
+  cues:
+    ru: ["Последовательность: ноги, корпус, руки при гребке; руки, корпус, ноги при возврате", "Не сгибайте колени раньше времени"]
+    en: ["Drive sequence: legs, hips, arms; recovery: arms, hips, legs", "Drive explosively, recover smoothly"]
+    de: ["Reihenfolge: Beine, Rumpf, Arme; zurück: Arme, Rumpf, Beine", "Flüssiger Bewegungsablauf"]
+  alternatives: [elliptical_trainer, treadmill_running]

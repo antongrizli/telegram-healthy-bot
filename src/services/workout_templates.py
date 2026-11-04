@@ -7,6 +7,15 @@ from src.database.models import Exercise, Workout, WorkoutEntry, WorkoutTemplate
 
 PRIORITIES = ('maintain_strength', 'endurance', 'avoid_fatigue')
 INTENSITIES = ('easy', 'moderate', 'hard')
+INTENSITY_MAP = {
+    'easy': 'easy', 'легко': 'easy', 'lekko': 'easy', 'leicht': 'easy', 'kolay': 'easy', 'fácil': 'easy',
+    'moderate': 'moderate', 'умеренно': 'moderate', 'средне': 'moderate', 'средняя': 'moderate',
+    'medium': 'moderate', 'normal': 'moderate', 'umiarkowanie': 'moderate', 'mäßig': 'moderate',
+    'orta': 'moderate', 'moderado': 'moderate',
+    'hard': 'hard', 'тяжело': 'hard', 'тяжёлая': 'hard', 'ciężko': 'hard', 'schwer': 'hard',
+    'zor': 'hard', 'difícil': 'hard',
+}
+LAST_WORKOUT_TEMPLATE = '__last_completed_workout__'
 
 
 def training_preferences(user):
@@ -57,7 +66,7 @@ async def import_example(db, uid):
         'B': [('Rudermaschine', 30, 35, 12), ('Brustpresse', 30, 30, 12),
               ('Beinstrecker', 30, 30, 12), ('Adduktion', 30, 30, 12), ('Latzug', 30, 35, 12)],
     }
-    current = {t.name for t in await templates(db, uid)}
+    current = {t.name for t in await templates(db, uid) if t.name != LAST_WORKOUT_TEMPLATE}
     if len(current | set(specs)) > 20:
         raise ValueError('Maximum 20 templates')
     for name, lifts in specs.items():
@@ -96,7 +105,7 @@ async def save_template(db, workout, name):
         source = workout.template_snapshot or {}
         if existing.id != source.get('id') or existing.revision != source.get('revision'):
             raise StaleWorkout('Template changed; save under a new name')
-    elif len(await templates(db, workout.user_id)) >= 20:
+    elif sum(t.name != LAST_WORKOUT_TEMPLATE for t in await templates(db, workout.user_id)) >= 20:
         raise ValueError('Maximum 20 templates')
     items = []
     for e in rows:
@@ -123,6 +132,103 @@ async def save_template(db, workout, name):
         db.add(template)
     await db.flush()
     return template
+
+
+async def save_last_workout(db, workout):
+    """Keep one rolling, reusable template from the user's latest completed workout."""
+    rows = list((await db.scalars(select(WorkoutEntry).where(
+        WorkoutEntry.workout_id == workout.id, WorkoutEntry.user_id == workout.user_id
+    ).order_by(WorkoutEntry.id))).all())
+    items = []
+    for entry in rows:
+        if not entry.actual:
+            continue
+        exercise = await db.get(Exercise, entry.exercise_id)
+        sets = copy.deepcopy(entry.actual)
+        for row in sets:
+            if 'confirmed' in row:
+                row['confirmed'] = False
+        items.append({'exercise_id': exercise.id, 'kind': exercise.kind, 'sets': sets})
+    if not items:
+        return None
+    template = await db.scalar(select(WorkoutTemplate).where(
+        WorkoutTemplate.user_id == workout.user_id,
+        WorkoutTemplate.name == LAST_WORKOUT_TEMPLATE,
+    ))
+    if template:
+        template.items = items
+        template.minutes_min = None
+        template.minutes_max = workout.available_minutes
+        template.revision += 1
+    else:
+        template = WorkoutTemplate(user_id=workout.user_id, name=LAST_WORKOUT_TEMPLATE,
+                                   items=items, minutes_max=workout.available_minutes)
+        db.add(template)
+    await db.flush()
+    return template
+
+
+async def auto_save_template(db, workout, lang='ru'):
+    """Auto-saves completed workout composition: updates existing composition or creates date-named template."""
+    from src.utils.workout_locales import tr
+    await save_last_workout(db, workout)
+
+    rows = list((await db.scalars(select(WorkoutEntry).where(
+        WorkoutEntry.workout_id == workout.id, WorkoutEntry.user_id == workout.user_id
+    ).order_by(WorkoutEntry.id))).all())
+    valid_entries = [e for e in rows if e.actual]
+    if not valid_entries:
+        return None, False
+
+    items = []
+    current_exercise_ids = []
+    for entry in valid_entries:
+        exercise = await db.get(Exercise, entry.exercise_id)
+        sets = copy.deepcopy(entry.actual)
+        for row in sets:
+            if 'confirmed' in row:
+                row['confirmed'] = False
+        items.append({'exercise_id': exercise.id, 'kind': exercise.kind, 'sets': sets})
+        current_exercise_ids.append(exercise.id)
+
+    user_templates = [t for t in await templates(db, workout.user_id) if t.name != LAST_WORKOUT_TEMPLATE]
+    matching_template = None
+    for t in user_templates:
+        t_exercise_ids = [i.get('exercise_id') for i in t.items]
+        if t_exercise_ids == current_exercise_ids:
+            matching_template = t
+            break
+
+    if matching_template:
+        matching_template.items = items
+        matching_template.minutes_max = workout.available_minutes
+        matching_template.revision += 1
+        await db.flush()
+        return matching_template, False
+
+    from datetime import datetime, UTC
+    date_str = (workout.finished_at or datetime.now(UTC).replace(tzinfo=None)).strftime('%d.%m')
+    template_name = tr('auto_template_date', lang, date=date_str)
+
+    if len(user_templates) >= 20:
+        return None, True
+
+    existing_names = {t.name for t in user_templates}
+    final_name = template_name
+    counter = 2
+    while final_name in existing_names:
+        final_name = f"{template_name} ({counter})"
+        counter += 1
+
+    new_template = WorkoutTemplate(
+        user_id=workout.user_id,
+        name=final_name,
+        items=items,
+        minutes_max=workout.available_minutes,
+    )
+    db.add(new_template)
+    await db.flush()
+    return new_template, False
 
 
 def estimate_minutes(items):
@@ -189,14 +295,25 @@ def validate_template_sets(sets):
         row = sets[0]
         if row.get('minutes') is not None:
             return validate_sets(sets)
+        if row.get('minutes_min') is None and row.get('minutes_max') is None:
+            if len(sets) != 1 or (row.get('intensity') is not None and row.get('intensity') not in INTENSITIES):
+                raise ValueError('Invalid cardio')
+            return [{'kind': 'cardio', 'minutes': None, 'intensity': row.get('intensity')}]
         low, high = number(row.get('minutes_min'), 1, 240), number(row.get('minutes_max'), 1, 240)
-        if len(sets) != 1 or low > high or row.get('intensity') not in INTENSITIES:
+        if (len(sets) != 1 or low > high
+                or (row.get('intensity') is not None and row.get('intensity') not in INTENSITIES)):
             raise ValueError('Invalid cardio range')
-        return [{'kind': 'cardio', 'minutes': None, 'minutes_min': low, 'minutes_max': high, 'intensity': row['intensity']}]
+        return [{'kind': 'cardio', 'minutes': None, 'minutes_min': low, 'minutes_max': high,
+                 'intensity': row.get('intensity')}]
     result = []
     for row in sets:
         if row.get('weight') is not None:
             result.extend(validate_sets([row]))
+            continue
+        if row.get('weight_min') is None and row.get('weight_max') is None:
+            result.append({'weight': None,
+                           'reps': None if row.get('reps') is None else number(row['reps'], 1, 100, True),
+                           'confirmed': False})
             continue
         low, high = number(row.get('weight_min'), 0, 1000), number(row.get('weight_max'), 0, 1000)
         if low > high:

@@ -1,5 +1,5 @@
 from datetime import datetime, time, UTC
-from sqlalchemy import BigInteger, Column, Integer, Float, String, Boolean, DateTime, Time, ForeignKey, JSON, Date, UniqueConstraint, Index, false, text
+from sqlalchemy import BigInteger, Column, Integer, Float, String, Boolean, DateTime, Time, ForeignKey, JSON, Date, UniqueConstraint, Index, Numeric, Text, false, text
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -52,6 +52,11 @@ class User(Base):
     achievements = relationship("Achievement", back_populates="user", cascade="all, delete-orphan")
     health_cards = relationship("HealthCard", back_populates="user", cascade="all, delete-orphan")
     water_logs = relationship("WaterLog", cascade="all, delete-orphan")
+    training_profile = relationship("TrainingProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    canonical_exercises = relationship("CanonicalExercise", cascade="all, delete-orphan")
+    workout_sessions = relationship("WorkoutSession", cascade="all, delete-orphan")
+    training_plans = relationship("TrainingPlan", back_populates="user", cascade="all, delete-orphan")
+
 
 class WaterLog(Base):
     __tablename__ = "water_logs"
@@ -339,3 +344,152 @@ class DailyWorkoutPlan(Base):
     items = Column(JSON, nullable=False, default=list)
     summary = Column(String(3000), nullable=False, default="")
     generation_started_at = Column(DateTime)
+
+
+class CanonicalExercise(Base):
+    __tablename__ = "canonical_exercises"
+    __table_args__ = (UniqueConstraint("user_id", "canonical_slug", name="uq_canonical_exercise_owner_slug"),)
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False, index=True)
+    canonical_slug = Column(String(100), nullable=False)
+    display_name = Column(String(150), nullable=False)
+    exercise_type = Column(String(20), nullable=False, default="strength")
+    kind = Column(String(16), nullable=False, default="strength")
+    muscle_primary = Column(String(24), nullable=True)
+    muscles_secondary = Column(JSON, nullable=False, default=list)
+    pattern = Column(String(24), nullable=True)
+    muscle_group = Column(String(50), nullable=True)
+    equipment = Column(String(50), nullable=True)
+    weight_step = Column(Numeric(4, 2), nullable=False, default=2.5)
+    min_weight = Column(Numeric(6, 2), nullable=True)
+    per_side = Column(Boolean, nullable=False, default=False)
+    machine_settings = Column(String(200), nullable=True)
+    catalog_key = Column(String(64), nullable=True)
+    is_favorite = Column(Boolean, nullable=False, default=False)
+    is_hidden = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+    updated_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+
+    aliases = relationship("ExerciseAlias", cascade="all, delete-orphan", back_populates="canonical_exercise")
+    entries = relationship("WorkoutSessionEntry", cascade="all, delete-orphan", back_populates="canonical_exercise")
+
+
+class ExerciseAlias(Base):
+    __tablename__ = "exercise_aliases"
+    __table_args__ = (UniqueConstraint("user_id", "alias_normalized", name="uq_exercise_alias_owner"),)
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False, index=True)
+    alias_normalized = Column(String(150), nullable=False)
+    canonical_exercise_id = Column(Integer, ForeignKey("canonical_exercises.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    canonical_exercise = relationship("CanonicalExercise", back_populates="aliases")
+
+
+class WorkoutSession(Base):
+    __tablename__ = "workout_sessions"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False, index=True)
+    performed_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+    status = Column(String(12), nullable=False, default="draft")  # draft / active / finished / cancelled
+    source = Column(String(12), nullable=False, default="text")   # live / text / repeat / voice / webapp / migrated
+    plan_id = Column(Integer, ForeignKey("training_plans.id", ondelete="SET NULL"), nullable=True)
+    focus = Column(JSON, nullable=False, default=list)
+    feeling = Column(String(8), nullable=True)
+    energy = Column(String(8), nullable=True)
+    note = Column(Text, nullable=True)
+    revision = Column(Integer, nullable=False, default=0)
+    anchor_message_id = Column(BigInteger, nullable=True)
+    ai_summary = Column(Text, nullable=True)
+
+    entries = relationship("WorkoutSessionEntry", cascade="all, delete-orphan", back_populates="session", order_by="WorkoutSessionEntry.position")
+    plan = relationship("TrainingPlan", back_populates="sessions")
+
+
+class WorkoutSessionEntry(Base):
+    __tablename__ = "workout_session_entries"
+
+    id = Column(Integer, primary_key=True)
+    session_id = Column(Integer, ForeignKey("workout_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    canonical_exercise_id = Column(Integer, ForeignKey("canonical_exercises.id", ondelete="CASCADE"), nullable=False, index=True)
+    raw_input = Column(Text, nullable=False)
+    position = Column(Integer, nullable=False, default=0)
+    status = Column(String(10), nullable=False, default="done")  # done / skipped / partial
+    sets = Column(Integer, default=1, nullable=False)
+    reps = Column(Integer, nullable=True)
+    weight_kg = Column(Numeric(6, 2), nullable=True)
+    duration_sec = Column(Integer, nullable=True)
+    distance_m = Column(Integer, nullable=True)
+    feeling = Column(String(16), nullable=False, default="normal")
+    next_recommended_load = Column(String(100), nullable=True)
+    ai_note = Column(Text, nullable=True)
+    note = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+
+    session = relationship("WorkoutSession", back_populates="entries")
+    canonical_exercise = relationship("CanonicalExercise", back_populates="entries")
+    workout_sets = relationship("WorkoutSet", cascade="all, delete-orphan", back_populates="entry", order_by="WorkoutSet.idx")
+
+
+class WorkoutSet(Base):
+    __tablename__ = "workout_sets"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    entry_id = Column(Integer, ForeignKey("workout_session_entries.id", ondelete="CASCADE"), nullable=False, index=True)
+    idx = Column(Integer, nullable=False, default=1)
+    set_type = Column(String(8), nullable=False, default="working")  # warmup / working / drop / failure
+    weight_kg = Column(Numeric(6, 2), nullable=True)
+    added_weight_kg = Column(Numeric(6, 2), nullable=True)
+    reps = Column(Integer, nullable=True)
+    duration_sec = Column(Integer, nullable=True)
+    distance_m = Column(Integer, nullable=True)
+    rpe = Column(Numeric(3, 1), nullable=True)
+    target_weight_kg = Column(Numeric(6, 2), nullable=True)
+    target_reps = Column(Integer, nullable=True)
+    target_duration_sec = Column(Integer, nullable=True)
+    completed = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+
+    entry = relationship("WorkoutSessionEntry", back_populates="workout_sets")
+
+
+class TrainingProfile(Base):
+    __tablename__ = "training_profiles"
+
+    user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), primary_key=True)
+    goal = Column(String(20), nullable=False, default="hypertrophy")  # hypertrophy, strength, endurance, fat_loss, health
+    experience = Column(String(20), nullable=False, default="intermediate")  # beginner, intermediate, advanced
+    days_per_week = Column(Integer, nullable=False, default=3)  # 1..7
+    session_minutes = Column(Integer, nullable=False, default=45)  # 15..180
+    split = Column(String(20), nullable=False, default="auto")  # auto, fullbody, upper_lower, ppl, custom
+    limitations = Column(JSON, nullable=False, default=list)  # e.g. ["lower_back", "knees"]
+    rest_timer = Column(Boolean, nullable=False, default=False)
+    weight_unit = Column(String(10), nullable=False, default="kg")
+    updated_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+
+    user = relationship("User", back_populates="training_profile")
+
+
+class TrainingPlan(Base):
+    __tablename__ = "training_plans"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False, index=True)
+    local_date = Column(Date, nullable=False)
+    status = Column(String(20), nullable=False, default="proposed")  # proposed / accepted / in_progress / done / expired
+    focus = Column(JSON, nullable=False, default=list)
+    constraints = Column(JSON, nullable=False, default=dict)
+    items = Column(JSON, nullable=False, default=list)
+    rationale = Column(String(1000), nullable=False, default="")
+    generator = Column(String(20), nullable=False, default="rules")  # rules / rules+llm
+    revision = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None))
+
+    sessions = relationship("WorkoutSession", back_populates="plan")
+    user = relationship("User", back_populates="training_plans")
+
+

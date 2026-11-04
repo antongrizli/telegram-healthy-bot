@@ -1,0 +1,98 @@
+- in: "Brustpresse 35кг x 4 подхода по 15 раз"
+  out:
+    - name: "Brustpresse"
+      sets_count: 4
+      reps: 15
+      weight: 35.0
+
+- in: "Abduktion и  Adduktion 40 kg x 3 x 15"
+  library: ["Abduktion", "Adduktion"]
+  out:
+    - name: "Abduktion"
+      sets_count: 3
+      reps: 15
+      weight: 40.0
+    - name: "Adduktion"
+      sets_count: 3
+      reps: 15
+      weight: 40.0
+
+- in: "Bizepsmaschine 15x3x15kg."
+  out:
+    - name: "Bizepsmaschine"
+      sets_count: 3
+      reps: 15
+      weight: 15.0
+
+- in: "Ellipsentrainer 20 минут кросс тренинг"
+  out:
+    - name: "Ellipsentrainer"
+      kind: "cardio"
+      duration_sec: 1200
+      note: "Кросс тренинг"
+
+- in: "Жим лёжа 60x10, 70x8, 80x6"
+  out:
+    - name: "Жим лёжа"
+      sets_detail: [[60.0, 10], [70.0, 8], [80.0, 6]]
+
+- in: "Жим 20x10"
+  status: "ambiguous"
+
+- in: "Klimmzüge +10kg 3x8"
+  out:
+    - name: "Klimmzüge"
+      kind: "bodyweight"
+      added_weight: 10.0
+      sets_count: 3
+      reps: 8
+
+- in: "Laufband 5 km 27:30"
+  out:
+    - name: "Laufband"
+      kind: "cardio"
+      distance_m: 5000
+      duration_sec: 1650
+
+- in: "Latzug wie letztes Mal"
+  history:
+    latzug:
+      working_sets:
+        - {weight_kg: 40.0, reps: 15}
+        - {weight_kg: 40.0, reps: 15}
+        - {weight_kg: 40.0, reps: 15}
+  out:
+    - name: "Latzug"
+      sets_count: 3
+      reps: 15
+      weight: 40.0
+
+- in: "Latzug +2.5"
+  history:
+    latzug:
+      working_sets:
+        - {weight_kg: 40.0, reps: 12}
+  out:
+    - name: "Latzug"
+      sets_count: 1
+      reps: 12
+      weight: 42.5
+
+- in: "Планка 3x60с"
+  out:
+    - name: "Планка"
+      kind: "timed"
+      sets_count: 3
+      duration_sec: 60
+
+- in: "Присед 100кг 5x5"
+  out:
+    - name: "Присед"
+      sets_count: 5
+      reps: 5
+      weight: 100.0
+
+- in: "40/45/50 x 12/10/8 Жим гантелей"
+  out:
+    - name: "Жим гантелей"
+      sets_detail: [[40.0, 12], [45.0, 10], [50.0, 8]]

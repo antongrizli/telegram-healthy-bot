@@ -114,6 +114,102 @@ async def library_context(db, user, preferences):
             'days_since_previous': (svc.now() - last.finished_at).days if last else None}
 
 
+def sanitize_daily_proposal(output: svc.Analysis, ctx: dict) -> svc.Analysis:
+    """Ensure daily plan proposal strictly adheres to library facts and safety limits."""
+    known = {e['exercise_id']: e for e in ctx.get('planning_basis', ctx.get('exercises', []))}
+    feedback = ctx.get('feedback', {})
+    reduced = feedback.get('wish') == 'lighter' or feedback.get('effort') in ('hard', 'too_hard')
+    hard_ids = set(feedback.get('hard_exercises', []))
+    shorter = feedback.get('wish') == 'shorter'
+
+    sanitized_items = []
+    seen = set()
+
+    for item in output.items:
+        if item.exercise_id not in known or item.exercise_id in seen:
+            raise ValueError('Unknown or repeated exercise')
+        seen.add(item.exercise_id)
+        ex_meta = known[item.exercise_id]
+        original = ex_meta['actual']
+        is_library_without_history = ex_meta.get('source') == 'library_without_history'
+        is_reduced = reduced or (item.exercise_id in hard_ids)
+
+        if ex_meta.get('kind') == 'cardio':
+            if not item.sets:
+                continue
+            row = item.sets[0]
+            intensity = None
+            if row.intensity:
+                intensity = wt.INTENSITY_MAP.get(str(row.intensity).strip().lower())
+                if intensity not in wt.INTENSITIES:
+                    intensity = None
+            previous = original[0]
+            prev_intensity = previous.get('intensity')
+            if prev_intensity in wt.INTENSITIES:
+                if intensity is None or wt.INTENSITIES.index(intensity) > wt.INTENSITIES.index(prev_intensity):
+                    intensity = prev_intensity
+            elif intensity is None:
+                intensity = 'easy' if is_reduced else 'moderate'
+
+            prev_minutes = previous.get('minutes')
+            if prev_minutes is not None:
+                cap_minutes = max(1, prev_minutes * (0.9 if is_reduced else 1.0))
+                minutes = row.minutes if (row.minutes is not None and row.minutes <= cap_minutes) else cap_minutes
+            else:
+                minutes = None
+
+            sanitized_items.append(svc.ProposedExercise(
+                exercise_id=item.exercise_id,
+                sets=[svc.ProposedSet(minutes=minutes, intensity=intensity, weight=None, reps=None)]
+            ))
+            continue
+
+        # Strength / Bodyweight
+        if is_library_without_history:
+            limit = 3
+        elif 'planning_basis' in ctx:
+            limit = len(original)
+        else:
+            limit = max(1, len(original) - 1) if shorter else len(original)
+
+        sets_to_process = item.sets[:limit] if limit > 0 else []
+        sanitized_sets = []
+
+        for index, row in enumerate(sets_to_process):
+            previous = original[min(index, len(original) - 1)]
+
+            if previous.get('load_type') == 'bodyweight':
+                prev_reps = previous.get('reps')
+                reps = row.reps
+                if reps is not None and prev_reps is not None and reps > prev_reps:
+                    reps = prev_reps
+                elif prev_reps is None:
+                    reps = None
+                sanitized_sets.append(svc.ProposedSet(weight=0.0, reps=reps))
+                continue
+
+            prev_weight = previous.get('weight')
+            if prev_weight is None:
+                weight = None
+            else:
+                cap_weight = prev_weight * (0.9 if is_reduced else 1.0)
+                weight = row.weight if (row.weight is not None and row.weight <= cap_weight) else cap_weight
+
+            prev_reps = previous.get('reps')
+            reps = row.reps
+            if reps is not None and prev_reps is not None and reps > prev_reps:
+                reps = prev_reps
+            elif prev_reps is None:
+                reps = None
+
+            sanitized_sets.append(svc.ProposedSet(weight=weight, reps=reps))
+
+        if sanitized_sets:
+            sanitized_items.append(svc.ProposedExercise(exercise_id=item.exercise_id, sets=sanitized_sets))
+
+    return svc.Analysis(summary=output.summary, explanation=output.explanation, items=sanitized_items)
+
+
 async def generate(db, plan, user, revision, language):
     from src.services import gemini
     if (not wt.training_preferences(user).get('sessions_per_week') or plan.local_date != local_today(user)
@@ -156,7 +252,8 @@ async def generate(db, plan, user, revision, language):
                 f'Language: {language}. Context:\n' + json.dumps(ctx, ensure_ascii=False, separators=(',', ':')))
             async with asyncio.timeout(100):
                 response = await gemini.call_gemini_with_retry([prompt], user_id=uid, request_type='workout_today', max_retries=2)
-            output = svc.Analysis.model_validate_json(gemini.extract_json(response.text))
+            raw_output = svc.Analysis.model_validate_json(gemini.extract_json(response.text))
+            output = sanitize_daily_proposal(raw_output, ctx)
             result = svc.safe_plan(output, ctx)
             summary = (output.summary + '\n' + output.explanation).strip()[:3000]
         done = await db.execute(update(DailyWorkoutPlan).where(

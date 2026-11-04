@@ -33,6 +33,184 @@ def get_today_keyboard(lang: str) -> ReplyKeyboardMarkup:
     ], resize_keyboard=True)
 
 
+def get_workout_menu(lang: str, mode: str = 'home', frequency: int | None = None) -> ReplyKeyboardMarkup:
+    """Reply-keyboard menus for the workout hub and an editable workout draft."""
+    from src.utils.workout_locales import tr
+    if mode == 'draft':
+        rows = [
+            [KeyboardButton(text=get_text('btn_workout_done', lang))],
+            [KeyboardButton(text=get_text('btn_workout_template', lang))],
+            [KeyboardButton(text=get_text('btn_workout_cancel', lang))],
+        ]
+    elif mode == 'frequency':
+        rows = [
+            [KeyboardButton(text=str(i)) for i in (1, 2, 3, 4)],
+            [KeyboardButton(text=str(i)) for i in (5, 6, 7)],
+            [KeyboardButton(text=get_text('ux_back', lang))],
+        ]
+    else:
+        freq_text = (
+            f"🔁 {tr('btn_workout_frequency_dynamic', lang, count=frequency)}"
+            if frequency
+            else get_text('btn_workout_frequency_default', lang)
+        )
+        rows = [
+            [KeyboardButton(text=get_text('btn_workout_today', lang))],
+            [KeyboardButton(text=get_text('btn_workout_history', lang))],
+            [
+                KeyboardButton(text=get_text('btn_workout_templates', lang)),
+                KeyboardButton(text=freq_text),
+            ],
+            [KeyboardButton(text=get_text('ux_back', lang))],
+        ]
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
+
+
+def get_training_hub_reply_keyboard(lang: str = "ru", is_active: bool = False) -> ReplyKeyboardMarkup:
+    """Bottom docked reply keyboard for Workout Hub."""
+    start_label = "▶️ Продолжить" if is_active else "▶️ Начать"
+    if lang == "en":
+        start_label = "▶️ Resume" if is_active else "▶️ Start"
+    elif lang == "uk":
+        start_label = "▶️ Продовжити" if is_active else "▶️ Почати"
+    elif lang == "de":
+        start_label = "▶️ Fortsetzen" if is_active else "▶️ Starten"
+    elif lang == "pl":
+        start_label = "▶️ Wznów" if is_active else "▶️ Rozpocznij"
+    elif lang == "tr":
+        start_label = "▶️ Devam et" if is_active else "▶️ Başla"
+    elif lang == "es":
+        start_label = "▶️ Reanudar" if is_active else "▶️ Empezar"
+
+    goal_label = "🎯 Другая цель"
+    repeat_label = "🔁 Повторить прошлую"
+    write_label = "✍️ Записать"
+    progress_label = "📈 Прогресс"
+    settings_label = "⚙️ Тренажёры"
+
+    if lang == "en":
+        goal_label = "🎯 Other goal"
+        repeat_label = "🔁 Like last time"
+        write_label = "✍️ Log workout"
+        progress_label = "📈 Progress"
+        settings_label = "⚙️ Equipment"
+    elif lang == "uk":
+        goal_label = "🎯 Інша ціль"
+        repeat_label = "🔁 Повторити минулу"
+        write_label = "✍️ Записати"
+        progress_label = "📈 Прогрес"
+        settings_label = "⚙️ Тренажери"
+    elif lang == "de":
+        goal_label = "🎯 Anderes Ziel"
+        repeat_label = "🔁 Wie letztes Mal"
+        write_label = "✍️ Eintragen"
+        progress_label = "📈 Fortschritt"
+        settings_label = "⚙️ Geräte"
+    elif lang == "pl":
+        goal_label = "🎯 Inny cel"
+        repeat_label = "🔁 Powtórz poprzedni"
+        write_label = "✍️ Zapisz"
+        progress_label = "📈 Postępy"
+        settings_label = "⚙️ Maszyny"
+    elif lang == "tr":
+        goal_label = "🎯 Başka hedef"
+        repeat_label = "🔁 Geçen seferki gibi"
+        write_label = "✍️ Kaydet"
+        progress_label = "📈 Gelişim"
+        settings_label = "⚙️ Makineler"
+    elif lang == "es":
+        goal_label = "🎯 Otro objetivo"
+        repeat_label = "🔁 Como la última vez"
+        write_label = "✍️ Registrar"
+        progress_label = "📈 Progreso"
+        settings_label = "⚙️ Máquinas"
+
+    rows = [
+        [KeyboardButton(text=start_label)],
+        [KeyboardButton(text=goal_label), KeyboardButton(text=repeat_label)],
+        [KeyboardButton(text=write_label), KeyboardButton(text=progress_label)],
+        [KeyboardButton(text=settings_label)],
+        [KeyboardButton(text=get_text("ux_back", lang))],
+    ]
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
+
+
+def get_equipment_reply_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
+    """Bottom docked reply keyboard for Equipment & Profile section."""
+    add_label = "➕ Добавить тренажёр"
+    del_label = "🗑 Удалить тренажёр"
+    prof_label = "✏️ Настроить профиль"
+    back_hub_label = "⬅️ К тренировкам"
+
+    if lang == "en":
+        add_label = "➕ Add equipment"
+        del_label = "🗑 Remove equipment"
+        prof_label = "✏️ Edit profile"
+        back_hub_label = "⬅️ Back to workouts"
+    elif lang == "uk":
+        add_label = "➕ Додати тренажер"
+        del_label = "🗑 Видалити тренажер"
+        prof_label = "✏️ Налаштувати профіль"
+        back_hub_label = "⬅️ До тренувань"
+    elif lang == "de":
+        add_label = "➕ Gerät hinzufügen"
+        del_label = "🗑 Gerät entfernen"
+        prof_label = "✏️ Profil bearbeiten"
+        back_hub_label = "⬅️ Zurück zum Training"
+    elif lang == "pl":
+        add_label = "➕ Dodaj maszynę"
+        del_label = "🗑 Usuń maszynę"
+        prof_label = "✏️ Edytuj profil"
+        back_hub_label = "⬅️ Do treningów"
+    elif lang == "tr":
+        add_label = "➕ Makine ekle"
+        del_label = "🗑 Makine sil"
+        prof_label = "✏️ Profili düzenle"
+        back_hub_label = "⬅️ Antrenmanlara dön"
+    elif lang == "es":
+        add_label = "➕ Añadir máquina"
+        del_label = "🗑 Eliminar máquina"
+        prof_label = "✏️ Editar perfil"
+        back_hub_label = "⬅️ Volver a entrenamientos"
+
+    rows = [
+        [KeyboardButton(text=add_label), KeyboardButton(text=del_label)],
+        [KeyboardButton(text=prof_label)],
+        [KeyboardButton(text=back_hub_label), KeyboardButton(text=get_text("ux_back", lang))],
+    ]
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
+
+
+def get_equipment_sub_reply_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
+    """Bottom docked reply keyboard during equipment add/delete flow."""
+    back_eq_label = "⬅️ К тренажёрам"
+    back_hub_label = "⬅️ К тренировкам"
+    if lang == "en":
+        back_eq_label = "⬅️ Back to equipment"
+        back_hub_label = "⬅️ Back to workouts"
+    elif lang == "uk":
+        back_eq_label = "⬅️ До тренажерів"
+        back_hub_label = "⬅️ До тренувань"
+    elif lang == "de":
+        back_eq_label = "⬅️ Zurück zu Geräten"
+        back_hub_label = "⬅️ Zurück zum Training"
+    elif lang == "pl":
+        back_eq_label = "⬅️ Do maszyn"
+        back_hub_label = "⬅️ Do treningów"
+    elif lang == "tr":
+        back_eq_label = "⬅️ Makinelere dön"
+        back_hub_label = "⬅️ Antrenmanlara dön"
+    elif lang == "es":
+        back_eq_label = "⬅️ Volver a máquinas"
+        back_hub_label = "⬅️ Volver a entrenamientos"
+
+    rows = [
+        [KeyboardButton(text=back_eq_label), KeyboardButton(text=back_hub_label)],
+        [KeyboardButton(text=get_text("ux_back", lang))],
+    ]
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
+
+
 def get_progress_keyboard(lang: str) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(keyboard=[
         [KeyboardButton(text=get_text('btn_charts', lang)),

@@ -134,7 +134,12 @@ def build_plan(
         h_info = history_index.get(name.lower())
         has_hist = h_info is not None
         fav = cand.get("is_favorite", False)
-        recent = (h_info.get("days_ago", 999) < 4) if h_info else False
+        if h_info is None:
+            recent = False
+        elif isinstance(h_info, dict):
+            recent = h_info.get("days_ago", 999) < 4
+        else:
+            recent = getattr(h_info, "days_ago", 999) < 4
 
         sc = score_candidate(cand, focus, has_hist, fav, recent)
         if sc > 0.0:  # Only positive matches

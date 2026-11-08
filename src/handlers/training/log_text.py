@@ -14,7 +14,7 @@ from src.database.models import WorkoutSession, WorkoutSessionEntry
 from src.handlers.training.ui import edit_or_send
 from src.handlers.training.keyboards import get_draft_keyboard, get_summary_keyboard, make_cb
 from src.handlers.training.states import TrainingFSM
-from src.services.training import library, llm, parser, render, sessions, summary
+from src.services.training import history, library, llm, parser, render, sessions, summary
 
 logger = logging.getLogger(__name__)
 router = Router(name="training_log_text_router")
@@ -54,6 +54,11 @@ async def handle_draft_text_input(message: Message, state: FSMContext):
     async with AsyncSessionLocal() as db:
         user_library = await library.get_user_library(db, uid)
         lib_names = [e.display_name for e in user_library]
+        history_index = {}
+        for e in user_library:
+            h = await history.get_exercise_history(db, uid, e.id)
+            if h:
+                history_index[e.display_name.lower()] = h
         session = await db.get(WorkoutSession, session_id) if session_id else None
         if not session:
             session = await sessions.get_or_create_draft(db, uid, source="text", anchor_message_id=anchor_id)
@@ -61,7 +66,7 @@ async def handle_draft_text_input(message: Message, state: FSMContext):
             await state.update_data(session_id=session_id)
 
     # 2. Deterministic parsing
-    draft_items = parser.parse_text(text, lang="ru", library_names=lib_names)
+    draft_items = parser.parse_text(text, lang="ru", library_names=lib_names, history_index=history_index)
 
     # 3. If any item is unparsed, attempt graceful LLM recovery
     unparsed = [it for it in draft_items if it.status == "unparsed"]

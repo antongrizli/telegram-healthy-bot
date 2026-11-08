@@ -93,6 +93,13 @@ def _extract_name_and_tail(raw_line: str, match_start: int, match_end: int) -> T
     return name, note
 
 
+def _hist_get(hist: Any, key: str, default: Any = None) -> Any:
+    """Read a field from a history entry that may be a dict or an ExerciseHistory object."""
+    if isinstance(hist, dict):
+        return hist.get(key, default)
+    return getattr(hist, key, default)
+
+
 def parse_line(
     raw_line: str,
     line_no: int = 1,
@@ -119,14 +126,14 @@ def parse_line(
     if r12_match:
         ex_name = clean_name(r12_match.group(1))
         hist = history_index.get(ex_name.lower())
-        if hist and hist.get("working_sets"):
+        if hist and _hist_get(hist, "working_sets"):
             return [
                 DraftItem(
                     line_no=line_no,
                     raw=raw_line,
                     name=ex_name,
                     kind="strength",
-                    sets=[s for s in hist["working_sets"]],
+                    sets=[s for s in _hist_get(hist, "working_sets")],
                     status="ok",
                     source="rules",
                 )
@@ -140,14 +147,14 @@ def parse_line(
         ex_name = clean_name(r13_match.group(1))
         delta = float(r13_match.group(2))
         hist = history_index.get(ex_name.lower())
-        if hist and hist.get("working_sets"):
+        if hist and _hist_get(hist, "working_sets"):
             shifted = [
                 ParsedSet(
                     weight_kg=max(0.0, (s.weight_kg or 0.0) + delta),
                     reps=s.reps,
                     set_type=s.set_type,
                 )
-                for s in hist["working_sets"]
+                for s in _hist_get(hist, "working_sets")
             ]
             return [
                 DraftItem(
@@ -404,7 +411,7 @@ def parse_line(
             reps = v2
             # Check history to see if there was a previous weight
             hist = history_index.get(name.lower())
-            weight = hist.get("top_weight") if hist else None
+            weight = _hist_get(hist, "top_weight") if hist else None
             sets = [ParsedSet(weight_kg=weight, reps=reps) for _ in range(n_sets)]
             return _make_draft_items(name, sets, raw_line, line_no, None, "strength", catalog, library_names)
 

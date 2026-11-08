@@ -5,12 +5,15 @@ import contextlib
 import html
 import logging
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from src.utils.training_locales import t
 from src.database.connection import AsyncSessionLocal
 from src.database.models import CanonicalExercise, TrainingProfile, User
-from src.handlers.training.keyboards import make_cb
+from src.handlers.training.ui import edit_or_send
+from src.handlers.training.keyboards import get_rest_pref_keyboard, make_cb
 from src.handlers.training.states import TrainingFSM
 from src.keyboards.reply import get_equipment_reply_keyboard, get_equipment_sub_reply_keyboard
 from src.services.training import library
@@ -68,14 +71,14 @@ async def start_onboarding(message: Message, state: FSMContext) -> None:
     await state.set_state(TrainingFSM.onboarding)
     await state.update_data(onboarding_step=1, profile_draft={})
 
-    text = "👋 <b>Настроим тренировочный профиль (1/5)</b>\n\nКакая у вас главная цель?"
+    text = t("onb_goal_title")
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💪 Мышцы (гипертрофия)", callback_data=make_cb("onb_goal", 0, 0, "hypertrophy"))],
-        [InlineKeyboardButton(text="🏋️ Сила", callback_data=make_cb("onb_goal", 0, 0, "strength"))],
-        [InlineKeyboardButton(text="🔥 Похудение / рельеф", callback_data=make_cb("onb_goal", 0, 0, "fat_loss"))],
-        [InlineKeyboardButton(text="🫀 Выносливость", callback_data=make_cb("onb_goal", 0, 0, "endurance"))],
-        [InlineKeyboardButton(text="🌿 Здоровье и тонус", callback_data=make_cb("onb_goal", 0, 0, "health"))],
-        [InlineKeyboardButton(text="Пропустить", callback_data=make_cb("onb_skip", 0, 0, "1"))],
+        [InlineKeyboardButton(text=t("goal_hypertrophy"), callback_data=make_cb("onb_goal", 0, 0, "hypertrophy"))],
+        [InlineKeyboardButton(text=t("goal_strength"), callback_data=make_cb("onb_goal", 0, 0, "strength"))],
+        [InlineKeyboardButton(text=t("goal_fat_loss"), callback_data=make_cb("onb_goal", 0, 0, "fat_loss"))],
+        [InlineKeyboardButton(text=t("goal_endurance"), callback_data=make_cb("onb_goal", 0, 0, "endurance"))],
+        [InlineKeyboardButton(text=t("goal_health"), callback_data=make_cb("onb_goal", 0, 0, "health"))],
+        [InlineKeyboardButton(text=t("onb_skip"), callback_data=make_cb("onb_skip", 0, 0, "1"))],
     ])
     await message.answer(text, parse_mode="HTML", reply_markup=kb)
 
@@ -93,15 +96,15 @@ async def handle_onboarding_goal(callback: CallbackQuery, state: FSMContext):
     draft["goal"] = goal
     await state.update_data(onboarding_step=2, profile_draft=draft)
 
-    text = "🎯 <b>Опыт тренировок (2/5)</b>\n\nКак долго вы занимаетесь силовыми?"
+    text = t("onb_exp_title")
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Менее 6 месяцев (новичок)", callback_data=make_cb("onb_exp", 0, 0, "beginner"))],
-        [InlineKeyboardButton(text="6 месяцев – 2 года", callback_data=make_cb("onb_exp", 0, 0, "intermediate"))],
-        [InlineKeyboardButton(text="Более 2 лет (опытный)", callback_data=make_cb("onb_exp", 0, 0, "advanced"))],
-        [InlineKeyboardButton(text="Пропустить", callback_data=make_cb("onb_skip", 0, 0, "2"))],
+        [InlineKeyboardButton(text=t("exp_beginner"), callback_data=make_cb("onb_exp", 0, 0, "beginner"))],
+        [InlineKeyboardButton(text=t("exp_intermediate"), callback_data=make_cb("onb_exp", 0, 0, "intermediate"))],
+        [InlineKeyboardButton(text=t("exp_advanced"), callback_data=make_cb("onb_exp", 0, 0, "advanced"))],
+        [InlineKeyboardButton(text=t("onb_skip"), callback_data=make_cb("onb_skip", 0, 0, "2"))],
     ])
     if callback.message:
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+        await edit_or_send(callback.message, text, parse_mode="HTML", reply_markup=kb)
 
 
 @router.callback_query(F.data.startswith("t2:onb_exp:"))
@@ -117,14 +120,14 @@ async def handle_onboarding_exp(callback: CallbackQuery, state: FSMContext):
     draft["experience"] = exp
     await state.update_data(onboarding_step=3, profile_draft=draft)
 
-    text = "📅 <b>Регулярность (3/5)</b>\n\nСколько дней в неделю планируете тренироваться?"
+    text = t("onb_days_title")
     rows = [
-        [InlineKeyboardButton(text=f"{d} дн.", callback_data=make_cb("onb_days", 0, 0, str(d))) for d in (2, 3, 4)],
-        [InlineKeyboardButton(text=f"{d} дн.", callback_data=make_cb("onb_days", 0, 0, str(d))) for d in (1, 5, 6)],
-        [InlineKeyboardButton(text="Пропустить", callback_data=make_cb("onb_skip", 0, 0, "3"))],
+        [InlineKeyboardButton(text=t("days_n", d=d), callback_data=make_cb("onb_days", 0, 0, str(d))) for d in (2, 3, 4)],
+        [InlineKeyboardButton(text=t("days_n", d=d), callback_data=make_cb("onb_days", 0, 0, str(d))) for d in (1, 5, 6)],
+        [InlineKeyboardButton(text=t("onb_skip"), callback_data=make_cb("onb_skip", 0, 0, "3"))],
     ]
     if callback.message:
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+        await edit_or_send(callback.message, text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
 
 
 @router.callback_query(F.data.startswith("t2:onb_days:"))
@@ -140,20 +143,20 @@ async def handle_onboarding_days(callback: CallbackQuery, state: FSMContext):
     draft["days_per_week"] = days
     await state.update_data(onboarding_step=4, profile_draft=draft)
 
-    text = "⏱ <b>Время на тренировку (4/5)</b>\n\nСколько минут обычно выделяете?"
+    text = t("onb_time_title")
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="30 мин", callback_data=make_cb("onb_time", 0, 0, "30")),
-            InlineKeyboardButton(text="45 мин", callback_data=make_cb("onb_time", 0, 0, "45")),
+            InlineKeyboardButton(text=t("min_n", n=30), callback_data=make_cb("onb_time", 0, 0, "30")),
+            InlineKeyboardButton(text=t("min_n", n=45), callback_data=make_cb("onb_time", 0, 0, "45")),
         ],
         [
-            InlineKeyboardButton(text="60 мин", callback_data=make_cb("onb_time", 0, 0, "60")),
-            InlineKeyboardButton(text="90 мин", callback_data=make_cb("onb_time", 0, 0, "90")),
+            InlineKeyboardButton(text=t("min_n", n=60), callback_data=make_cb("onb_time", 0, 0, "60")),
+            InlineKeyboardButton(text=t("min_n", n=90), callback_data=make_cb("onb_time", 0, 0, "90")),
         ],
-        [InlineKeyboardButton(text="Пропустить", callback_data=make_cb("onb_skip", 0, 0, "4"))],
+        [InlineKeyboardButton(text=t("onb_skip"), callback_data=make_cb("onb_skip", 0, 0, "4"))],
     ])
     if callback.message:
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+        await edit_or_send(callback.message, text, parse_mode="HTML", reply_markup=kb)
 
 
 @router.callback_query(F.data.startswith("t2:onb_time:"))
@@ -171,17 +174,16 @@ async def handle_onboarding_time(callback: CallbackQuery, state: FSMContext):
     await state.update_data(onboarding_step=5, profile_draft=draft)
 
     text = (
-        "🛡 <b>Ограничения по здоровью (5/5)</b>\n\n"
-        "Отметьте зоны, на которые нежелательна осевая или ударная нагрузка:"
+        t("onb_lim_title")
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Поясница / спина", callback_data=make_cb("onb_lim", 0, 0, "lower_back"))],
-        [InlineKeyboardButton(text="Колени", callback_data=make_cb("onb_lim", 0, 0, "knees"))],
-        [InlineKeyboardButton(text="Плечи", callback_data=make_cb("onb_lim", 0, 0, "shoulders"))],
-        [InlineKeyboardButton(text="✅ Готово / ограничений нет", callback_data=make_cb("onb_done", 0, 0))],
+        [InlineKeyboardButton(text=t("lim_lower_back"), callback_data=make_cb("onb_lim", 0, 0, "lower_back"))],
+        [InlineKeyboardButton(text=t("lim_knees"), callback_data=make_cb("onb_lim", 0, 0, "knees"))],
+        [InlineKeyboardButton(text=t("lim_shoulders"), callback_data=make_cb("onb_lim", 0, 0, "shoulders"))],
+        [InlineKeyboardButton(text=t("onb_lim_done"), callback_data=make_cb("onb_done", 0, 0))],
     ])
     if callback.message:
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+        await edit_or_send(callback.message, text, parse_mode="HTML", reply_markup=kb)
 
 
 @router.callback_query(F.data.startswith("t2:onb_lim:"))
@@ -206,10 +208,10 @@ async def handle_onboarding_lim_toggle(callback: CallbackQuery, state: FSMContex
         return f"☑️ {name}" if key in lims else name
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=_lbl("Поясница / спина", "lower_back"), callback_data=make_cb("onb_lim", 0, 0, "lower_back"))],
-        [InlineKeyboardButton(text=_lbl("Колени", "knees"), callback_data=make_cb("onb_lim", 0, 0, "knees"))],
-        [InlineKeyboardButton(text=_lbl("Плечи", "shoulders"), callback_data=make_cb("onb_lim", 0, 0, "shoulders"))],
-        [InlineKeyboardButton(text="✅ Сохранить профиль", callback_data=make_cb("onb_done", 0, 0))],
+        [InlineKeyboardButton(text=_lbl(t("lim_lower_back"), "lower_back"), callback_data=make_cb("onb_lim", 0, 0, "lower_back"))],
+        [InlineKeyboardButton(text=_lbl(t("lim_knees"), "knees"), callback_data=make_cb("onb_lim", 0, 0, "knees"))],
+        [InlineKeyboardButton(text=_lbl(t("lim_shoulders"), "shoulders"), callback_data=make_cb("onb_lim", 0, 0, "shoulders"))],
+        [InlineKeyboardButton(text=t("onb_save"), callback_data=make_cb("onb_done", 0, 0))],
     ])
     if callback.message:
         with contextlib.suppress(Exception):
@@ -250,7 +252,7 @@ async def handle_onboarding_finish(callback: CallbackQuery, state: FSMContext):
             prof.limitations = lims
         await db.commit()
 
-    await callback.answer("Профиль сохранён ✓")
+    await callback.answer(t("profile_saved"))
     from src.handlers.training.hub import render_and_send_hub
     if callback.message:
         await render_and_send_hub(callback.message, uid, state, edit=True)
@@ -284,21 +286,21 @@ async def render_equipment_settings(
     await state.set_state(TrainingFSM.hub)
 
     goals_map = {
-        "hypertrophy": "💪 Мышцы (гипертрофия)",
-        "strength": "🏋️ Сила",
-        "fat_loss": "🔥 Похудение / рельеф",
-        "endurance": "🫀 Выносливость",
-        "health": "🌿 Здоровье и тонус",
+        "hypertrophy": t("goal_hypertrophy"),
+        "strength": t("goal_strength"),
+        "fat_loss": t("goal_fat_loss"),
+        "endurance": t("goal_endurance"),
+        "health": t("goal_health"),
     }
     exp_map = {
-        "beginner": "Менее 6 месяцев",
-        "intermediate": "6 месяцев – 2 года",
-        "advanced": "Более 2 лет",
+        "beginner": t("exp_beginner"),
+        "intermediate": t("exp_intermediate"),
+        "advanced": t("exp_advanced"),
     }
 
     goal_str = goals_map.get(profile.goal, profile.goal)
     exp_str = exp_map.get(profile.experience, profile.experience)
-    lims_str = ", ".join(profile.limitations) if profile.limitations else "нет"
+    lims_str = ", ".join(profile.limitations) if profile.limitations else t("prof_lims_none")
 
     ex_lines = []
     for ex in exercises:
@@ -306,22 +308,15 @@ async def render_equipment_settings(
         ex_lines.append(f"• <b>{html.escape(ex.display_name)}</b>{group}")
 
     if not ex_lines:
-        ex_text = "<i>Библиотека пока пуста. Нажмите «➕ Добавить тренажёр» внизу, чтобы добавить тренажёры вашего зала.</i>"
+        ex_text = t("prof_lib_empty")
     else:
         ex_text = "\n".join(ex_lines)
 
     prefix = f"{feedback}\n\n" if feedback else ""
 
-    text = (
-        f"{prefix}⚙️ <b>Профиль и тренажёры</b>\n\n"
-        f"🎯 <b>Цель:</b> {goal_str}\n"
-        f"🏋️ <b>Опыт:</b> {exp_str}\n"
-        f"🗓 <b>Дней в неделю:</b> {profile.days_per_week}\n"
-        f"⏱ <b>Время на тренировку:</b> {profile.session_minutes} мин\n"
-        f"🛡 <b>Ограничения:</b> {lims_str}\n\n"
-        f"🏋️ <b>Тренажёры в библиотеке ({len(exercises)}):</b>\n"
-        f"{ex_text}\n\n"
-        "<i>Используйте кнопки под экраном для добавления, удаления тренажёров или настройки профиля.</i>"
+    text = t(
+        "prof_card", prefix=prefix, goal=goal_str, exp=exp_str, days=profile.days_per_week,
+        mins=profile.session_minutes, lims=lims_str, n=len(exercises), ex=ex_text,
     )
 
     reply_kb = get_equipment_reply_keyboard(lang=lang)
@@ -332,10 +327,31 @@ async def render_equipment_settings(
         await target_message.answer(text, parse_mode="HTML", reply_markup=reply_kb)
     else:
         await target_message.answer(text, parse_mode="HTML", reply_markup=reply_kb)
+    # The card above carries the docked reply keyboard, so the inline toggle travels in its own small message.
+    await target_message.answer(
+        t("rest_pref_hint"), reply_markup=get_rest_pref_keyboard(bool(profile.rest_timer))
+    )
+
+
+@router.callback_query(F.data.startswith("t2:tgl_rest:"))
+async def handle_toggle_rest_pref(callback: CallbackQuery, state: FSMContext):
+    """Flip the automatic rest timer preference."""
+    async with AsyncSessionLocal() as db:
+        profile = await db.get(TrainingProfile, callback.from_user.id)
+        if not profile:
+            await callback.answer(t("stale"))
+            return
+        profile.rest_timer = not profile.rest_timer
+        enabled = bool(profile.rest_timer)
+        await db.commit()
+    await callback.answer()
+    if callback.message:
+        with contextlib.suppress(TelegramBadRequest):
+            await callback.message.edit_reply_markup(reply_markup=get_rest_pref_keyboard(enabled))
 
 
 @router.message(F.text.in_(ADD_EQUIPMENT_TEXTS))
-@router.callback_query(F.data.startswith("t2:eq_add"))
+@router.callback_query(F.data.startswith("t2:eq_add:"))
 async def handle_add_equipment_start(event: Message | CallbackQuery, state: FSMContext):
     """Start equipment add flow."""
     if isinstance(event, CallbackQuery):
@@ -368,20 +384,18 @@ async def handle_add_equipment_start(event: Message | CallbackQuery, state: FSMC
         inline_rows.append(row)
     inline_rows.append([
         InlineKeyboardButton(
-            text="⬅️ К тренажёрам",
+            text=t("eq_back"),
             callback_data=make_cb("settings", 0, 0),
         )
     ])
     inline_kb = InlineKeyboardMarkup(inline_keyboard=inline_rows)
 
     text = (
-        "➕ <b>Добавление тренажёра</b>\n\n"
-        "Отправьте название тренажёра сообщением в чат (например, <i>Жим в Смите</i>, <i>Latzug</i>, <i>Грудной жим</i>), "
-        "либо выберите готовый из каталога:"
+        t("eq_add_title")
     )
 
     await target_message.answer(text, parse_mode="HTML", reply_markup=sub_reply_kb)
-    await target_message.answer("Быстрый выбор из каталога:", reply_markup=inline_kb)
+    await target_message.answer(t("eq_quick_pick"), reply_markup=inline_kb)
 
 
 @router.callback_query(F.data.startswith("t2:eq_add_cat:"))
@@ -415,7 +429,7 @@ async def handle_add_catalog_machine(callback: CallbackQuery, state: FSMContext)
         )
         await db.commit()
 
-    feedback = f"✅ Тренажёр «<b>{html.escape(disp_name)}</b>» добавлен!"
+    feedback = t("eq_added", name=html.escape(disp_name))
     await render_equipment_settings(callback, state, user_id=uid, feedback=feedback)
 
 
@@ -446,12 +460,12 @@ async def handle_add_custom_machine(message: Message, state: FSMContext):
         ex = await library.get_or_create_canonical(db, user_id=uid, name=text)
         await db.commit()
 
-    feedback = f"✅ Тренажёр «<b>{html.escape(ex.display_name)}</b>» добавлен в библиотеку!"
+    feedback = t("eq_added_lib", name=html.escape(ex.display_name))
     await render_equipment_settings(message, state, user_id=uid, feedback=feedback)
 
 
 @router.message(F.text.in_(DELETE_EQUIPMENT_TEXTS))
-@router.callback_query(F.data.startswith("t2:eq_del"))
+@router.callback_query(F.data.startswith("t2:eq_del:"))
 async def handle_delete_equipment_start(event: Message | CallbackQuery, state: FSMContext):
     """Start equipment delete flow."""
     if isinstance(event, CallbackQuery):
@@ -468,7 +482,7 @@ async def handle_delete_equipment_start(event: Message | CallbackQuery, state: F
         exercises = await library.get_user_library(db, uid)
 
     if not exercises:
-        msg = "<i>В вашей библиотеке пока нет активных тренажёров для удаления.</i>"
+        msg = t("eq_del_empty")
         reply_kb = get_equipment_reply_keyboard(lang=lang)
         await target_message.answer(msg, parse_mode="HTML", reply_markup=reply_kb)
         return
@@ -486,18 +500,17 @@ async def handle_delete_equipment_start(event: Message | CallbackQuery, state: F
         ])
     del_rows.append([
         InlineKeyboardButton(
-            text="⬅️ Готово",
+            text=t("eq_done"),
             callback_data=make_cb("settings", 0, 0),
         )
     ])
     del_kb = InlineKeyboardMarkup(inline_keyboard=del_rows)
 
     text = (
-        "🗑 <b>Удаление тренажёра</b>\n\n"
-        "Нажмите на тренажёр, который хотите убрать из библиотеки, либо отправьте его название текстом:"
+        t("eq_del_title")
     )
     await target_message.answer(text, parse_mode="HTML", reply_markup=sub_reply_kb)
-    await target_message.answer("Список активных тренажёров:", reply_markup=del_kb)
+    await target_message.answer(t("eq_del_list"), reply_markup=del_kb)
 
 
 @router.callback_query(F.data.startswith("t2:eq_del_id:"))
@@ -506,7 +519,7 @@ async def handle_delete_equipment_item(callback: CallbackQuery, state: FSMContex
     parts = callback.data.split(":")
     ex_id = int(parts[4]) if len(parts) > 4 and parts[4].isdigit() else None
     if not ex_id:
-        await callback.answer("Ошибка ID тренажёра")
+        await callback.answer(t("eq_id_err"))
         return
 
     uid = callback.from_user.id
@@ -515,17 +528,11 @@ async def handle_delete_equipment_item(callback: CallbackQuery, state: FSMContex
         await db.commit()
         remaining = await library.get_user_library(db, uid)
 
-    name = removed.display_name if removed else "тренажёр"
-    await callback.answer(f"🗑 Удалено: {name}")
+    name = removed.display_name if removed else t("eq_fallback")
+    await callback.answer(t("eq_removed_toast", name=name))
 
     if not remaining:
-        with contextlib.suppress(Exception):
-            await callback.message.edit_text(
-                "<i>Все тренажёры удалены из библиотеки.</i>\n\n"
-                "Вы можете добавить новые кнопкой «➕ Добавить тренажёр» под экраном.",
-                parse_mode="HTML",
-                reply_markup=None,
-            )
+        await edit_or_send(callback.message, t("eq_all_removed"))
         return
 
     del_rows = []
@@ -538,7 +545,7 @@ async def handle_delete_equipment_item(callback: CallbackQuery, state: FSMContex
         ])
     del_rows.append([
         InlineKeyboardButton(
-            text="⬅️ Готово",
+            text=t("eq_done"),
             callback_data=make_cb("settings", 0, 0),
         )
     ])
@@ -576,11 +583,11 @@ async def handle_delete_custom_machine(message: Message, state: FSMContext):
         await db.commit()
 
     if removed:
-        feedback = f"🗑 Тренажёр «<b>{html.escape(removed.display_name)}</b>» удалён из библиотеки."
+        feedback = t("eq_removed_msg", name=html.escape(removed.display_name))
         await render_equipment_settings(message, state, user_id=uid, feedback=feedback)
     else:
         await message.answer(
-            f"Тренажёр «{html.escape(text)}» не найден в списке активных. Проверьте название или нажмите кнопку выше.",
+            t("eq_not_found", name=html.escape(text)),
             parse_mode="HTML",
         )
 

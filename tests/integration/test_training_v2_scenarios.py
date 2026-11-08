@@ -335,7 +335,7 @@ async def test_equipment_reply_keyboard_and_add_delete_flow(db_session):
     await training_settings.render_equipment_settings(msg_open, state, user_id=uid)
 
     assert msg_open.answer.called
-    sent_call = msg_open.answer.call_args
+    sent_call = msg_open.answer.call_args_list[0]  # the card; a second message carries the inline rest toggle
     # Verify that bottom docked reply keyboard is sent
     reply_markup = sent_call.kwargs.get("reply_markup")
     assert reply_markup is not None
@@ -407,7 +407,7 @@ async def test_equipment_reply_keyboard_and_add_delete_flow(db_session):
     msg_hub_eq = fake_message(uid=uid, text="⚙️ Тренажёры")
     await hub.handle_settings(msg_hub_eq, state)
     assert msg_hub_eq.answer.called
-    eq_markup = msg_hub_eq.answer.call_args.kwargs.get("reply_markup")
+    eq_markup = msg_hub_eq.answer.call_args_list[0].kwargs.get("reply_markup")
     assert eq_markup is not None
     assert "➕ Добавить тренажёр" in [b.text for r in eq_markup.keyboard for b in r]
 

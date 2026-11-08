@@ -1,6 +1,8 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+import json
+from typing import Annotated, List
+
 from pydantic import Field, field_validator
-from typing import List
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str
@@ -13,7 +15,9 @@ class Settings(BaseSettings):
     OPENROUTER_REQUEST_TIMEOUT: float = Field(default=90.0, gt=0)
     OPENROUTER_MAX_TOKENS: int = Field(default=8192, ge=256)
     OPENROUTER_REASONING_TOKENS: int = Field(default=1024, ge=0)
-    ADMIN_USER_IDS: List[int] = Field(default_factory=list)
+    # NoDecode: pydantic-settings would otherwise json.loads this complex field before our validator runs, so
+    # "111,222" and "" would fail at import time. The validator below accepts all of: "", "1", "1,2", "[1,2]".
+    ADMIN_USER_IDS: Annotated[List[int], NoDecode] = Field(default_factory=list)
     DATABASE_URL: str
     WEBAPP_URL: str
     FORCE_IPV6: bool = False
@@ -32,9 +36,12 @@ class Settings(BaseSettings):
         if isinstance(v, int):
             return [v]
         if isinstance(v, str):
-            if not v.strip():
+            raw = v.strip()
+            if not raw:
                 return []
-            return [int(x.strip()) for x in v.split(",") if x.strip()]
+            if raw.startswith("["):  # JSON list form, supported before NoDecode
+                return [int(x) for x in json.loads(raw)]
+            return [int(x.strip()) for x in raw.split(",") if x.strip()]
         if isinstance(v, list):
             return [int(x) for x in v]
         return v

@@ -143,7 +143,7 @@ async def render_current_live_card(
         return
 
     # Determine current weight and reps
-    cw = temp_w if temp_w is not None else (current_set.weight_kg or current_set.target_weight_kg or 0.0)
+    cw = float(temp_w if temp_w is not None else (current_set.weight_kg or current_set.target_weight_kg or 0.0))
     cr = temp_r if temp_r is not None else (current_set.reps or current_set.target_reps or 10)
     await state.update_data(
         session_id=session.id,
@@ -155,7 +155,7 @@ async def render_current_live_card(
 
     # Format completed sets for this entry
     completed_sets = [
-        {"idx": s.idx, "weight_kg": s.weight_kg, "reps": s.reps}
+        {"idx": s.idx, "weight_kg": float(s.weight_kg) if s.weight_kg is not None else None, "reps": s.reps}
         for s in current_entry.workout_sets
         if s.completed
     ]
@@ -304,7 +304,7 @@ async def handle_adjust_weight_reps(callback: CallbackQuery, state: FSMContext):
     delta = float(parts[4])
 
     data = await state.get_data()
-    cw = data.get("current_w") or 0.0
+    cw = float(data.get("current_w") or 0.0)
     cr = data.get("current_r") or 10
 
     if action == "adj_w":

@@ -27,3 +27,33 @@ def test_parser_accepts_exercise_history_objects():
     idx = {"жим лёжа": _hist()}
     items = parse_line("жим лёжа +2.5", history_index=idx)
     assert items[0].sets[0].weight_kg == 62.5
+
+
+def test_adjust_weight_handler_accepts_decimal_state(monkeypatch):
+    """Postgres Numeric gives Decimal; the +/- weight button must not crash on it."""
+    import asyncio
+    from decimal import Decimal
+    from unittest.mock import AsyncMock, MagicMock
+
+    from src.handlers.training import live
+
+    state = MagicMock()
+    state.get_data = AsyncMock(return_value={"current_w": Decimal("40.00"), "current_r": 10})
+    state.update_data = AsyncMock()
+    callback = MagicMock()
+    callback.answer = AsyncMock()
+    callback.data = "t2:adj_w:1:0:2.5"
+    callback.message = None
+
+    class _Ctx:
+        async def __aenter__(self):
+            return MagicMock()
+
+        async def __aexit__(self, *a):
+            return False
+
+    monkeypatch.setattr(live, "AsyncSessionLocal", lambda: _Ctx())
+    monkeypatch.setattr(live.sessions, "get_session_full", AsyncMock(return_value=None))
+
+    asyncio.run(live.handle_adjust_weight_reps(callback, state))
+    state.update_data.assert_awaited_with(current_w=42.5)

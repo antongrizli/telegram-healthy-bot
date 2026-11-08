@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from src.utils.training_locales import t
 from src.database.models import (
     CanonicalExercise,
     WorkoutSession,
@@ -109,7 +110,7 @@ async def build_session_summary(
                         past_best_e1rm = pe1
 
             if past_best_e1rm > 0 and best_e1rm > past_best_e1rm:
-                records.append(f"{ex_name}: e1RM {best_e1rm:.1f} кг (было {past_best_e1rm:.1f})")
+                records.append(t("sum_record_line", name=ex_name, new=best_e1rm, old=past_best_e1rm))
 
         # Next recommended target for next time
         top_w = max(weights_list) if weights_list else 0.0
@@ -134,9 +135,9 @@ async def build_session_summary(
         if target.weight and target.weight > top_w:
             target_str = f"🎯 {format_weight(target.weight)} × {target.reps}"
         elif target.weight:
-            target_str = f"🎯 держим {format_weight(target.weight)} × {target.reps}"
+            target_str = t("sum_hold", w=format_weight(target.weight), r=target.reps)
         else:
-            target_str = f"🎯 {target.reps} повт"
+            target_str = t("sum_reps_only", r=target.reps)
 
         load_str = f"{n_sets}×{med_r} @ {format_weight(top_w)}" if top_w > 0 else f"{n_sets}×{med_r}"
         exercise_summaries.append({

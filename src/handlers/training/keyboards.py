@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from src.services.training.summary import format_weight
+from src.utils.training_locales import group_label, t
 
 
 def make_cb(action: str, session_id: int = 0, rev: int = 0, arg: str = "") -> str:
@@ -21,7 +22,7 @@ def get_hub_keyboard(
     session_id: int = 0,
     rev: int = 0,
     is_empty_library: bool = False,
-    rec_focus_str: str = "Ноги",
+    rec_focus_str: str = "",
     rec_mins: int = 45,
     active_exercise: str = "",
     active_progress: str = "",
@@ -30,24 +31,24 @@ def get_hub_keyboard(
     rows: List[List[InlineKeyboardButton]] = []
 
     if is_active:
-        text = f"⏯ Продолжить: {active_exercise[:12]} · {active_progress}"
+        text = t("kb_continue", ex=active_exercise[:12], prog=active_progress)
         rows.append([InlineKeyboardButton(text=text, callback_data=make_cb("resume", session_id, rev))])
     elif is_empty_library:
-        rows.append([InlineKeyboardButton(text="✍️ Записать первую тренировку", callback_data=make_cb("log_first", 0, 0))])
+        rows.append([InlineKeyboardButton(text=t("kb_log_first"), callback_data=make_cb("log_first", 0, 0))])
     else:
-        text = f"▶️ Начать: {rec_focus_str} · ≈{rec_mins} мин"
+        text = t("kb_start", focus=rec_focus_str or group_label("legs"), mins=rec_mins)
         rows.append([InlineKeyboardButton(text=text, callback_data=make_cb("start_rec", session_id, rev))])
 
     rows.append([
-        InlineKeyboardButton(text="🎯 Другая цель", callback_data=make_cb("goal_menu", 0, 0)),
-        InlineKeyboardButton(text="🔁 Повторить прошлую", callback_data=make_cb("repeat_menu", 0, 0)),
+        InlineKeyboardButton(text=t("kb_other_goal"), callback_data=make_cb("goal_menu", 0, 0)),
+        InlineKeyboardButton(text=t("kb_repeat"), callback_data=make_cb("repeat_menu", 0, 0)),
     ])
     rows.append([
-        InlineKeyboardButton(text="✍️ Записать выполненное", callback_data=make_cb("write_done", 0, 0)),
+        InlineKeyboardButton(text=t("kb_write_done"), callback_data=make_cb("write_done", 0, 0)),
     ])
     rows.append([
-        InlineKeyboardButton(text="📈 Прогресс", callback_data=make_cb("progress", 0, 0)),
-        InlineKeyboardButton(text="⚙️ Тренажёры", callback_data=make_cb("settings", 0, 0)),
+        InlineKeyboardButton(text=t("kb_progress"), callback_data=make_cb("progress", 0, 0)),
+        InlineKeyboardButton(text=t("kb_equipment"), callback_data=make_cb("settings", 0, 0)),
     ])
 
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -66,9 +67,9 @@ def get_goal_picker_keyboard(
         return InlineKeyboardButton(text=f"{prefix}{name}", callback_data=make_cb("tgl_m", 0, 0, key))
 
     rows: List[List[InlineKeyboardButton]] = [
-        [_btn("🪵 Спина", "back"), _btn("🛡 Грудь", "chest"), _btn("🦵 Ноги", "legs")],
-        [_btn("💪 Руки", "arms"), _btn("⚡ Плечи", "shoulders"), _btn("🧱 Пресс", "abs")],
-        [_btn("🔥 Всё тело", "fullbody"), _btn("🏃 Кардио", "cardio")],
+        [_btn(group_label("back"), "back"), _btn(group_label("chest"), "chest"), _btn(group_label("legs"), "legs")],
+        [_btn(group_label("arms"), "arms"), _btn(group_label("shoulders"), "shoulders"), _btn(group_label("abs"), "abs")],
+        [_btn(group_label("fullbody"), "fullbody"), _btn(group_label("cardio"), "cardio")],
     ]
 
     # Time row: 30, 45, 60, 90
@@ -86,13 +87,10 @@ def get_goal_picker_keyboard(
         energy_row.append(InlineKeyboardButton(text=label, callback_data=make_cb("set_en", 0, 0, en_key)))
     rows.append(energy_row)
 
-    # Manual picker
-    rows.append([InlineKeyboardButton(text="🧩 Выбрать тренажёры вручную", callback_data=make_cb("manual_pick", 0, 0))])
-
     # Action row
     rows.append([
-        InlineKeyboardButton(text="🚀 Составить план", callback_data=make_cb("make_plan", 0, 0)),
-        InlineKeyboardButton(text="⬅️ Назад", callback_data=make_cb("hub", 0, 0)),
+        InlineKeyboardButton(text=t("kb_make_plan"), callback_data=make_cb("make_plan", 0, 0)),
+        InlineKeyboardButton(text=t("kb_back"), callback_data=make_cb("hub", 0, 0)),
     ])
 
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -104,14 +102,10 @@ def get_plan_card_keyboard(
 ) -> InlineKeyboardMarkup:
     """Plan card keyboard matching Section 3.4."""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="▶️ Начать", callback_data=make_cb("start_plan", plan_id, rev))],
+        [InlineKeyboardButton(text=t("kb_start_plan"), callback_data=make_cb("start_plan", plan_id, rev))],
         [
-            InlineKeyboardButton(text="🔄 Заменить", callback_data=make_cb("swap_menu", plan_id, rev)),
-            InlineKeyboardButton(text="⏱ Длина", callback_data=make_cb("resize_menu", plan_id, rev)),
-        ],
-        [
-            InlineKeyboardButton(text="💾 В шаблон", callback_data=make_cb("save_tmpl", plan_id, rev)),
-            InlineKeyboardButton(text="⬅️ Назад", callback_data=make_cb("hub", 0, 0)),
+            InlineKeyboardButton(text=t("kb_length"), callback_data=make_cb("resize_menu", plan_id, rev)),
+            InlineKeyboardButton(text=t("kb_back"), callback_data=make_cb("hub", 0, 0)),
         ],
     ])
 
@@ -124,40 +118,53 @@ def get_live_logging_keyboard(
     weight_step: float = 2.5,
     is_cardio: bool = False,
     duration_mins: int = 8,
+    rest_sec: int = 90,
 ) -> InlineKeyboardMarkup:
     """Live exercise set logging keyboard matching Section 3.5."""
     rows: List[List[InlineKeyboardButton]] = []
 
     if is_cardio:
-        rows.append([InlineKeyboardButton(text=f"✅ {duration_mins} мин", callback_data=make_cb("ok_set", session_id, rev))])
+        rows.append([InlineKeyboardButton(text=t("kb_done_min", n=duration_mins), callback_data=make_cb("ok_set", session_id, rev))])
         rows.append([
-            InlineKeyboardButton(text="−2 мин", callback_data=make_cb("adj_c", session_id, rev, "-2")),
-            InlineKeyboardButton(text="+2 мин", callback_data=make_cb("adj_c", session_id, rev, "+2")),
-            InlineKeyboardButton(text="✍️ Другое", callback_data=make_cb("custom_live", session_id, rev)),
+            InlineKeyboardButton(text=t("kb_min_delta", d="−2"), callback_data=make_cb("adj_c", session_id, rev, "-2")),
+            InlineKeyboardButton(text=t("kb_min_delta", d="+2"), callback_data=make_cb("adj_c", session_id, rev, "+2")),
+            InlineKeyboardButton(text=t("kb_other"), callback_data=make_cb("custom_live", session_id, rev)),
         ])
     else:
         w_str = format_weight(current_weight)
-        btn_text = f"✅ {w_str} × {current_reps}" if current_weight else f"✅ {current_reps} повт"
+        btn_text = f"✅ {w_str} × {current_reps}" if current_weight else t("kb_done_reps", reps=current_reps)
         rows.append([InlineKeyboardButton(text=btn_text, callback_data=make_cb("ok_set", session_id, rev))])
 
         step_str = format_weight(weight_step)
         rows.append([
-            InlineKeyboardButton(text=f"−{step_str} кг", callback_data=make_cb("adj_w", session_id, rev, f"-{step_str}")),
-            InlineKeyboardButton(text=f"+{step_str} кг", callback_data=make_cb("adj_w", session_id, rev, f"+{step_str}")),
-            InlineKeyboardButton(text="−1 повт", callback_data=make_cb("adj_r", session_id, rev, "-1")),
-            InlineKeyboardButton(text="+1 повт", callback_data=make_cb("adj_r", session_id, rev, "+1")),
+            InlineKeyboardButton(text=t("kb_kg_delta", d=f"−{step_str}"), callback_data=make_cb("adj_w", session_id, rev, f"-{step_str}")),
+            InlineKeyboardButton(text=t("kb_kg_delta", d=f"+{step_str}"), callback_data=make_cb("adj_w", session_id, rev, f"+{step_str}")),
+            InlineKeyboardButton(text=t("kb_rep_delta", d="−1"), callback_data=make_cb("adj_r", session_id, rev, "-1")),
+            InlineKeyboardButton(text=t("kb_rep_delta", d="+1"), callback_data=make_cb("adj_r", session_id, rev, "+1")),
         ])
 
     rows.append([
-        InlineKeyboardButton(text="✍️ Другое", callback_data=make_cb("custom_live", session_id, rev)),
-        InlineKeyboardButton(text="⏭ Пропустить", callback_data=make_cb("skip_ex", session_id, rev)),
+        InlineKeyboardButton(text=t("kb_other"), callback_data=make_cb("custom_live", session_id, rev)),
+        InlineKeyboardButton(text=t("kb_skip"), callback_data=make_cb("skip_ex", session_id, rev)),
     ])
     rows.append([
-        InlineKeyboardButton(text="⏸ Отдых 90 с", callback_data=make_cb("rest_timer", session_id, rev, "90")),
-        InlineKeyboardButton(text="🏁 Завершить", callback_data=make_cb("finish_live", session_id, rev)),
+        InlineKeyboardButton(text=t("kb_rest", n=rest_sec), callback_data=make_cb("rest_timer", session_id, rev, str(rest_sec))),
+        InlineKeyboardButton(text=t("kb_finish"), callback_data=make_cb("finish_live", session_id, rev)),
+    ])
+    rows.append([
+        InlineKeyboardButton(text=t("kb_undo_set"), callback_data=make_cb("undo_set", session_id, rev)),
+        InlineKeyboardButton(text=t("kb_abort"), callback_data=make_cb("abort_live", session_id, rev)),
     ])
 
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_abort_confirm_keyboard(session_id: int, rev: int) -> InlineKeyboardMarkup:
+    """Confirm discarding a live workout."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=t("kb_abort_yes"), callback_data=make_cb("abort_yes", session_id, rev))],
+        [InlineKeyboardButton(text=t("kb_abort_no"), callback_data=make_cb("resume", session_id, rev))],
+    ])
 
 
 def get_live_feeling_keyboard(
@@ -167,9 +174,9 @@ def get_live_feeling_keyboard(
     """Prompt user feeling after the last set of an exercise."""
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="🟢 Легко", callback_data=make_cb("feel_ex", session_id, rev, "easy")),
-            InlineKeyboardButton(text="🟡 Норм", callback_data=make_cb("feel_ex", session_id, rev, "normal")),
-            InlineKeyboardButton(text="🔴 Тяжело", callback_data=make_cb("feel_ex", session_id, rev, "hard")),
+            InlineKeyboardButton(text=t("feel_easy"), callback_data=make_cb("feel_ex", session_id, rev, "easy")),
+            InlineKeyboardButton(text=t("feel_normal"), callback_data=make_cb("feel_ex", session_id, rev, "normal")),
+            InlineKeyboardButton(text=t("feel_hard"), callback_data=make_cb("feel_ex", session_id, rev, "hard")),
         ],
     ])
 
@@ -188,11 +195,10 @@ def get_draft_keyboard(
 
     rows = [
         feel_row,
-        [InlineKeyboardButton(text="💾 Сохранить", callback_data=make_cb("save_draft", session_id, rev))],
+        [InlineKeyboardButton(text=t("kb_save"), callback_data=make_cb("save_draft", session_id, rev))],
         [
-            InlineKeyboardButton(text="✏️ Исправить строку", callback_data=make_cb("fix_line", session_id, rev)),
-            InlineKeyboardButton(text="↩️ Убрать последнее", callback_data=make_cb("undo_draft", session_id, rev)),
-            InlineKeyboardButton(text="❌ Отмена", callback_data=make_cb("cancel_draft", session_id, rev)),
+            InlineKeyboardButton(text=t("kb_undo"), callback_data=make_cb("undo_draft", session_id, rev)),
+            InlineKeyboardButton(text=t("kb_cancel"), callback_data=make_cb("cancel_draft", session_id, rev)),
         ],
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -214,11 +220,10 @@ def get_repeat_checklist_keyboard(
         rows.append([InlineKeyboardButton(text=btn_text[:40], callback_data=make_cb("rep_tgl", session_id, rev, str(idx)))])
 
     rows.append([
-        InlineKeyboardButton(text="💾 Сохранить отмеченные", callback_data=make_cb("rep_save", session_id, rev)),
-        InlineKeyboardButton(text="▶️ По подходам", callback_data=make_cb("rep_live", session_id, rev)),
+        InlineKeyboardButton(text=t("kb_save_checked"), callback_data=make_cb("rep_save", session_id, rev)),
     ])
     rows.append([
-        InlineKeyboardButton(text="⬅️ Назад", callback_data=make_cb("hub", 0, 0)),
+        InlineKeyboardButton(text=t("kb_back"), callback_data=make_cb("hub", 0, 0)),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -227,7 +232,13 @@ def get_summary_keyboard(session_id: int = 0) -> InlineKeyboardMarkup:
     """Summary card buttons matching Section 3.8."""
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="🏋️ В меню", callback_data=make_cb("hub", 0, 0)),
-            InlineKeyboardButton(text="✏️ Исправить", callback_data=make_cb("fix_summary", session_id, 0)),
+            InlineKeyboardButton(text=t("kb_to_menu"), callback_data=make_cb("hub", 0, 0)),
         ]
     ])
+
+
+def get_rest_pref_keyboard(enabled: bool) -> InlineKeyboardMarkup:
+    """Single toggle for the automatic rest timer."""
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=t("rest_pref_on" if enabled else "rest_pref_off"), callback_data=make_cb("tgl_rest", 0, 0)),
+    ]])

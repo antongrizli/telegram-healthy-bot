@@ -9,8 +9,10 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from src.utils.training_locales import current_lang, group_label, t
 from src.database.connection import AsyncSessionLocal
 from src.database.models import TrainingPlan, TrainingProfile
+from src.handlers.training.ui import edit_or_send
 from src.handlers.training.keyboards import get_goal_picker_keyboard, get_plan_card_keyboard, make_cb
 from src.handlers.training.states import TrainingFSM
 from src.services.training import history, library, llm, planner, render
@@ -35,7 +37,7 @@ async def open_goal_menu(callback: CallbackQuery, state: FSMContext):
     card_html = render.render_goal_picker(selected_muscles=["back"], minutes=45, energy="normal")
     kb = get_goal_picker_keyboard(selected_muscles=["back"], current_mins=45, current_energy="normal")
     if callback.message:
-        await callback.message.edit_text(card_html, parse_mode="HTML", reply_markup=kb)
+        await edit_or_send(callback.message, card_html, parse_mode="HTML", reply_markup=kb)
 
 
 @router.callback_query(F.data.startswith("t2:tgl_m:"))
@@ -60,8 +62,7 @@ async def toggle_goal_muscle(callback: CallbackQuery, state: FSMContext):
     card_html = render.render_goal_picker(selected, minutes=mins, energy=en, understood_note=note)
     kb = get_goal_picker_keyboard(selected, current_mins=mins, current_energy=en)
     if callback.message:
-        with contextlib.suppress(Exception):
-            await callback.message.edit_text(card_html, parse_mode="HTML", reply_markup=kb)
+        await edit_or_send(callback.message, card_html, parse_mode="HTML", reply_markup=kb)
 
 
 @router.callback_query(F.data.startswith("t2:set_time:"))
@@ -80,8 +81,7 @@ async def set_goal_time(callback: CallbackQuery, state: FSMContext):
     card_html = render.render_goal_picker(selected, minutes=mins, energy=en, understood_note=note)
     kb = get_goal_picker_keyboard(selected, current_mins=mins, current_energy=en)
     if callback.message:
-        with contextlib.suppress(Exception):
-            await callback.message.edit_text(card_html, parse_mode="HTML", reply_markup=kb)
+        await edit_or_send(callback.message, card_html, parse_mode="HTML", reply_markup=kb)
 
 
 @router.callback_query(F.data.startswith("t2:set_en:"))
@@ -100,8 +100,7 @@ async def set_goal_energy(callback: CallbackQuery, state: FSMContext):
     card_html = render.render_goal_picker(selected, minutes=mins, energy=en, understood_note=note)
     kb = get_goal_picker_keyboard(selected, current_mins=mins, current_energy=en)
     if callback.message:
-        with contextlib.suppress(Exception):
-            await callback.message.edit_text(card_html, parse_mode="HTML", reply_markup=kb)
+        await edit_or_send(callback.message, card_html, parse_mode="HTML", reply_markup=kb)
 
 
 @router.message(TrainingFSM.goal)
@@ -119,11 +118,11 @@ async def handle_goal_text_input(message: Message, state: FSMContext):
     # Format feedback string
     parts = []
     if focus_obj.accent:
-        parts.append(f"{focus_obj.accent} (упор)")
+        parts.append(t("note_accent", x=focus_obj.accent))
     elif focus_obj.primary_muscles:
         parts.append(", ".join(focus_obj.primary_muscles[:3]))
     if focus_obj.limitations:
-        parts.append(f"исключить: {', '.join(focus_obj.limitations)}")
+        parts.append(t("note_exclude", x=", ".join(focus_obj.limitations)))
     note_str = "; ".join(parts) if parts else text
 
     # Update state
@@ -164,7 +163,7 @@ async def handle_goal_text_input(message: Message, state: FSMContext):
 @router.callback_query(F.data.startswith("t2:make_plan"))
 async def handle_generate_plan(callback: CallbackQuery, state: FSMContext):
     """Generate plan, polish cues with LLM, store TrainingPlan in DB, and show plan card."""
-    await callback.answer("Составляю план…")
+    await callback.answer(t("plan_building"))
     uid = callback.from_user.id
     data = await state.get_data()
     selected_muscles = data.get("selected_muscles") or ["back"]
@@ -217,8 +216,8 @@ async def handle_generate_plan(callback: CallbackQuery, state: FSMContext):
     )
 
     # 2. Polish with LLM (cues & rationale)
-    default_rationale = f"Фокус на {', '.join(selected_muscles[:2])}, время ≈{mins} мин"
-    plan_items, final_rationale = await llm.polish_plan(plan_items, default_rationale, lang="ru")
+    default_rationale = t("plan_rationale", focus=", ".join(group_label(m) for m in selected_muscles[:2]), mins=mins)
+    plan_items, final_rationale = await llm.polish_plan(plan_items, default_rationale, lang=current_lang.get())
 
     # 3. Store TrainingPlan in database
     now = datetime.now(UTC).replace(tzinfo=None)
@@ -248,7 +247,7 @@ async def handle_generate_plan(callback: CallbackQuery, state: FSMContext):
     await state.update_data(plan_id=plan_record.id)
 
     if callback.message:
-        await callback.message.edit_text(card_html, parse_mode="HTML", reply_markup=kb)
+        await edit_or_send(callback.message, card_html, parse_mode="HTML", reply_markup=kb)
 
 
 @router.callback_query(F.data.startswith("t2:resize_menu:"))
@@ -270,7 +269,7 @@ async def handle_resize_plan(callback: CallbackQuery, state: FSMContext):
         plan.revision += 1
         await db.flush()
 
-    card_html = render.render_plan_card(resized, focus_name="План", minutes=30, rationale=plan.rationale)
+    card_html = render.render_plan_card(resized, focus_name=t("plan_word"), minutes=30, rationale=plan.rationale)
     kb = get_plan_card_keyboard(plan.id, plan.revision)
     if callback.message:
-        await callback.message.edit_text(card_html, parse_mode="HTML", reply_markup=kb)
+        await edit_or_send(callback.message, card_html, parse_mode="HTML", reply_markup=kb)

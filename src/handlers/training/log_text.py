@@ -8,8 +8,10 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from src.utils.training_locales import t
 from src.database.connection import AsyncSessionLocal
 from src.database.models import WorkoutSession, WorkoutSessionEntry
+from src.handlers.training.ui import edit_or_send
 from src.handlers.training.keyboards import get_draft_keyboard, get_summary_keyboard, make_cb
 from src.handlers.training.states import TrainingFSM
 from src.services.training import library, llm, parser, render, sessions, summary
@@ -28,21 +30,15 @@ async def start_text_logging(callback: CallbackQuery, state: FSMContext):
         session = await sessions.get_or_create_draft(db, uid, source="text", anchor_message_id=callback.message.message_id)
 
     prompt_text = (
-        "📝 <b>Запись тренировки</b>\n\n"
-        "Отправьте выполненные упражнения одним списком:\n\n"
-        "<i>Например:</i>\n"
-        "• <code>Brustpresse 35кг x 4 подхода по 15 раз</code>\n"
-        "• <code>Latzug 40кг 3 подхода по 15 раз</code>\n"
-        "• <code>Ellipsentrainer 20 минут кросс тренинг</code>\n\n"
-        "Я разберу каждый подход и покажу черновик перед сохранением."
+        t("log_prompt")
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⬅️ Отмена", callback_data=make_cb("hub", 0, 0))]
+        [InlineKeyboardButton(text=t("kb_cancel_back"), callback_data=make_cb("hub", 0, 0))]
     ])
     await state.set_state(TrainingFSM.draft)
     await state.update_data(session_id=session.id)
     if callback.message:
-        await callback.message.edit_text(prompt_text, parse_mode="HTML", reply_markup=kb)
+        await edit_or_send(callback.message, prompt_text, parse_mode="HTML", reply_markup=kb)
 
 
 @router.message(TrainingFSM.draft)
@@ -114,8 +110,8 @@ async def handle_draft_feeling_toggle(callback: CallbackQuery, state: FSMContext
 
     async with AsyncSessionLocal() as db:
         session = await db.get(WorkoutSession, session_id)
-        if not session or session.revision != rev:
-            await callback.answer("Экран устарел, обновил", show_alert=False)
+        if not session or session.user_id != callback.from_user.id or session.revision != rev:
+            await callback.answer(t("stale"), show_alert=False)
             return
 
         session.feeling = feel_val
@@ -146,8 +142,7 @@ async def handle_draft_feeling_toggle(callback: CallbackQuery, state: FSMContext
     card_html = render.render_draft_card(items, feeling=feel_val)
     kb = get_draft_keyboard(session.id, session.revision, current_feeling=feel_val)
     if callback.message:
-        with contextlib.suppress(Exception):
-            await callback.message.edit_text(card_html, parse_mode="HTML", reply_markup=kb)
+        await edit_or_send(callback.message, card_html, parse_mode="HTML", reply_markup=kb)
 
 
 @router.callback_query(F.data.startswith("t2:save_draft:"))
@@ -159,21 +154,21 @@ async def handle_save_draft(callback: CallbackQuery, state: FSMContext):
 
     async with AsyncSessionLocal() as db:
         session = await db.get(WorkoutSession, session_id)
-        if not session or session.revision != rev:
-            await callback.answer("Экран устарел", show_alert=True)
+        if not session or session.user_id != callback.from_user.id or session.revision != rev:
+            await callback.answer(t("stale_alert"), show_alert=True)
             return
 
         feeling = session.feeling or "normal"
-        finished_session = await sessions.finish_session(db, session_id, rev, feeling=feeling)
+        finished_session = await sessions.finish_session(db, session_id, rev, feeling=feeling, user_id=callback.from_user.id)
         summary_data = await summary.build_session_summary(db, finished_session)
 
-    await callback.answer("Сохранено ✓")
+    await callback.answer(t("saved"))
     await state.clear()
 
     summary_html = render.render_summary_card(summary_data)
     kb = get_summary_keyboard(session_id)
     if callback.message:
-        await callback.message.edit_text(summary_html, parse_mode="HTML", reply_markup=kb)
+        await edit_or_send(callback.message, summary_html, parse_mode="HTML", reply_markup=kb)
 
 
 @router.callback_query(F.data.startswith("t2:undo_draft:"))
@@ -184,9 +179,10 @@ async def handle_undo_last_draft_item(callback: CallbackQuery, state: FSMContext
     rev = int(parts[3])
 
     async with AsyncSessionLocal() as db:
-        session = await db.get(WorkoutSession, session_id)
+        # entries must be eagerly loaded: a lazy load on an async session raises MissingGreenlet
+        session = await sessions.get_session_full(db, session_id, user_id=callback.from_user.id)
         if not session or session.revision != rev:
-            await callback.answer("Экран устарел")
+            await callback.answer(t("stale_alert"))
             return
 
         if session.entries:
@@ -197,7 +193,7 @@ async def handle_undo_last_draft_item(callback: CallbackQuery, state: FSMContext
 
         session = await sessions.get_or_create_draft(db, callback.from_user.id)
 
-    await callback.answer("Удалено")
+    await callback.answer(t("removed"))
     # Redraw
     items = []
     for idx, entry in enumerate(session.entries, 1):
@@ -214,7 +210,7 @@ async def handle_undo_last_draft_item(callback: CallbackQuery, state: FSMContext
     card_html = render.render_draft_card(items, feeling=session.feeling or "normal")
     kb = get_draft_keyboard(session.id, session.revision, current_feeling=session.feeling or "normal")
     if callback.message:
-        await callback.message.edit_text(card_html, parse_mode="HTML", reply_markup=kb)
+        await edit_or_send(callback.message, card_html, parse_mode="HTML", reply_markup=kb)
 
 
 @router.callback_query(F.data.startswith("t2:cancel_draft:"))
@@ -225,9 +221,9 @@ async def handle_cancel_draft(callback: CallbackQuery, state: FSMContext):
     rev = int(parts[3])
 
     async with AsyncSessionLocal() as db:
-        await sessions.cancel_session(db, session_id, rev)
+        await sessions.cancel_session(db, session_id, rev, user_id=callback.from_user.id)
 
-    await callback.answer("Черновик отменён")
+    await callback.answer(t("draft_cancelled"))
     from src.handlers.training.hub import render_and_send_hub
     if callback.message:
         await render_and_send_hub(callback.message, callback.from_user.id, state, edit=True)

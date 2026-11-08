@@ -11,6 +11,8 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from src.handlers.training.ui import edit_or_send
+from src.utils.training_locales import group_label, t, weekdays
 from src.database.connection import AsyncSessionLocal
 from src.database.models import CanonicalExercise, TrainingPlan, TrainingProfile, User
 from src.handlers.training.keyboards import (
@@ -46,17 +48,17 @@ async def render_and_send_hub(
 
     user_lang = db_user.language if db_user and db_user.language else "ru"
     weekly_target = profile.days_per_week if profile else 3
-    last_str = "Пока нет"
+    last_str = t("hub_never")
     if last_session and last_session.performed_at:
-        days = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
+        days = weekdays()
         day_name = days[last_session.performed_at.weekday()]
         date_str = last_session.performed_at.strftime("%d.%m")
         n_ex = len(last_session.entries)
-        last_str = f"{day_name} {date_str} · {n_ex} упр."
+        last_str = f"{day_name} {date_str} · {t('n_ex', n=n_ex)}"
 
     # Focus recommendation
     rec_group, rec_reason = recovery.suggest_focus(profile, muscle_stats)
-    rec_label = recovery.GROUP_LABELS.get(rec_group, rec_group)
+    rec_label = group_label(rec_group)
     rec_str = f"{rec_label} ({rec_reason})" if not active_session else None
 
     is_active = active_session is not None
@@ -64,8 +66,17 @@ async def render_and_send_hub(
     active_prog = ""
 
     if active_session and active_session.entries:
-        active_ex = active_session.entries[0].raw_input
-        active_prog = f"1/{len(active_session.entries)}"
+        entries = sorted(active_session.entries, key=lambda e: e.position)
+        pos, current = next(
+            (
+                (i, e)
+                for i, e in enumerate(entries, 1)
+                if e.status != "skipped" and any(not s.completed for s in e.workout_sets)
+            ),
+            (len(entries), entries[-1]),
+        )
+        active_ex = current.canonical_exercise.display_name if current.canonical_exercise else current.raw_input
+        active_prog = f"{pos}/{len(entries)}"
 
     text = render.render_hub(
         last_session_str=last_str,
@@ -215,7 +226,7 @@ async def handle_start_workout(event: Message | CallbackQuery, state: FSMContext
         await db.commit()
         await db.refresh(plan_record)
 
-    rec_label = recovery.GROUP_LABELS.get(rec_group, rec_group).capitalize()
+    rec_label = group_label(rec_group)
     card_html = render.render_plan_card(plan_items, focus_name=rec_label, minutes=mins, rationale=rec_reason)
     kb = get_plan_card_keyboard(plan_record.id, plan_record.revision)
 
@@ -223,7 +234,7 @@ async def handle_start_workout(event: Message | CallbackQuery, state: FSMContext
     await state.update_data(plan_id=plan_record.id)
 
     if isinstance(event, CallbackQuery) and event.message:
-        await event.message.edit_text(card_html, parse_mode="HTML", reply_markup=kb)
+        await edit_or_send(event.message, card_html, parse_mode="HTML", reply_markup=kb)
     else:
         sent = await target_message.answer(card_html, parse_mode="HTML", reply_markup=kb)
         await state.update_data(anchor_message_id=sent.message_id)
@@ -292,7 +303,7 @@ async def handle_repeat_from_reply(message: Message, state: FSMContext):
     async with AsyncSessionLocal() as db:
         last_session = await history.get_last_finished_session(db, uid)
     if not last_session or not last_session.entries:
-        await message.answer("У вас ещё нет сохранённых тренировок")
+        await message.answer(t("rep_none"))
         return
 
     items_state = []
@@ -304,7 +315,7 @@ async def handle_repeat_from_reply(message: Message, state: FSMContext):
         r = working_sets[0].reps if working_sets else 0
         dur = working_sets[0].duration_sec if working_sets else None
         if dur:
-            load_str = f"{int(dur / 60)} мин"
+            load_str = f"{int(dur / 60)} {t('unit_min')}"
         elif w:
             w_str = f"{w:.1f}".rstrip("0").rstrip(".")
             load_str = f"{n_sets}×{r} @ {w_str}"
@@ -330,7 +341,7 @@ async def handle_repeat_from_reply(message: Message, state: FSMContext):
     await state.set_state(TrainingFSM.repeat)
     await state.update_data(repeat_items=items_state)
     date_str = last_session.performed_at.strftime("%d.%m") if last_session.performed_at else ""
-    text = f"🔁 <b>Как в прошлый раз ({date_str})</b>\n\nОтметьте выполненные упражнения:"
+    text = t("rep_title_date", date=date_str)
     kb = get_repeat_checklist_keyboard(items_state)
     sent = await message.answer(text, parse_mode="HTML", reply_markup=kb)
     await state.update_data(anchor_message_id=sent.message_id)
@@ -351,17 +362,9 @@ async def handle_write_from_reply(message: Message, state: FSMContext):
     uid = message.from_user.id
     async with AsyncSessionLocal() as db:
         session = await sessions.get_or_create_draft(db, uid, source="text")
-    prompt_text = (
-        "📝 <b>Запись тренировки</b>\n\n"
-        "Отправьте выполненные упражнения одним списком:\n\n"
-        "<i>Например:</i>\n"
-        "• <code>Brustpresse 35кг x 4 подхода по 15 раз</code>\n"
-        "• <code>Latzug 40кг 3 подхода по 15 раз</code>\n"
-        "• <code>Ellipsentrainer 20 минут кросс тренинг</code>\n\n"
-        "Я разберу каждый подход и покажу черновик перед сохранением."
-    )
+    prompt_text = t("log_prompt")
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⬅️ Отмена", callback_data=make_cb("hub", 0, 0))]
+        [InlineKeyboardButton(text=t("kb_cancel_back"), callback_data=make_cb("hub", 0, 0))]
     ])
     await state.set_state(TrainingFSM.draft)
     await state.update_data(session_id=session.id)
@@ -387,13 +390,13 @@ async def handle_progress_from_reply(message: Message, state: FSMContext):
         last_session = await history.get_last_finished_session(db, uid)
 
     lines = [
-        "📈 <b>История и прогресс тренировок</b>\n",
-        f"🔥 Тренировок на этой неделе: <b>{weekly_count}</b>",
+        t("prog_title"),
+        t("prog_week", n=weekly_count),
     ]
 
     if last_session and last_session.entries:
         date_str = last_session.performed_at.strftime("%d.%m.%Y") if last_session.performed_at else ""
-        lines.append(f"\n<b>Последняя тренировка ({date_str}):</b>")
+        lines.append(t("prog_last", date=date_str))
         for entry in last_session.entries[:6]:
             ex_name = entry.canonical_exercise.display_name if entry.canonical_exercise else entry.raw_input
             w_sets = [s for s in entry.workout_sets if s.set_type == "working"] or entry.workout_sets
@@ -402,10 +405,10 @@ async def handle_progress_from_reply(message: Message, state: FSMContext):
             r = w_sets[0].reps if w_sets and w_sets[0].reps else 0
             dur = w_sets[0].duration_sec if w_sets and w_sets[0].duration_sec else 0
             if dur:
-                lines.append(f"• {html.escape(ex_name)}: {int(dur/60)} мин")
+                lines.append(f"• {html.escape(ex_name)}: {int(dur/60)} {t('unit_min')}")
             elif w:
                 w_str = f"{w:.1f}".rstrip("0").rstrip(".")
-                lines.append(f"• {html.escape(ex_name)}: {n_sets}×{r} @ {w_str} кг")
+                lines.append(f"• {html.escape(ex_name)}: {n_sets}×{r} @ {w_str} {t('unit_kg')}")
             else:
                 lines.append(f"• {html.escape(ex_name)}: {n_sets}×{r}")
 
@@ -413,8 +416,8 @@ async def handle_progress_from_reply(message: Message, state: FSMContext):
     from aiogram.types import WebAppInfo
     rows = []
     if settings.WEBAPP_URL:
-        rows.append([InlineKeyboardButton(text="📊 Открыть графики в WebApp", web_app=WebAppInfo(url=f"{settings.WEBAPP_URL}?tab=workouts"))])
-    rows.append([InlineKeyboardButton(text="⬅️ В хаб", callback_data=make_cb("hub", 0, 0))])
+        rows.append([InlineKeyboardButton(text=t("kb_webapp"), web_app=WebAppInfo(url=f"{settings.WEBAPP_URL}?tab=workouts"))])
+    rows.append([InlineKeyboardButton(text=t("kb_to_menu_arrow"), callback_data=make_cb("hub", 0, 0))])
     kb = InlineKeyboardMarkup(inline_keyboard=rows)
     sent = await message.answer("\n".join(lines), parse_mode="HTML", reply_markup=kb)
     await state.update_data(anchor_message_id=sent.message_id)

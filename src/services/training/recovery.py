@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
+from src.utils.training_locales import t
 
 EXPERIENCE_TARGET_SETS = {
     "beginner": 8,
@@ -81,7 +82,7 @@ def suggest_focus(
         else:
             next_day = rotation[0]
 
-        reason = f"по сплиту {split.upper()}"
+        reason = t("rec_split", x=split.upper())
         return next_day, reason
 
     # 2. Auto split based on fresh muscle groups with biggest deficit
@@ -107,10 +108,10 @@ def suggest_focus(
 
     # Build human-readable rationale
     if best_days_since >= 90:
-        reason = "не тренировались давно"
+        reason = t("rec_long")
     elif best_days_since >= 1:
-        reason = f"не тренировались {int(best_days_since)} дн."
+        reason = t("rec_days", n=int(best_days_since))
     else:
-        reason = "свежая мышечная группа"
+        reason = t("rec_fresh")
 
     return best_group, reason

@@ -5,6 +5,7 @@ import html
 from typing import Any, Dict, List, Optional
 
 from src.services.training.dto import DraftItem, PlanItem, SessionSummary
+from src.utils.training_locales import t
 
 
 def _fmt_w(w: Any) -> str:
@@ -33,14 +34,14 @@ def render_hub(
 ) -> str:
     """Render main training hub card."""
     lines = [
-        "🏋️ <b>Тренировки</b>",
-        f"Последняя: {html.escape(last_session_str)}",
-        f"На этой неделе: <b>{weekly_count} из {weekly_target}</b>",
+        t("hub_title"),
+        t("hub_last", x=html.escape(last_session_str)),
+        t("hub_week", n=weekly_count, m=weekly_target),
     ]
     if recommendation_str:
-        lines.append(f"💡 <i>Сегодня рекомендую:</i> {html.escape(recommendation_str)}")
+        lines.append(t("hub_rec", x=html.escape(recommendation_str)))
     if is_active:
-        lines.append(f"\n▶️ <b>Текущая тренировка:</b> {html.escape(active_exercise)} · {active_progress}")
+        lines.append("\n" + t("hub_current", ex=html.escape(active_exercise), prog=active_progress))
     return "\n".join(lines)
 
 
@@ -51,13 +52,9 @@ def render_goal_picker(
     understood_note: Optional[str] = None,
 ) -> str:
     """Render '🎯 Другая цель' screen."""
-    lines = [
-        "🎯 <b>Что тренируем сегодня?</b>",
-        "Нажмите группы мышц или напишите своими словами",
-        "<i>(например: «упор на спину, без нагрузки на поясницу»).</i>\n",
-    ]
+    lines = [t("goal_title"), t("goal_hint"), t("goal_example")]
     if understood_note:
-        lines.append(f"<b>Понял:</b> {html.escape(understood_note)}\n")
+        lines.append(t("goal_understood", x=html.escape(understood_note)))
     return "\n".join(lines)
 
 
@@ -69,25 +66,25 @@ def render_plan_card(
 ) -> str:
     """Render workout plan card with expandable biomechanical cues."""
     lines = [
-        f"📋 <b>План · {html.escape(focus_name)} · ≈{minutes} мин · {len(plan_items)} упр.</b>",
+        t("plan_title", focus=html.escape(focus_name), mins=minutes, n=len(plan_items)),
     ]
     if rationale:
-        lines.append(f"<i>Почему так:</i> {html.escape(rationale)}\n")
+        lines.append(t("plan_why", x=html.escape(rationale)))
 
     cues_lines = []
     for idx, item in enumerate(plan_items, 1):
         if item.kind == "cardio":
             dur_min = int((item.working[0].duration_sec or 480) / 60) if item.working else 8
-            lines.append(f"{idx}. <b>{html.escape(item.name)}</b> — {dur_min} мин разминка")
+            lines.append(t("plan_cardio", idx=idx, name=html.escape(item.name), n=dur_min))
         else:
             w_count = len(item.working)
             first_w = item.working[0] if item.working else None
             w_str = _fmt_w(first_w.weight_kg) if first_w and first_w.weight_kg else ""
             reps_str = str(first_w.reps) if first_w and first_w.reps else ""
 
-            load_part = f"{w_count}×{reps_str}" if reps_str else f"{w_count} подходов"
+            load_part = f"{w_count}×{reps_str}" if reps_str else t("plan_n_sets", n=w_count)
             if w_str and w_str != "0":
-                load_part += f" @ {w_str} кг"
+                load_part += f" @ {w_str} {t('unit_kg')}"
 
             reason_part = f"   <i>({html.escape(item.reason)})</i>" if item.reason else ""
             lines.append(f"{idx}. <b>{html.escape(item.name)}</b> — {load_part}{reason_part}")
@@ -96,13 +93,13 @@ def render_plan_card(
                 wm = item.warmup[0]
                 wm_w = _fmt_w(wm.weight_kg)
                 wm_r = wm.reps or 12
-                lines.append(f"   разминка 1×{wm_r} @ {wm_w} кг")
+                lines.append(t("plan_warmup", r=wm_r, w=wm_w))
 
         if item.cue:
             cues_lines.append(f"• <b>{html.escape(item.name)}:</b> {html.escape(item.cue)}")
 
     if cues_lines:
-        lines.append("\n<blockquote expandable>💡 <b>Подсказки по технике:</b>\n" + "\n".join(cues_lines) + "</blockquote>")
+        lines.append("\n<blockquote expandable>" + t("plan_cues") + "\n" + "\n".join(cues_lines) + "</blockquote>")
 
     return "\n".join(lines)
 
@@ -113,7 +110,7 @@ def render_draft_card(
 ) -> str:
     """Render parsed workout draft card with line-by-line validation status."""
     lines = [
-        f"📝 <b>Черновик · {len(items)} упражнений</b>\n",
+        t("draft_title", n=len(items)),
     ]
 
     for item in items:
@@ -126,7 +123,7 @@ def render_draft_card(
             status_icon = "❓"
 
         if item.status == "unparsed":
-            lines.append(f"{status_icon} <i>Не распознано:</i> {html.escape(item.raw)}")
+            lines.append(t("draft_unparsed", icon=status_icon, x=html.escape(item.raw)))
             continue
 
         if item.kind == "cardio":
@@ -134,9 +131,9 @@ def render_draft_card(
             dist_km = (item.sets[0].distance_m or 0) / 1000.0 if item.sets else 0
             parts = []
             if dur_min > 0:
-                parts.append(f"{dur_min} мин")
+                parts.append(f"{dur_min} {t('unit_min')}")
             if dist_km > 0:
-                parts.append(f"{dist_km:.1f} км")
+                parts.append(f"{dist_km:.1f} km")
             if item.note:
                 parts.append(html.escape(item.note))
             lines.append(f"{status_icon} <b>{html.escape(item.name)}</b> — {' · '.join(parts)}")
@@ -146,7 +143,7 @@ def render_draft_card(
             add_w = item.sets[0].added_weight_kg if item.sets else None
             load_str = f"{n_sets}×{reps}"
             if add_w:
-                load_str += f" (+{_fmt_w(add_w)} кг)"
+                load_str += f" (+{_fmt_w(add_w)} {t('unit_kg')})"
             note_str = f" · {html.escape(item.note)}" if item.note else ""
             lines.append(f"{status_icon} <b>{html.escape(item.name)}</b> — {load_str}{note_str}")
         else:
@@ -155,7 +152,7 @@ def render_draft_card(
             reps = item.sets[0].reps if item.sets else 0
             w = item.sets[0].weight_kg if item.sets else 0
             w_str = _fmt_w(w)
-            load_str = f"{n_sets}×{reps} @ {w_str} кг" if w_str != "0" else f"{n_sets}×{reps}"
+            load_str = f"{n_sets}×{reps} @ {w_str} {t('unit_kg')}" if w_str != "0" else f"{n_sets}×{reps}"
             note_str = f" · {html.escape(item.note)}" if item.note else ""
             lines.append(f"{status_icon} <b>{html.escape(item.name)}</b> — {load_str}{note_str}")
 
@@ -179,15 +176,15 @@ def render_live_card(
     """Render live logging card (Scenario A)."""
     lines = [
         f"▶️ <b>{html.escape(workout_name)} · {exercise_pos}/{total_exercises} · ⏱ {duration_str}</b>",
-        f"<b>{html.escape(exercise_name)}</b> — подход {set_idx} из {total_sets}",
+        t("live_set_of", name=html.escape(exercise_name), i=set_idx, n=total_sets),
     ]
     if machine_settings:
         lines.append(f"⚙️ <i>{html.escape(machine_settings)}</i>")
 
     target_w_str = _fmt_w(target_weight)
-    target_str = f"🎯 {target_w_str} кг × {target_reps}" if target_weight else f"🎯 {target_reps} повт"
+    target_str = f"🎯 {target_w_str} {t('unit_kg')} × {target_reps}" if target_weight else f"🎯 {target_reps} {t('unit_reps')}"
     if last_session_str:
-        target_str += f"      прошлый раз: {html.escape(last_session_str)}"
+        target_str += t("live_last", x=html.escape(last_session_str))
     lines.append(target_str)
 
     if completed_sets:
@@ -204,23 +201,23 @@ def render_live_card(
 def render_summary_card(summary: SessionSummary) -> str:
     """Render post-workout summary card."""
     lines = [
-        f"🏁 <b>Тренировка сохранена · {summary.duration_minutes} мин · {summary.exercises_count} упр. · {summary.sets_count} подходов</b>",
+        t("sum_title", mins=summary.duration_minutes, ex=summary.exercises_count, sets=summary.sets_count),
     ]
-    vol_str = f"{int(summary.total_volume_kg):,} кг".replace(",", " ")
+    vol_str = f"{int(summary.total_volume_kg):,} {t('unit_kg')}".replace(",", " ")
     diff_str = ""
     if summary.volume_diff_pct is not None:
         sign = "+" if summary.volume_diff_pct >= 0 else ""
-        diff_str = f" ({sign}{summary.volume_diff_pct}% к прошлой)"
-    lines.append(f"Объём: <b>{vol_str}</b>{diff_str}\n")
+        diff_str = t("sum_vs_prev", s=sign, p=summary.volume_diff_pct)
+    lines.append(t("sum_volume", v=vol_str, d=diff_str))
 
     if summary.records:
-        lines.append("🏆 <b>Рекорды</b>")
+        lines.append(t("sum_records"))
         for rec in summary.records:
             lines.append(f"• {html.escape(rec)}")
         lines.append("")
 
     if summary.exercise_summaries:
-        lines.append("📊 <b>По упражнениям</b>")
+        lines.append(t("sum_by_ex"))
         for es in summary.exercise_summaries:
             name = es["name"]
             load = es["load_str"]
@@ -229,6 +226,6 @@ def render_summary_card(summary: SessionSummary) -> str:
             lines.append(f"• {html.escape(name)} — {load} {feel} → {target}")
 
     if summary.ai_focus_next:
-        lines.append(f"\n💡 <i>Фокус на следующий раз:</i> {html.escape(summary.ai_focus_next)}")
+        lines.append(t("sum_next_focus", x=html.escape(summary.ai_focus_next)))
 
     return "\n".join(lines)

@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 from typing import Any, List, Optional, Union
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -21,9 +21,28 @@ from src.services.training.library import get_or_create_canonical
 logger = logging.getLogger(__name__)
 
 
+class EmptyWorkoutError(Exception):
+    """Raised when finishing a live session in which nothing was completed."""
+
+
 class StaleRevisionError(Exception):
     """Raised when incoming callback revision does not match the database session revision."""
     pass
+
+
+async def _load_full(db: AsyncSession, session_id: int, missing_ok: bool = False) -> Optional[WorkoutSession]:
+    """Reload a session with entries, sets and exercises; populate_existing so rows changed in this transaction show."""
+    stmt = (
+        select(WorkoutSession)
+        .options(
+            selectinload(WorkoutSession.entries).selectinload(WorkoutSessionEntry.workout_sets),
+            selectinload(WorkoutSession.entries).selectinload(WorkoutSessionEntry.canonical_exercise),
+        )
+        .where(WorkoutSession.id == session_id)
+        .execution_options(populate_existing=True)
+    )
+    result = await db.scalars(stmt)
+    return result.first() if missing_ok else result.one()
 
 
 async def get_or_create_draft(
@@ -63,15 +82,7 @@ async def get_or_create_draft(
     db.add(session)
     await db.flush()
     # Refresh to load relationships
-    stmt = (
-        select(WorkoutSession)
-        .options(
-            selectinload(WorkoutSession.entries).selectinload(WorkoutSessionEntry.workout_sets),
-            selectinload(WorkoutSession.entries).selectinload(WorkoutSessionEntry.canonical_exercise),
-        )
-        .where(WorkoutSession.id == session.id)
-    )
-    return (await db.scalars(stmt)).one()
+    return await _load_full(db, session.id)
 
 
 async def get_active_session(
@@ -95,17 +106,13 @@ async def get_active_session(
 async def get_session_full(
     db: AsyncSession,
     session_id: int,
+    user_id: Optional[int] = None,
 ) -> Optional[WorkoutSession]:
-    """Retrieve full workout session by ID with entries, sets, and canonical exercises loaded."""
-    stmt = (
-        select(WorkoutSession)
-        .options(
-            selectinload(WorkoutSession.entries).selectinload(WorkoutSessionEntry.workout_sets),
-            selectinload(WorkoutSession.entries).selectinload(WorkoutSessionEntry.canonical_exercise),
-        )
-        .where(WorkoutSession.id == session_id)
-    )
-    return (await db.scalars(stmt)).first()
+    """Full session tree by id; when ``user_id`` is given, another user's session reads as missing."""
+    session = await _load_full(db, session_id, missing_ok=True)
+    if session is not None and user_id is not None and session.user_id != user_id:
+        return None
+    return session
 
 
 async def add_draft_items(
@@ -158,15 +165,7 @@ async def add_draft_items(
     await db.flush()
 
     # Reload session with updated entries and sets
-    stmt = (
-        select(WorkoutSession)
-        .options(
-            selectinload(WorkoutSession.entries).selectinload(WorkoutSessionEntry.workout_sets),
-            selectinload(WorkoutSession.entries).selectinload(WorkoutSessionEntry.canonical_exercise),
-        )
-        .where(WorkoutSession.id == session.id)
-    )
-    return (await db.scalars(stmt)).one()
+    return await _load_full(db, session.id)
 
 
 async def start_from_plan(
@@ -250,15 +249,7 @@ async def start_from_plan(
     plan.status = "in_progress"
     await db.flush()
 
-    stmt = (
-        select(WorkoutSession)
-        .options(
-            selectinload(WorkoutSession.entries).selectinload(WorkoutSessionEntry.workout_sets),
-            selectinload(WorkoutSession.entries).selectinload(WorkoutSessionEntry.canonical_exercise),
-        )
-        .where(WorkoutSession.id == session.id)
-    )
-    return (await db.scalars(stmt)).one()
+    return await _load_full(db, session.id)
 
 
 async def log_set(
@@ -267,10 +258,11 @@ async def log_set(
     rev: int,
     entry_id: int,
     set_data: ParsedSet,
+    user_id: Optional[int] = None,
 ) -> WorkoutSession:
-    """Log a completed set in live session with revision guard."""
+    """Log a completed set in live session with revision guard (and owner guard when ``user_id`` is given)."""
     session = await db.get(WorkoutSession, session_id)
-    if not session or session.revision != rev:
+    if not session or (user_id is not None and session.user_id != user_id) or session.revision != rev:
         raise StaleRevisionError(f"Session revision mismatch: expected {session.revision if session else None}, got {rev}")
 
     entry = await db.get(WorkoutSessionEntry, entry_id)
@@ -310,15 +302,44 @@ async def log_set(
     session.revision += 1
     await db.flush()
 
+    return await _load_full(db, session.id)
+
+
+async def undo_last_set(
+    db: AsyncSession,
+    session_id: int,
+    rev: int,
+    user_id: int,
+) -> Optional[WorkoutSession]:
+    """Undo the most recently logged set of a live session; returns None when nothing was logged yet."""
+    session = await db.get(WorkoutSession, session_id)
+    if not session or session.user_id != user_id:
+        raise ValueError(f"Session {session_id} not found for user")
+    if session.revision != rev:
+        raise StaleRevisionError("Revision mismatch")
+
     stmt = (
-        select(WorkoutSession)
-        .options(
-            selectinload(WorkoutSession.entries).selectinload(WorkoutSessionEntry.workout_sets),
-            selectinload(WorkoutSession.entries).selectinload(WorkoutSessionEntry.canonical_exercise),
-        )
-        .where(WorkoutSession.id == session.id)
+        select(WorkoutSet)
+        .join(WorkoutSessionEntry, WorkoutSet.entry_id == WorkoutSessionEntry.id)
+        .where(WorkoutSessionEntry.session_id == session_id, WorkoutSet.completed == True)  # noqa: E712
+        .order_by(WorkoutSet.id.desc())
+        .limit(1)
     )
-    return (await db.scalars(stmt)).one()
+    last = (await db.scalars(stmt)).first()
+    if last is None:
+        return None
+
+    planned = any(v is not None for v in (last.target_weight_kg, last.target_reps, last.target_duration_sec))
+    if planned:
+        last.completed = False  # keep the planned target so the set can be logged again
+    else:
+        await db.delete(last)  # an extra set added during the workout
+    entry = await db.get(WorkoutSessionEntry, last.entry_id)
+    if entry and entry.status == "skipped":
+        entry.status = "done"
+    session.revision += 1
+    await db.flush()
+    return await get_session_full(db, session_id)
 
 
 async def skip_entry(
@@ -326,10 +347,11 @@ async def skip_entry(
     session_id: int,
     rev: int,
     entry_id: int,
+    user_id: Optional[int] = None,
 ) -> WorkoutSession:
     """Mark an entry as skipped."""
     session = await db.get(WorkoutSession, session_id)
-    if not session or session.revision != rev:
+    if not session or (user_id is not None and session.user_id != user_id) or session.revision != rev:
         raise StaleRevisionError("Revision mismatch")
 
     entry = await db.get(WorkoutSessionEntry, entry_id)
@@ -338,48 +360,59 @@ async def skip_entry(
         session.revision += 1
         await db.flush()
 
-    stmt = (
-        select(WorkoutSession)
-        .options(
-            selectinload(WorkoutSession.entries).selectinload(WorkoutSessionEntry.workout_sets),
-            selectinload(WorkoutSession.entries).selectinload(WorkoutSessionEntry.canonical_exercise),
-        )
-        .where(WorkoutSession.id == session.id)
-    )
-    return (await db.scalars(stmt)).one()
+    return await _load_full(db, session.id)
+
+
+_FEELING_RANK = {"easy": 0, "normal": 1, "hard": 2, "pain": 3}
 
 
 async def finish_session(
     db: AsyncSession,
     session_id: int,
     rev: int,
-    feeling: str = "normal",
+    feeling: Optional[str] = None,
+    user_id: Optional[int] = None,
 ) -> WorkoutSession:
-    """Mark session as finished, mark all pending sets as completed if drafting, and record finished_at."""
+    """Finish a session and record finished_at.
+
+    Draft (text-logged) sessions: all sets count as done and ``feeling`` (default "normal") applies to every entry.
+    Live sessions: only sets the user actually completed are kept (pending sets and untouched/skipped entries are
+    dropped, so unperformed work never counts as volume), per-exercise feelings are preserved, and the session feeling
+    is ``feeling`` or the hardest exercise feeling. Raises EmptyWorkoutError when a live session has no completed sets.
+    """
     session = await db.get(WorkoutSession, session_id)
-    if not session or session.revision != rev:
+    if not session or (user_id is not None and session.user_id != user_id) or session.revision != rev:
         raise StaleRevisionError("Revision mismatch")
 
-    now = datetime.now(UTC).replace(tzinfo=None)
-    session.status = "finished"
-    session.finished_at = now
-    session.feeling = feeling
-
-    # Mark all sets in entries as completed and update legacy entry columns for backward read compatibility
     stmt = (
         select(WorkoutSessionEntry)
         .options(selectinload(WorkoutSessionEntry.workout_sets))
         .where(WorkoutSessionEntry.session_id == session.id)
     )
     entries = (await db.scalars(stmt)).all()
+    live = session.status == "active"
+
+    if live and not any(ws.completed for e in entries for ws in e.workout_sets):
+        raise EmptyWorkoutError(f"Session {session_id} has no completed sets")
+
+    kept = []
     for entry in entries:
-        if feeling:
-            entry.feeling = feeling
-        for ws in entry.workout_sets:
-            ws.completed = True
+        if live:
+            for ws in [w for w in entry.workout_sets if not w.completed]:
+                await db.delete(ws)
+            sets = [w for w in entry.workout_sets if w.completed]
+            if not sets:
+                await db.delete(entry)
+                continue
+        else:
+            entry.feeling = feeling or "normal"
+            for ws in entry.workout_sets:
+                ws.completed = True
+            sets = list(entry.workout_sets)
+        kept.append(entry)
 
         # Keep legacy columns populated
-        working_sets = [s for s in entry.workout_sets if s.set_type == "working"] or entry.workout_sets
+        working_sets = [w for w in sets if w.set_type == "working"] or sets
         entry.sets = len(working_sets) if working_sets else 1
         if working_sets:
             entry.weight_kg = working_sets[0].weight_kg
@@ -387,31 +420,39 @@ async def finish_session(
             entry.duration_sec = working_sets[0].duration_sec
             entry.distance_m = working_sets[0].distance_m
 
+    if live and not feeling:
+        feeling = max((e.feeling for e in kept if e.feeling), key=lambda f: _FEELING_RANK.get(f, 1), default="normal")
+
+    session.status = "finished"
+    session.finished_at = datetime.now(UTC).replace(tzinfo=None)
+    session.feeling = feeling or "normal"
+    if session.plan_id:
+        plan = await db.get(TrainingPlan, session.plan_id)
+        if plan and plan.status == "in_progress":
+            plan.status = "done"
+
     session.revision += 1
     await db.flush()
 
-    stmt = (
-        select(WorkoutSession)
-        .options(
-            selectinload(WorkoutSession.entries).selectinload(WorkoutSessionEntry.workout_sets),
-            selectinload(WorkoutSession.entries).selectinload(WorkoutSessionEntry.canonical_exercise),
-        )
-        .where(WorkoutSession.id == session.id)
-    )
-    return (await db.scalars(stmt)).one()
+    return await _load_full(db, session.id)
 
 
 async def cancel_session(
     db: AsyncSession,
     session_id: int,
     rev: int,
+    user_id: Optional[int] = None,
 ) -> None:
-    """Cancel and delete draft or active session."""
+    """Cancel and delete draft or active session (silently ignores another user's session)."""
     session = await db.get(WorkoutSession, session_id)
-    if not session:
+    if not session or (user_id is not None and session.user_id != user_id):
         return
     if session.revision != rev:
         raise StaleRevisionError("Revision mismatch")
 
+    if session.plan_id:
+        plan = await db.get(TrainingPlan, session.plan_id)
+        if plan and plan.status == "in_progress":
+            plan.status = "proposed"  # let the user start the plan again
     await db.delete(session)
     await db.flush()

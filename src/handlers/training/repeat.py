@@ -8,8 +8,10 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 
+from src.utils.training_locales import t
 from src.database.connection import AsyncSessionLocal
 from src.database.models import WorkoutSession
+from src.handlers.training.ui import edit_or_send
 from src.handlers.training.keyboards import get_repeat_checklist_keyboard, get_summary_keyboard
 from src.handlers.training.states import TrainingFSM
 from src.services.training import history, render, sessions, summary
@@ -28,7 +30,7 @@ async def open_repeat_menu(callback: CallbackQuery, state: FSMContext):
         last_session = await history.get_last_finished_session(db, uid)
 
     if not last_session or not last_session.entries:
-        await callback.answer("У вас ещё нет сохранённых тренировок", show_alert=True)
+        await callback.answer(t("rep_none"), show_alert=True)
         return
 
     # Build checklist items state
@@ -42,7 +44,7 @@ async def open_repeat_menu(callback: CallbackQuery, state: FSMContext):
         dur = working_sets[0].duration_sec if working_sets else None
 
         if dur:
-            load_str = f"{int(dur / 60)} мин"
+            load_str = f"{int(dur / 60)} {t('unit_min')}"
         elif w:
             w_str = f"{w:.1f}".rstrip("0").rstrip(".")
             load_str = f"{n_sets}×{r} @ {w_str}"
@@ -70,10 +72,10 @@ async def open_repeat_menu(callback: CallbackQuery, state: FSMContext):
     await state.update_data(repeat_items=items_state)
 
     date_str = last_session.performed_at.strftime("%d.%m") if last_session.performed_at else ""
-    text = f"🔁 <b>Как в прошлый раз ({date_str})</b>\n\nОтметьте выполненные упражнения:"
+    text = t("rep_title_date", date=date_str)
     kb = get_repeat_checklist_keyboard(items_state)
     if callback.message:
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+        await edit_or_send(callback.message, text, parse_mode="HTML", reply_markup=kb)
 
 
 @router.callback_query(F.data.startswith("t2:rep_tgl:"))
@@ -89,11 +91,10 @@ async def handle_toggle_repeat_item(callback: CallbackQuery, state: FSMContext):
         items_state[idx]["checked"] = not items_state[idx].get("checked", True)
         await state.update_data(repeat_items=items_state)
 
-    text = "🔁 <b>Как в прошлый раз</b>\n\nОтметьте выполненные упражнения:"
+    text = t("rep_title")
     kb = get_repeat_checklist_keyboard(items_state)
     if callback.message:
-        with contextlib.suppress(Exception):
-            await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+        await edit_or_send(callback.message, text, parse_mode="HTML", reply_markup=kb)
 
 
 @router.callback_query(F.data.startswith("t2:rep_save:"))
@@ -104,7 +105,7 @@ async def handle_save_checked_repeat_items(callback: CallbackQuery, state: FSMCo
     checked = [i for i in items_state if i.get("checked", True)]
 
     if not checked:
-        await callback.answer("Выберите хотя бы одно упражнение", show_alert=True)
+        await callback.answer(t("rep_pick_one"), show_alert=True)
         return
 
     uid = callback.from_user.id
@@ -154,10 +155,10 @@ async def handle_save_checked_repeat_items(callback: CallbackQuery, state: FSMCo
         await db.flush()
         summary_data = await summary.build_session_summary(db, session)
 
-    await callback.answer("Тренировка сохранена ✓")
+    await callback.answer(t("workout_saved"))
     await state.clear()
 
     summary_html = render.render_summary_card(summary_data)
     kb = get_summary_keyboard(session.id)
     if callback.message:
-        await callback.message.edit_text(summary_html, parse_mode="HTML", reply_markup=kb)
+        await edit_or_send(callback.message, summary_html, parse_mode="HTML", reply_markup=kb)

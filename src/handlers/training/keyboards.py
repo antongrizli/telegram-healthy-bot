@@ -120,8 +120,9 @@ def get_live_logging_keyboard(
     is_cardio: bool = False,
     duration_mins: int = 8,
     rest_sec: int = 90,
+    open_sets: int = 0,
 ) -> InlineKeyboardMarkup:
-    """Live exercise set logging keyboard matching Section 3.5."""
+    """Live exercise set logging keyboard matching Section 3.5. ``open_sets`` >= 2 adds a one-tap "all as planned"."""
     rows: List[List[InlineKeyboardButton]] = []
 
     if is_cardio:
@@ -144,6 +145,8 @@ def get_live_logging_keyboard(
             InlineKeyboardButton(text=t("kb_rep_delta", d="+1"), callback_data=make_cb("adj_r", session_id, rev, "+1")),
         ])
 
+    if open_sets >= 2:
+        rows.append([InlineKeyboardButton(text=t("kb_ok_all"), callback_data=make_cb("ok_all", session_id, rev))])
     rows.append([
         InlineKeyboardButton(text=t("kb_other"), callback_data=make_cb("custom_live", session_id, rev)),
         InlineKeyboardButton(text=t("kb_skip"), callback_data=make_cb("skip_ex", session_id, rev)),

@@ -319,6 +319,43 @@ async def log_set(
     return await _load_full(db, session.id)
 
 
+async def complete_entry_as_planned(
+    db: AsyncSession,
+    session_id: int,
+    rev: int,
+    entry_id: int,
+    user_id: Optional[int] = None,
+) -> WorkoutSession:
+    """Mark every open set of an entry as done at its planned values.
+
+    Sets with unknown weight/reps (and no planned duration) stay open so the user fills them in.
+    """
+    session = await db.get(WorkoutSession, session_id)
+    if not session or (user_id is not None and session.user_id != user_id) or session.revision != rev:
+        raise StaleRevisionError(f"Session revision mismatch: expected {session.revision if session else None}, got {rev}")
+
+    entry = await db.get(WorkoutSessionEntry, entry_id)
+    if not entry or entry.session_id != session.id:
+        raise ValueError(f"Entry {entry_id} does not belong to session {session_id}")
+
+    stmt = select(WorkoutSet).where(WorkoutSet.entry_id == entry_id, WorkoutSet.completed == False).order_by(WorkoutSet.idx)
+    for ws in (await db.scalars(stmt)).all():
+        weight = ws.weight_kg if ws.weight_kg is not None else ws.target_weight_kg
+        reps = ws.reps if ws.reps is not None else ws.target_reps
+        duration = ws.duration_sec if ws.duration_sec is not None else ws.target_duration_sec
+        if duration is not None:
+            ws.duration_sec = duration
+        elif weight is not None and reps is not None:
+            ws.weight_kg, ws.reps = weight, reps
+        else:
+            continue
+        ws.completed = True
+
+    session.revision += 1
+    await db.flush()
+    return await _load_full(db, session.id)
+
+
 async def undo_last_set(
     db: AsyncSession,
     session_id: int,

@@ -59,7 +59,7 @@ async def ensure_tags(db: AsyncSession, ex: CanonicalExercise, lang: str = "ru")
     return True
 
 
-async def tag_untagged(db: AsyncSession, user_id: int, lang: str = "ru", limit: int = 20) -> int:
+async def tag_untagged(db: AsyncSession, user_id: int, lang: str = "ru", limit: int = 5) -> int:
     """Backfill muscle tags for visible exercises that have none. Returns how many were tagged."""
     stmt = (
         select(CanonicalExercise)

@@ -36,3 +36,14 @@ async def test_same_report_twice_no_duplicates(db_session):
     assert await _count(db_session, uid) == first
     names = (await db_session.scalars(select(CanonicalExercise.display_name).where(CanonicalExercise.user_id == uid))).all()
     assert all(":" not in n for n in names)
+
+
+async def test_new_draft_survives_session_close(db_session):
+    """Regression: a draft created by one DB session was only flushed, so the next request hit an FK violation."""
+    from src.database.models import WorkoutSession
+
+    await make_user(db_session, 4103)
+    session = await sessions.get_or_create_draft(db_session, 4103, source="text")
+    sid = session.id
+    await db_session.rollback()  # what closing a request's session without commit does
+    assert await db_session.get(WorkoutSession, sid) is not None

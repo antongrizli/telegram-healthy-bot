@@ -16,7 +16,7 @@ from src.handlers.training.ui import edit_or_send
 from src.handlers.training.keyboards import get_rest_pref_keyboard, make_cb
 from src.handlers.training.states import TrainingFSM
 from src.keyboards.reply import get_equipment_reply_keyboard, get_equipment_sub_reply_keyboard
-from src.services.training import library
+from src.services.training import library, llm
 from src.services.training.catalog import get_catalog
 
 logger = logging.getLogger(__name__)
@@ -34,6 +34,8 @@ POPULAR_CATALOG_MACHINES = [
     ("bicep_curl_machine", "Бицепс в тренажёре", "Bicep Machine"),
     ("tricep_extension_machine", "Трицепс в тренажёре", "Tricep Machine"),
 ]
+
+SHORT_MACHINE_NAME_MAX = 60
 
 ADD_EQUIPMENT_TEXTS = {
     "➕ Добавить тренажёр", "➕ Add equipment", "➕ Додати тренажер",
@@ -456,12 +458,66 @@ async def handle_add_custom_machine(message: Message, state: FSMContext):
         await render_equipment_settings(message, state, user_id=uid)
         return
 
+    if len(text) > SHORT_MACHINE_NAME_MAX or "\n" in text:
+        await _propose_extracted_machines(message, state, uid, text)
+        return
+
     async with AsyncSessionLocal() as db:
         ex = await library.get_or_create_canonical(db, user_id=uid, name=text)
         await db.commit()
 
     feedback = t("eq_added_lib", name=html.escape(ex.display_name))
     await render_equipment_settings(message, state, user_id=uid, feedback=feedback)
+
+
+async def _propose_extracted_machines(message: Message, state: FSMContext, uid: int, text: str) -> None:
+    """Long/multiline input: ask the AI backend for machine names and request confirmation."""
+    async with AsyncSessionLocal() as db:
+        user = await db.get(User, uid)
+        lang = user.language if user and user.language else "ru"
+
+    names = await llm.extract_machines_from_text(text, lang=lang)
+    if not names:
+        await message.answer(t("eq_ai_none"))
+        return
+
+    await state.update_data(eq_ai_candidates=names)
+    items = "\n".join(f"• {html.escape(n)}" for n in names)
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=t("eq_ai_add_all"), callback_data=make_cb("eq_ai_ok", 0, 0)),
+        InlineKeyboardButton(text=t("eq_ai_cancel"), callback_data=make_cb("eq_ai_no", 0, 0)),
+    ]])
+    await message.answer(t("eq_ai_found", items=items), parse_mode="HTML", reply_markup=kb)
+
+
+@router.callback_query(F.data.startswith("t2:eq_ai_ok:"))
+async def handle_ai_machines_confirm(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    uid = callback.from_user.id
+    data = await state.get_data()
+    names = data.get("eq_ai_candidates") or []
+    await state.update_data(eq_ai_candidates=None)
+    with contextlib.suppress(TelegramBadRequest):
+        await callback.message.edit_reply_markup(reply_markup=None)
+    if not names:
+        await callback.message.answer(t("eq_ai_expired"))
+        return
+
+    async with AsyncSessionLocal() as db:
+        for name in names:
+            await library.get_or_create_canonical(db, user_id=uid, name=name)
+        await db.commit()
+
+    feedback = t("eq_ai_added", count=len(names))
+    await render_equipment_settings(callback, state, user_id=uid, feedback=feedback)
+
+
+@router.callback_query(F.data.startswith("t2:eq_ai_no:"))
+async def handle_ai_machines_cancel(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    await state.update_data(eq_ai_candidates=None)
+    with contextlib.suppress(TelegramBadRequest):
+        await callback.message.delete()
 
 
 @router.message(F.text.in_(DELETE_EQUIPMENT_TEXTS))

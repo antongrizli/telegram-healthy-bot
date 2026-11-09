@@ -12,6 +12,9 @@ from src.database.models import CanonicalExercise, ExerciseAlias, WorkoutSession
 from src.services.training.catalog import get_catalog, normalize_catalog_string
 
 
+MAX_NAME_LEN = 100  # well below varchar(150) columns
+
+
 def slugify(text: str) -> str:
     """Generate safe snake_case slug from name."""
     s = text.lower().strip()
@@ -83,7 +86,8 @@ async def get_or_create_canonical(
     kind: str = "strength",
 ) -> CanonicalExercise:
     """Find or create canonical exercise and register alias."""
-    norm = normalize_catalog_string(name)
+    name = " ".join((name or "").split())[:MAX_NAME_LEN].strip() or "Exercise"
+    norm = normalize_catalog_string(name)[:MAX_NAME_LEN]
     catalog = get_catalog()
 
     # 1. Check existing alias

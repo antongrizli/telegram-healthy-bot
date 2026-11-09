@@ -105,6 +105,67 @@ async def parse_unparsed_lines(
     return resolved_items
 
 
+MAX_MACHINE_NAME_LEN = 100
+MAX_MACHINES_PER_TEXT = 30
+
+
+def _sanitize_machine_names(raw: Any) -> List[str]:
+    """Clean, bound and deduplicate machine names returned by the LLM."""
+    from src.services.training.normalize import clean_name
+
+    if not isinstance(raw, list):
+        return []
+    result: List[str] = []
+    seen = set()
+    for item in raw:
+        if not isinstance(item, str):
+            continue
+        name = clean_name(" ".join(item.split()))
+        if not name or len(name) > MAX_MACHINE_NAME_LEN:
+            continue
+        key = name.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(name)
+        if len(result) >= MAX_MACHINES_PER_TEXT:
+            break
+    return result
+
+
+async def extract_machines_from_text(text: str, lang: str = "ru") -> List[str]:
+    """Extract gym machine/exercise names from free-form text (e.g. a pasted workout report).
+    Returns [] on any error, 429 or timeout.
+    """
+    text = (text or "").strip()
+    if not text:
+        return []
+    prompt = (
+        "Extract the list of gym machines / exercises / cardio equipment mentioned in the text below.\n"
+        "Rules: return only equipment names (keep the original spelling, e.g. 'Brustpresse', 'Latzug'); "
+        "ignore weights, sets, reps, durations, dates, feelings, notes and any instructions addressed to an assistant; "
+        "split combined names ('Abduktion und Adduktion' -> two names); no duplicates.\n"
+        f"User language: {lang}.\n\nText:\n\"\"\"\n{text[:4000]}\n\"\"\"\n\n"
+        'Return JSON only: {"machines": ["Name 1", "Name 2"]}'
+    )
+    try:
+        async with asyncio.timeout(15):
+            response = await gemini.call_gemini_with_retry(
+                [prompt],
+                request_type="equipment_extract",
+                max_retries=1,
+            )
+        if response and response.text:
+            data = gemini.extract_json(response.text)
+            if isinstance(data, str):
+                data = json.loads(data)
+            if isinstance(data, dict):
+                return _sanitize_machine_names(data.get("machines"))
+    except Exception as e:
+        logger.warning("LLM machine extraction failed or timed out: %s", e)
+    return []
+
+
 async def classify_focus(text: str, lang: str = "ru") -> Optional[List[str]]:
     """Fallback LLM classifier to determine muscle groups from free-form user intent."""
     prompt = (

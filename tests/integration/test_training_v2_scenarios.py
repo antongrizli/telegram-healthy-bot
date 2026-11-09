@@ -415,7 +415,7 @@ async def test_equipment_reply_keyboard_and_add_delete_flow(db_session):
     msg_start = fake_message(uid=uid, text="▶️ Начать")
     await hub.handle_start_workout(msg_start, state)
     assert msg_start.answer.called
-    plan_card_call = msg_start.answer.call_args
-    assert "План" in plan_card_call.args[0]
+    # Library is empty at this point: the planner must not invent exercises from the catalog
+    assert "нет ничего для этого плана" in msg_start.answer.call_args.args[0]
     data = await state.get_data()
-    assert data.get("plan_id") is not None
+    assert data.get("plan_id") is None

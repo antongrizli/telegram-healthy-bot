@@ -468,3 +468,25 @@ async def test_undo_draft_uses_eagerly_loaded_entries(db_session):
     db_session.expire_all()
     names = (await db_session.scalars(select(WorkoutSessionEntry).where(WorkoutSessionEntry.session_id == sid))).all()
     assert len(names) == 1
+
+
+async def test_complete_entry_as_planned_skips_unknown_sets(db_session):
+    plan, s = await _start(db_session, 3190)
+    entry = s.entries[0]
+    rev_before = s.revision
+    extra_known = WorkoutSet(entry_id=entry.id, idx=90, set_type="working", target_weight_kg=40, target_reps=12, completed=False)
+    unknown = WorkoutSet(entry_id=entry.id, idx=91, set_type="working", completed=False)
+    db_session.add_all([extra_known, unknown])
+    await db_session.commit()
+
+    out = await sessions.complete_entry_as_planned(db_session, s.id, s.revision, entry.id, user_id=3190)
+    done = {ws.idx: ws.completed for ws in out.entries[0].workout_sets}
+    assert done[90] is True and done[91] is False
+    assert all(ws.completed for ws in out.entries[0].workout_sets if ws.idx != 91)
+    assert out.revision == rev_before + 1
+
+
+async def test_complete_entry_as_planned_stale_revision(db_session):
+    _, s = await _start(db_session, 3191)
+    with pytest.raises(sessions.StaleRevisionError):
+        await sessions.complete_entry_as_planned(db_session, s.id, s.revision + 5, s.entries[0].id, user_id=3191)

@@ -190,6 +190,7 @@ async def render_current_live_card(
         is_cardio=is_cardio,
         duration_mins=int((current_set.duration_sec or 480) / 60) if is_cardio else 8,
         rest_sec=_suggested_rest_sec(current_entry.canonical_exercise),
+        open_sets=len([s for s in current_entry.workout_sets if not s.completed]),
     )
 
     await state.set_state(TrainingFSM.live)
@@ -289,6 +290,44 @@ async def handle_log_set_ok(callback: CallbackQuery, state: FSMContext):
         await edit_or_send(callback.message, text, parse_mode="HTML", reply_markup=feel_kb)
         return
 
+    if callback.message:
+        await render_current_live_card(callback.message, session, state, edit=True)
+
+
+@router.callback_query(F.data.startswith("t2:ok_all:"))
+async def handle_complete_as_planned(callback: CallbackQuery, state: FSMContext):
+    """Complete all open sets of the current exercise at their planned values (1 tap)."""
+    parts = callback.data.split(":")
+    session_id = int(parts[2])
+    rev = int(parts[3])
+    entry_id = (await state.get_data()).get("current_entry_id")
+
+    async with AsyncSessionLocal() as db:
+        try:
+            session = await sessions.complete_entry_as_planned(
+                db, session_id, rev, entry_id, user_id=callback.from_user.id,
+            )
+            await db.commit()
+        except (sessions.StaleRevisionError, ValueError):
+            await callback.answer(t("stale"))
+            session = await sessions.get_session_full(db, session_id, user_id=callback.from_user.id)
+            if session and callback.message:
+                await render_current_live_card(callback.message, session, state, edit=True)
+            return
+
+        entry = next((e for e in session.entries if e.id == entry_id), None)
+        still_open = bool(entry and any(not s.completed for s in entry.workout_sets))
+
+    await callback.answer(t("set_logged"))
+    if not still_open and callback.message:
+        ex_name = entry.canonical_exercise.display_name if entry and entry.canonical_exercise else ""
+        await edit_or_send(
+            callback.message,
+            t("ex_done_feel", name=ex_name),
+            parse_mode="HTML",
+            reply_markup=get_live_feeling_keyboard(session.id, session.revision),
+        )
+        return
     if callback.message:
         await render_current_live_card(callback.message, session, state, edit=True)
 

@@ -126,3 +126,17 @@ def resolve_focus(
         accent=accent_group,
         raw_text=text,
     )
+
+
+def groups_for(selected: List[str]) -> List[str]:
+    """Map a mixed list of group keys and muscle names back to FOCUS_GROUPS keys (order-preserving, unique)."""
+    result: List[str] = []
+    for item in selected or []:
+        if item in FOCUS_GROUPS:
+            candidates = [item]
+        else:
+            candidates = [g for g, muscles in FOCUS_GROUPS.items() if item in muscles and g != "fullbody"]
+        for g in candidates:
+            if g not in result:
+                result.append(g)
+    return result

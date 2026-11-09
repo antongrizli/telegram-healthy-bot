@@ -42,6 +42,48 @@ async def get_exercise_history(
     if not entries:
         return None
 
+    ex = await db.get(CanonicalExercise, canonical_id)
+    return _build_history(entries, canonical_id, ex.display_name if ex else "Exercise")
+
+
+async def get_histories(
+    db: AsyncSession,
+    user_id: int,
+    exercise_ids: List[int],
+) -> Dict[int, ExerciseHistory]:
+    """Batch variant of get_exercise_history: one entries query + one names query for all exercises."""
+    if not exercise_ids:
+        return {}
+    stmt = (
+        select(WorkoutSessionEntry)
+        .join(WorkoutSession, WorkoutSessionEntry.session_id == WorkoutSession.id)
+        .options(selectinload(WorkoutSessionEntry.workout_sets), selectinload(WorkoutSessionEntry.session))
+        .where(
+            WorkoutSession.user_id == user_id,
+            WorkoutSession.status == "finished",
+            WorkoutSessionEntry.canonical_exercise_id.in_(exercise_ids),
+        )
+        .order_by(WorkoutSession.performed_at.desc(), WorkoutSessionEntry.id.desc())
+    )
+    grouped: Dict[int, list] = {}
+    for entry in (await db.scalars(stmt)).all():
+        bucket = grouped.setdefault(entry.canonical_exercise_id, [])
+        if len(bucket) < 10:
+            bucket.append(entry)
+    if not grouped:
+        return {}
+    names = dict(
+        (await db.execute(
+            select(CanonicalExercise.id, CanonicalExercise.display_name).where(CanonicalExercise.id.in_(list(grouped)))
+        )).all()
+    )
+    return {
+        ex_id: _build_history(entries, ex_id, names.get(ex_id) or "Exercise")
+        for ex_id, entries in grouped.items()
+    }
+
+
+def _build_history(entries: list, canonical_id: int, name: str) -> ExerciseHistory:
     last_entry = entries[0]
     session_date = last_entry.session.performed_at or datetime.now(UTC).replace(tzinfo=None)
     now = datetime.now(UTC).replace(tzinfo=None)
@@ -76,9 +118,6 @@ async def get_exercise_history(
             e = calculate_e1rm(s.weight_kg, s.reps)
             if e > best_e1rm:
                 best_e1rm = e
-
-    ex = await db.get(CanonicalExercise, canonical_id)
-    name = ex.display_name if ex else "Exercise"
 
     return ExerciseHistory(
         exercise_id=canonical_id,

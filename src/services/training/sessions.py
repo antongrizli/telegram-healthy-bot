@@ -124,7 +124,13 @@ async def add_draft_items(
     # Find next position index
     max_pos = max((e.position for e in session.entries), default=-1)
 
+    skipped: List[str] = []
     for item in items:
+        if item.status in ("unparsed", "new_name"):
+            # Never turn unrecognised text into library machines; keep it as a session note instead.
+            if item.status == "unparsed" and item.raw:
+                skipped.append(item.raw)
+            continue
         max_pos += 1
         # Ensure canonical exercise exists
         canonical = await get_or_create_canonical(
@@ -161,6 +167,8 @@ async def add_draft_items(
             )
             db.add(ws)
 
+    if skipped:
+        session.note = "\n".join(filter(None, [session.note, *skipped]))[:2000]
     session.revision += 1
     await db.flush()
 
@@ -200,7 +208,13 @@ async def start_from_plan(
         name = item.get("name", "Exercise")
         cat_key = item.get("catalog_key")
         kind = item.get("kind", "strength")
-        canonical = await get_or_create_canonical(db, user_id, name, cat_key, kind)
+        canonical = None
+        if item.get("exercise_id"):
+            canonical = await db.get(CanonicalExercise, item["exercise_id"])
+            if canonical is not None and canonical.user_id != user_id:
+                canonical = None
+        if canonical is None:  # legacy plans without exercise ids
+            canonical = await get_or_create_canonical(db, user_id, name, cat_key, kind)
 
         entry = WorkoutSessionEntry(
             session_id=session.id,
@@ -302,6 +316,43 @@ async def log_set(
     session.revision += 1
     await db.flush()
 
+    return await _load_full(db, session.id)
+
+
+async def complete_entry_as_planned(
+    db: AsyncSession,
+    session_id: int,
+    rev: int,
+    entry_id: int,
+    user_id: Optional[int] = None,
+) -> WorkoutSession:
+    """Mark every open set of an entry as done at its planned values.
+
+    Sets with unknown weight/reps (and no planned duration) stay open so the user fills them in.
+    """
+    session = await db.get(WorkoutSession, session_id)
+    if not session or (user_id is not None and session.user_id != user_id) or session.revision != rev:
+        raise StaleRevisionError(f"Session revision mismatch: expected {session.revision if session else None}, got {rev}")
+
+    entry = await db.get(WorkoutSessionEntry, entry_id)
+    if not entry or entry.session_id != session.id:
+        raise ValueError(f"Entry {entry_id} does not belong to session {session_id}")
+
+    stmt = select(WorkoutSet).where(WorkoutSet.entry_id == entry_id, WorkoutSet.completed == False).order_by(WorkoutSet.idx)
+    for ws in (await db.scalars(stmt)).all():
+        weight = ws.weight_kg if ws.weight_kg is not None else ws.target_weight_kg
+        reps = ws.reps if ws.reps is not None else ws.target_reps
+        duration = ws.duration_sec if ws.duration_sec is not None else ws.target_duration_sec
+        if duration is not None:
+            ws.duration_sec = duration
+        elif weight is not None and reps is not None:
+            ws.weight_kg, ws.reps = weight, reps
+        else:
+            continue
+        ws.completed = True
+
+    session.revision += 1
+    await db.flush()
     return await _load_full(db, session.id)
 
 

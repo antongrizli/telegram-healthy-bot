@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from src.services.training.catalog import get_catalog
+from src.services.training.focus import FOCUS_GROUPS
 from src.services.training.dto import Focus, ParsedSet, PlanItem, Target
 from src.services.training.progression import (
     calculate_warmup_sets,
@@ -82,10 +83,27 @@ def score_candidate(
     if used_recently:
         score -= 1.0
 
-    if candidate.get("from_catalog_only"):
-        score -= 0.5
-
     return score
+
+
+def find_coverage_gaps(library_exercises: List[Dict[str, Any]], groups: List[str]) -> List[str]:
+    """Return goal groups for which the library has no machine. fullbody expands to chest/back/legs."""
+    expanded: List[str] = []
+    for g in groups:
+        expanded.extend(["chest", "back", "legs"] if g == "fullbody" else [g])
+
+    gaps: List[str] = []
+    for g in expanded:
+        if g in gaps:
+            continue
+        if g == "cardio":
+            covered = any(e.get("kind") == "cardio" for e in library_exercises)
+        else:
+            muscles = FOCUS_GROUPS.get(g, set())
+            covered = any(e.get("muscle_primary") in muscles for e in library_exercises)
+        if not covered:
+            gaps.append(g)
+    return gaps
 
 
 def build_plan(
@@ -110,22 +128,11 @@ def build_plan(
     if current_energy == "low":
         base_sets = max(2, base_sets - 1)
 
-    # 1. Combine library exercises + catalog candidates
+    # 1. Candidates come strictly from the user's library (never from the catalog)
     candidates: List[Dict[str, Any]] = []
-    seen_keys = set()
-
     for ex in library_exercises:
-        k = ex.get("catalog_key") or ex.get("display_name", "").lower()
-        seen_keys.add(k)
         candidates.append(ex)
 
-    # Add missing catalog items if library has few items
-    for cat_item in catalog.entries.values():
-        if cat_item["key"] not in seen_keys:
-            cat_copy = dict(cat_item)
-            cat_copy["from_catalog_only"] = True
-            cat_copy["display_name"] = cat_item.get("names", {}).get("ru", [cat_item["key"]])[0]
-            candidates.append(cat_copy)
 
     # 2. Score candidates
     scored = []
@@ -288,31 +295,30 @@ def get_alternatives(
 
 
 def resize_plan(plan: List[PlanItem], delta_minutes: int) -> List[PlanItem]:
-    """Resize plan by +15 or -15 minutes adjusting sets and exercises."""
+    """Resize plan by -15 or +15 minutes: drop a set (never below 2) or an exercise; or add a set to two exercises."""
     if not plan:
         return []
 
     resized = [PlanItem(**i.model_dump()) for i in plan]
 
     if delta_minutes < 0:
-        # Shorten: first reduce sets on non-compound / isolation
+        # Shorten: first reduce sets on the last strength exercise that has more than 2
         reduced = False
         for item in reversed(resized):
-            if len(item.working) > 2:
+            if item.kind != "cardio" and len(item.working) > 2:
                 item.working.pop()
                 reduced = True
                 break
         if not reduced and len(resized) > 2:
             resized.pop()
     else:
-        # Lengthen: add +1 working set to primary exercises
-        added = False
+        # Lengthen: add +1 working set to the first two strength exercises with room
+        added = 0
         for item in resized:
-            if len(item.working) < 4:
+            if item.kind != "cardio" and item.working and len(item.working) < 4:
                 item.working.append(ParsedSet(**item.working[-1].model_dump()))
-                added = True
-                break
-        if not added:
-            pass
+                added += 1
+                if added == 2:
+                    break
 
     return resized

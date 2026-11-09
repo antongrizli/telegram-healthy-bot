@@ -104,9 +104,10 @@ def get_plan_card_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=t("kb_start_plan"), callback_data=make_cb("start_plan", plan_id, rev))],
         [
-            InlineKeyboardButton(text=t("kb_length"), callback_data=make_cb("resize_menu", plan_id, rev)),
-            InlineKeyboardButton(text=t("kb_back"), callback_data=make_cb("hub", 0, 0)),
+            InlineKeyboardButton(text=t("kb_min_delta", d="−15"), callback_data=make_cb("resize_menu", plan_id, rev, "-15")),
+            InlineKeyboardButton(text=t("kb_min_delta", d="+15"), callback_data=make_cb("resize_menu", plan_id, rev, "15")),
         ],
+        [InlineKeyboardButton(text=t("kb_back"), callback_data=make_cb("hub", 0, 0))],
     ])
 
 
@@ -119,8 +120,9 @@ def get_live_logging_keyboard(
     is_cardio: bool = False,
     duration_mins: int = 8,
     rest_sec: int = 90,
+    open_sets: int = 0,
 ) -> InlineKeyboardMarkup:
-    """Live exercise set logging keyboard matching Section 3.5."""
+    """Live exercise set logging keyboard matching Section 3.5. ``open_sets`` >= 2 adds a one-tap "all as planned"."""
     rows: List[List[InlineKeyboardButton]] = []
 
     if is_cardio:
@@ -143,6 +145,8 @@ def get_live_logging_keyboard(
             InlineKeyboardButton(text=t("kb_rep_delta", d="+1"), callback_data=make_cb("adj_r", session_id, rev, "+1")),
         ])
 
+    if open_sets >= 2:
+        rows.append([InlineKeyboardButton(text=t("kb_ok_all"), callback_data=make_cb("ok_all", session_id, rev))])
     rows.append([
         InlineKeyboardButton(text=t("kb_other"), callback_data=make_cb("custom_live", session_id, rev)),
         InlineKeyboardButton(text=t("kb_skip"), callback_data=make_cb("skip_ex", session_id, rev)),
@@ -186,14 +190,26 @@ def get_draft_keyboard(
     rev: int,
     current_feeling: str = "normal",
     has_unparsed: bool = False,
+    pending: Optional[List[Dict[str, Any]]] = None,
 ) -> InlineKeyboardMarkup:
-    """Draft card keyboard matching Section 3.6."""
+    """Draft card keyboard matching Section 3.6. ``pending`` = unknown machines awaiting a decision (max 5 shown)."""
     feel_row = []
     for icon, val in [("🟢", "easy"), ("🟡", "normal"), ("🔴", "hard")]:
         label = f"•{icon}•" if val == current_feeling else icon
         feel_row.append(InlineKeyboardButton(text=label, callback_data=make_cb("dfeel", session_id, rev, val)))
 
-    rows = [
+    rows: List[List[InlineKeyboardButton]] = []
+    for idx, entry in enumerate((pending or [])[:5]):
+        name = str(entry.get("name", ""))[:28]
+        row = [InlineKeyboardButton(text=t("dn_add", name=name), callback_data=make_cb("dn_add", session_id, rev, str(idx)))]
+        if entry.get("near"):
+            row.append(InlineKeyboardButton(
+                text=t("dn_map", name=str(entry["near"])[:24]),
+                callback_data=make_cb("dn_map", session_id, rev, str(idx)),
+            ))
+        row.append(InlineKeyboardButton(text="🗑", callback_data=make_cb("dn_drop", session_id, rev, str(idx))))
+        rows.append(row)
+    rows += [
         feel_row,
         [InlineKeyboardButton(text=t("kb_save"), callback_data=make_cb("save_draft", session_id, rev))],
         [

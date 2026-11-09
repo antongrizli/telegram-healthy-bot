@@ -11,12 +11,13 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from src.utils.training_locales import current_lang, group_label, t
 from src.database.connection import AsyncSessionLocal
-from src.database.models import TrainingPlan, TrainingProfile
+from src.database.models import TrainingPlan, TrainingProfile, User
 from src.handlers.training.ui import edit_or_send
 from src.handlers.training.keyboards import get_goal_picker_keyboard, get_plan_card_keyboard, make_cb
 from src.handlers.training.states import TrainingFSM
+from src.services.training.plan_context import load_plan_context
 from src.services.training import history, library, llm, planner, render
-from src.services.training.focus import resolve_focus
+from src.services.training.focus import groups_for, resolve_focus
 
 logger = logging.getLogger(__name__)
 router = Router(name="training_plan_router")
@@ -160,16 +161,47 @@ async def handle_goal_text_input(message: Message, state: FSMContext):
             )
 
 
+async def _show(event: Message | CallbackQuery, text: str, kb: InlineKeyboardMarkup, feedback: Optional[str] = None) -> None:
+    """Render a screen: edit in place for callbacks, send a new message for text events."""
+    if feedback:
+        text = f"{feedback}\n\n{text}"
+    if isinstance(event, CallbackQuery):
+        if event.message:
+            await edit_or_send(event.message, text, parse_mode="HTML", reply_markup=kb)
+    else:
+        await event.answer(text, parse_mode="HTML", reply_markup=kb)
+
+
+def _gap_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=t("gap_add"), callback_data=make_cb("gap_add", 0, 0))],
+        [InlineKeyboardButton(text=t("gap_ai"), callback_data=make_cb("gap_ai", 0, 0))],
+        [InlineKeyboardButton(text=t("gap_skip"), callback_data=make_cb("gap_skip", 0, 0))],
+    ])
+
+
 @router.callback_query(F.data.startswith("t2:make_plan"))
 async def handle_generate_plan(callback: CallbackQuery, state: FSMContext):
-    """Generate plan, polish cues with LLM, store TrainingPlan in DB, and show plan card."""
+    """Generate plan from the user's library; ask what to do first if the goal has no machines."""
     await callback.answer(t("plan_building"))
-    uid = callback.from_user.id
+    await state.update_data(gap_skip=False)
+    await _generate_plan(callback, state)
+
+
+async def rebuild_current_plan(event: Message | CallbackQuery, state: FSMContext, feedback: Optional[str] = None) -> None:
+    """Rebuild the plan for the goal already stored in FSM (after machines were added)."""
+    await _generate_plan(event, state, feedback=feedback)
+
+
+async def _generate_plan(event: Message | CallbackQuery, state: FSMContext, feedback: Optional[str] = None) -> None:
+    """Build, polish, store and show the plan. Library-only; coverage gaps are resolved with the user first."""
+    uid = event.from_user.id
     data = await state.get_data()
     selected_muscles = data.get("selected_muscles") or ["back"]
     mins = data.get("target_mins", 45)
     en = data.get("target_energy", "normal")
     custom_text = data.get("custom_focus_text")
+    skip_gaps = bool(data.get("gap_skip"))
 
     focus_obj = resolve_focus(
         selected_groups=selected_muscles,
@@ -179,33 +211,24 @@ async def handle_generate_plan(callback: CallbackQuery, state: FSMContext):
     )
 
     async with AsyncSessionLocal() as db:
-        profile = await db.get(TrainingProfile, uid)
-        user_library = await library.get_user_library(db, uid)
-        lib_dicts = [
-            {
-                "id": ex.id,
-                "display_name": ex.display_name,
-                "kind": ex.kind,
-                "muscle_primary": ex.muscle_primary,
-                "muscles_secondary": ex.muscles_secondary,
-                "pattern": ex.pattern,
-                "equipment": ex.equipment,
-                "weight_step": ex.weight_step,
-                "min_weight": ex.min_weight,
-                "catalog_key": ex.catalog_key,
-                "is_favorite": ex.is_favorite,
-            }
-            for ex in user_library
-        ]
+        user = await db.get(User, uid)
+        lang = user.language if user and user.language else "ru"
+        if await library.tag_untagged(db, uid, lang=lang):
+            await db.commit()
+        ctx = await load_plan_context(db, uid)
+    profile = ctx.profile
+    lib_dicts = ctx.library
+    history_index = ctx.history_index
 
-        # Build history index for known exercises
-        history_index = {}
-        for ex in user_library:
-            h_obj = await history.get_exercise_history(db, uid, ex.id)
-            if h_obj:
-                history_index[ex.display_name.lower()] = h_obj
+    goal_groups = groups_for(selected_muscles)
+    gaps = planner.find_coverage_gaps(lib_dicts, goal_groups)
+    if gaps and not skip_gaps:
+        await state.update_data(gap_groups=gaps)
+        title = t("gap_title", groups=", ".join(group_label(g) for g in gaps))
+        await _show(event, title, _gap_keyboard(), feedback)
+        return
 
-    # 1. Deterministic planner
+    # 1. Deterministic planner (library only)
     plan_items = planner.build_plan(
         profile=profile,
         library_exercises=lib_dicts,
@@ -214,6 +237,9 @@ async def handle_generate_plan(callback: CallbackQuery, state: FSMContext):
         minutes=mins,
         energy=en,
     )
+    if not plan_items:
+        await _show(event, t("gap_empty_plan"), _gap_keyboard(), feedback)
+        return
 
     # 2. Polish with LLM (cues & rationale)
     default_rationale = t("plan_rationale", focus=", ".join(group_label(m) for m in selected_muscles[:2]), mins=mins)
@@ -246,30 +272,81 @@ async def handle_generate_plan(callback: CallbackQuery, state: FSMContext):
     await state.set_state(TrainingFSM.plan)
     await state.update_data(plan_id=plan_record.id)
 
-    if callback.message:
-        await edit_or_send(callback.message, card_html, parse_mode="HTML", reply_markup=kb)
+    await _show(event, card_html, kb, feedback)
+
+
+
+@router.callback_query(F.data.startswith("t2:gap_add:"))
+async def handle_gap_add(callback: CallbackQuery, state: FSMContext):
+    """User adds machines himself; after adding, the plan is rebuilt."""
+    from src.handlers.training.settings import handle_add_equipment_start
+
+    await handle_add_equipment_start(callback, state)
+    await state.update_data(eq_ai_return="plan")
+
+
+@router.callback_query(F.data.startswith("t2:gap_ai:"))
+async def handle_gap_ai(callback: CallbackQuery, state: FSMContext):
+    """Suggest machines for the uncovered goals (LLM with catalog fallback) and ask for confirmation."""
+    from src.handlers.training.machines_confirm import dedupe_against_library, propose_machines
+
+    await callback.answer(t("gap_ai_thinking"))
+    uid = callback.from_user.id
+    data = await state.get_data()
+    groups = data.get("gap_groups") or groups_for(data.get("selected_muscles") or [])
+    focus_obj = resolve_focus(selected_groups=groups, text=data.get("custom_focus_text"))
+
+    async with AsyncSessionLocal() as db:
+        user = await db.get(User, uid)
+        lang = user.language if user and user.language else "ru"
+        ctx = await load_plan_context(db, uid)
+
+    existing = [e["display_name"] for e in ctx.library]
+    goal = getattr(ctx.profile, "goal", None)
+    names = await llm.pick_suggestions(groups, goal, focus_obj.limitations, existing, lang=lang)
+    names = dedupe_against_library(names, ctx.library)
+    if not names:
+        await callback.message.answer(t("eq_ai_none"), reply_markup=_gap_keyboard())
+        return
+    await propose_machines(callback.message, state, names, return_to="plan")
+
+
+@router.callback_query(F.data.startswith("t2:gap_skip:"))
+async def handle_gap_skip(callback: CallbackQuery, state: FSMContext):
+    """Build the plan from whatever the library has."""
+    await callback.answer(t("plan_building"))
+    await state.update_data(gap_skip=True)
+    await _generate_plan(callback, state)
 
 
 @router.callback_query(F.data.startswith("t2:resize_menu:"))
 async def handle_resize_plan(callback: CallbackQuery, state: FSMContext):
-    """Resize plan by -15 or +15 minutes."""
-    await callback.answer()
+    """Resize the plan by -15 or +15 minutes (callback arg), persisting items, minutes and revision."""
     parts = callback.data.split(":")
     plan_id = int(parts[2])
+    rev = int(parts[3]) if len(parts) > 3 and parts[3].lstrip("-").isdigit() else 0
+    delta = -15 if len(parts) <= 4 or parts[4] not in ("15", "+15") else 15
 
     async with AsyncSessionLocal() as db:
         plan = await db.get(TrainingPlan, plan_id)
-        if not plan:
+        if not plan or plan.user_id != callback.from_user.id or plan.revision != rev:
+            await callback.answer(t("stale"))
             return
 
         items = [planner.PlanItem(**i) for i in (plan.items or [])]
-        # Alternate: shorten by 15 mins
-        resized = planner.resize_plan(items, delta_minutes=-15)
+        resized = planner.resize_plan(items, delta_minutes=delta)
+        constraints = dict(plan.constraints or {})
+        minutes = max(10, int(constraints.get("minutes") or 45) + delta)
+        constraints["minutes"] = minutes
         plan.items = [i.model_dump() for i in resized]
+        plan.constraints = constraints
         plan.revision += 1
-        await db.flush()
+        await db.commit()
+        focus_name = ", ".join(group_label(g) for g in (plan.focus or [])[:2]) or t("plan_word")
+        new_rev, rationale = plan.revision, plan.rationale
 
-    card_html = render.render_plan_card(resized, focus_name=t("plan_word"), minutes=30, rationale=plan.rationale)
-    kb = get_plan_card_keyboard(plan.id, plan.revision)
+    await callback.answer()
+    card_html = render.render_plan_card(resized, focus_name=focus_name, minutes=minutes, rationale=rationale)
+    kb = get_plan_card_keyboard(plan_id, new_rev)
     if callback.message:
         await edit_or_send(callback.message, card_html, parse_mode="HTML", reply_markup=kb)

@@ -120,6 +120,20 @@ def parse_line(
     normalized = normalize_units_and_cross(normalized)
 
     # -------------------------------------------------------------
+    # Rule R0: the bot's own report format: "Brustpresse 40 кг · 3×15 Стабильно" (comment is optional)
+    # -------------------------------------------------------------
+    r0_match = re.match(
+        r"^(.+?)\s+(\d+(?:\.\d+)?)\s*(?:" + RE_WEIGHT_UNIT + r")\s*[·•|]\s*(\d+)\s*x\s*(\d+)\b\s*(.*)$",
+        normalized,
+        re.IGNORECASE,
+    )
+    if r0_match:
+        name = clean_name(r0_match.group(1))
+        sets = [ParsedSet(weight_kg=float(r0_match.group(2)), reps=int(r0_match.group(4))) for _ in range(int(r0_match.group(3)))]
+        note = r0_match.group(5).strip() or None
+        return _make_draft_items(name, sets, raw_line, line_no, note, "strength", catalog, library_names)
+
+    # -------------------------------------------------------------
     # Rule R12: "Latzug как в прошлый раз" / "wie letztes Mal" / "same as last"
     # -------------------------------------------------------------
     r12_match = re.search(r"^(.*?)\s+(?:как в прошлый раз|wie letztes mal|same as last)\b", normalized, re.IGNORECASE)

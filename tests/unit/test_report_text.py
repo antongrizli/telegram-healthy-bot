@@ -57,3 +57,19 @@ def test_parse_unparsed_lines_uses_llm_json():
     with patch("src.services.training.llm.gemini.call_gemini_with_retry", AsyncMock(return_value=resp)):
         out = asyncio.run(llm.parse_unparsed_lines([item], known_exercises=[], lang="ru"))
     assert out[0].source == "llm" and out[0].name == "Brustpresse"
+
+
+def test_bot_report_format_lines_parse():
+    text = (
+        "Brustpresse 40 кг · 3×15 Стабильно\n"
+        "Beinbeuger 40 кг · 4×10 4 подхода\n"
+        "Bizepsmaschine 12,5 кг · 2×15 Меньший вес"
+    )
+    items = parse_text(clean_report(text).body, lang="ru")
+    assert [i.status for i in items] == ["ok", "ok", "ok"]
+    assert [i.name for i in items] == ["Brustpresse", "Beinbeuger", "Bizepsmaschine"]
+    brust, bein, bizeps = items
+    assert [(s.weight_kg, s.reps) for s in brust.sets] == [(40.0, 15)] * 3
+    assert len(bein.sets) == 4 and bein.sets[0].reps == 10
+    assert [(s.weight_kg, s.reps) for s in bizeps.sets] == [(12.5, 15)] * 2
+    assert brust.note == "Стабильно" and bizeps.note == "Меньший вес"

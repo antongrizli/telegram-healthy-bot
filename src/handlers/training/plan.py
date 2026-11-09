@@ -15,6 +15,7 @@ from src.database.models import TrainingPlan, TrainingProfile
 from src.handlers.training.ui import edit_or_send
 from src.handlers.training.keyboards import get_goal_picker_keyboard, get_plan_card_keyboard, make_cb
 from src.handlers.training.states import TrainingFSM
+from src.services.training.plan_context import load_plan_context
 from src.services.training import history, library, llm, planner, render
 from src.services.training.focus import resolve_focus
 
@@ -179,31 +180,10 @@ async def handle_generate_plan(callback: CallbackQuery, state: FSMContext):
     )
 
     async with AsyncSessionLocal() as db:
-        profile = await db.get(TrainingProfile, uid)
-        user_library = await library.get_user_library(db, uid)
-        lib_dicts = [
-            {
-                "id": ex.id,
-                "display_name": ex.display_name,
-                "kind": ex.kind,
-                "muscle_primary": ex.muscle_primary,
-                "muscles_secondary": ex.muscles_secondary,
-                "pattern": ex.pattern,
-                "equipment": ex.equipment,
-                "weight_step": ex.weight_step,
-                "min_weight": ex.min_weight,
-                "catalog_key": ex.catalog_key,
-                "is_favorite": ex.is_favorite,
-            }
-            for ex in user_library
-        ]
-
-        # Build history index for known exercises
-        history_index = {}
-        for ex in user_library:
-            h_obj = await history.get_exercise_history(db, uid, ex.id)
-            if h_obj:
-                history_index[ex.display_name.lower()] = h_obj
+        ctx = await load_plan_context(db, uid)
+    profile = ctx.profile
+    lib_dicts = ctx.library
+    history_index = ctx.history_index
 
     # 1. Deterministic planner
     plan_items = planner.build_plan(

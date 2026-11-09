@@ -24,6 +24,7 @@ from src.handlers.training.keyboards import (
 )
 from src.handlers.training.states import TrainingFSM
 from src.keyboards.reply import get_training_hub_reply_keyboard
+from src.services.training.plan_context import load_plan_context
 from src.services.training import focus, history, library, planner, recovery, render, sessions
 from src.utils.i18n_locales import get_all_translations
 
@@ -175,31 +176,12 @@ async def handle_start_workout(event: Message | CallbackQuery, state: FSMContext
     async with AsyncSessionLocal() as db:
         muscle_stats = await history.get_user_muscle_recovery_stats(db, user_id)
         rec_group, rec_reason = recovery.suggest_focus(profile, muscle_stats)
-        user_library = await library.get_user_library(db, user_id)
-        history_index = {}
-        for ex in user_library:
-            h = await history.get_exercise_history(db, user_id, ex.id)
-            if h:
-                history_index[ex.display_name.lower()] = h
+        ctx = await load_plan_context(db, user_id)
 
     mins = profile.session_minutes or 45
     focus_obj = focus.resolve_focus(selected_groups=[rec_group], minutes=mins, energy="normal")
-    lib_dicts = [
-        {
-            "id": ex.id,
-            "display_name": ex.display_name,
-            "kind": ex.kind,
-            "muscle_primary": ex.muscle_primary,
-            "muscles_secondary": ex.muscles_secondary,
-            "pattern": ex.pattern,
-            "equipment": ex.equipment,
-            "weight_step": ex.weight_step,
-            "min_weight": ex.min_weight,
-            "catalog_key": ex.catalog_key,
-            "is_favorite": ex.is_favorite,
-        }
-        for ex in user_library
-    ]
+    lib_dicts = ctx.library
+    history_index = ctx.history_index
     plan_items = planner.build_plan(
         profile=profile,
         library_exercises=lib_dicts,

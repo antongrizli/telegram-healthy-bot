@@ -186,14 +186,26 @@ def get_draft_keyboard(
     rev: int,
     current_feeling: str = "normal",
     has_unparsed: bool = False,
+    pending: Optional[List[Dict[str, Any]]] = None,
 ) -> InlineKeyboardMarkup:
-    """Draft card keyboard matching Section 3.6."""
+    """Draft card keyboard matching Section 3.6. ``pending`` = unknown machines awaiting a decision (max 5 shown)."""
     feel_row = []
     for icon, val in [("🟢", "easy"), ("🟡", "normal"), ("🔴", "hard")]:
         label = f"•{icon}•" if val == current_feeling else icon
         feel_row.append(InlineKeyboardButton(text=label, callback_data=make_cb("dfeel", session_id, rev, val)))
 
-    rows = [
+    rows: List[List[InlineKeyboardButton]] = []
+    for idx, entry in enumerate((pending or [])[:5]):
+        name = str(entry.get("name", ""))[:28]
+        row = [InlineKeyboardButton(text=t("dn_add", name=name), callback_data=make_cb("dn_add", session_id, rev, str(idx)))]
+        if entry.get("near"):
+            row.append(InlineKeyboardButton(
+                text=t("dn_map", name=str(entry["near"])[:24]),
+                callback_data=make_cb("dn_map", session_id, rev, str(idx)),
+            ))
+        row.append(InlineKeyboardButton(text="🗑", callback_data=make_cb("dn_drop", session_id, rev, str(idx))))
+        rows.append(row)
+    rows += [
         feel_row,
         [InlineKeyboardButton(text=t("kb_save"), callback_data=make_cb("save_draft", session_id, rev))],
         [

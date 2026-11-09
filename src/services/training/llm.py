@@ -69,6 +69,8 @@ async def parse_unparsed_lines(
                 )
             if response and response.text:
                 data = gemini.extract_json(response.text)
+                if isinstance(data, str):
+                    data = json.loads(data)
                 if isinstance(data, dict) and "items" in data:
                     for it in data["items"]:
                         lno = it.get("line_no")

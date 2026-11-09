@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import contextlib
+import difflib
 import logging
 from typing import Optional
 from aiogram import F, Router
@@ -10,11 +11,13 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from src.utils.training_locales import t
 from src.database.connection import AsyncSessionLocal
-from src.database.models import WorkoutSession, WorkoutSessionEntry
+from src.database.models import User, WorkoutSession, WorkoutSessionEntry
 from src.handlers.training.ui import edit_or_send
 from src.handlers.training.keyboards import get_draft_keyboard, get_summary_keyboard, make_cb
 from src.handlers.training.states import TrainingFSM
 from src.services.training import history, library, llm, parser, render, sessions, summary
+from src.services.training.plan_context import load_plan_context
+from src.services.training.report_text import clean_report
 
 logger = logging.getLogger(__name__)
 router = Router(name="training_log_text_router")
@@ -36,29 +39,78 @@ async def start_text_logging(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text=t("kb_cancel_back"), callback_data=make_cb("hub", 0, 0))]
     ])
     await state.set_state(TrainingFSM.draft)
-    await state.update_data(session_id=session.id)
+    await state.update_data(session_id=session.id, draft_pending=[])
     if callback.message:
         await edit_or_send(callback.message, prompt_text, parse_mode="HTML", reply_markup=kb)
 
 
+def _session_items(session: WorkoutSession) -> list:
+    items = []
+    for idx, entry in enumerate(session.entries, 1):
+        items.append(
+            parser.DraftItem(
+                line_no=idx,
+                raw=entry.raw_input,
+                name=entry.canonical_exercise.display_name if entry.canonical_exercise else entry.raw_input,
+                sets=[parser.ParsedSet(weight_kg=s.weight_kg, reps=s.reps, duration_sec=s.duration_sec, distance_m=s.distance_m) for s in entry.workout_sets],
+                note=entry.note,
+                status="ok",
+            )
+        )
+    return items
+
+
+def _pending_items(pending: list) -> list:
+    return [parser.DraftItem(**p["item"]) for p in pending]
+
+
+async def _render_draft_state(target, state: FSMContext, session: WorkoutSession, prior_items: list | None = None) -> None:
+    """Redraw the draft card: saved entries, unresolved new machines (🆕) and their decision buttons."""
+    data = await state.get_data()
+    pending = data.get("draft_pending") or []
+    items = (prior_items if prior_items is not None else _session_items(session)) + _pending_items(pending)
+    feeling = session.feeling or "normal"
+    card_html = render.render_draft_card(items, feeling=feeling)
+    kb = get_draft_keyboard(
+        session.id,
+        session.revision,
+        current_feeling=feeling,
+        pending=[{"name": p["item"]["name"], "near": p.get("near")} for p in pending],
+    )
+    anchor_id = data.get("anchor_message_id")
+    if isinstance(target, CallbackQuery):
+        if target.message:
+            await edit_or_send(target.message, card_html, parse_mode="HTML", reply_markup=kb)
+        return
+    edited = False
+    if anchor_id:
+        with contextlib.suppress(Exception):
+            await target.bot.edit_message_text(
+                chat_id=target.chat.id, message_id=anchor_id, text=card_html, parse_mode="HTML", reply_markup=kb,
+            )
+            edited = True
+    if not edited:
+        sent = await target.answer(card_html, parse_mode="HTML", reply_markup=kb)
+        await state.update_data(anchor_message_id=sent.message_id)
+
+
 @router.message(TrainingFSM.draft)
 async def handle_draft_text_input(message: Message, state: FSMContext):
-    """Parse incoming multiline workout text, delete user message, and update anchor draft message."""
-    text = message.text or ""
+    """Clean and parse incoming workout text; unknown machines wait for the user's decision, never auto-added."""
     uid = message.from_user.id
     data = await state.get_data()
     anchor_id = data.get("anchor_message_id")
     session_id = data.get("session_id")
+    report = clean_report(message.text or "")
+    text = report.body
 
     # 1. Fetch user known exercise names
     async with AsyncSessionLocal() as db:
-        user_library = await library.get_user_library(db, uid)
-        lib_names = [e.display_name for e in user_library]
-        history_index = {}
-        for e in user_library:
-            h = await history.get_exercise_history(db, uid, e.id)
-            if h:
-                history_index[e.display_name.lower()] = h
+        user = await db.get(User, uid)
+        lang = user.language if user and user.language else "ru"
+        ctx = await load_plan_context(db, uid)
+        lib_names = [e["display_name"] for e in ctx.library]
+        history_index = ctx.history_index
         session = await db.get(WorkoutSession, session_id) if session_id else None
         if not session:
             session = await sessions.get_or_create_draft(db, uid, source="text", anchor_message_id=anchor_id)
@@ -66,43 +118,99 @@ async def handle_draft_text_input(message: Message, state: FSMContext):
             await state.update_data(session_id=session_id)
 
     # 2. Deterministic parsing
-    draft_items = parser.parse_text(text, lang="ru", library_names=lib_names, history_index=history_index)
+    draft_items = parser.parse_text(text, lang=lang, library_names=lib_names, history_index=history_index)
 
     # 3. If any item is unparsed, attempt graceful LLM recovery
     unparsed = [it for it in draft_items if it.status == "unparsed"]
     if unparsed:
-        recovered = await llm.parse_unparsed_lines(unparsed, known_exercises=lib_names, lang="ru")
+        recovered = await llm.parse_unparsed_lines(unparsed, known_exercises=lib_names, lang=lang)
         rec_map = {r.line_no: r for r in recovered}
         draft_items = [rec_map.get(it.line_no, it) for it in draft_items]
 
-    # 4. Save items to draft session in DB
+    # 4. Unknown machines (neither in library nor catalog) are held back for confirmation
+    pending = list(data.get("draft_pending") or [])
+    async with AsyncSessionLocal() as db:
+        for it in draft_items:
+            if it.status in ("unparsed", "new_name") or not it.name:
+                continue
+            _, how = await library.match_exercise(db, uid, it.name)
+            if how == "unknown":
+                it.status = "new_name"
+                near = difflib.get_close_matches(it.name, lib_names, n=1, cutoff=0.6)
+                pending.append({"item": it.model_dump(), "near": near[0] if near else None})
+    await state.update_data(draft_pending=pending)
+
+    # 5. Save the rest to the draft session in DB (unparsed/new_name rows never create library machines)
     async with AsyncSessionLocal() as db:
         session = await sessions.add_draft_items(db, session, draft_items)
+        if report.feeling:
+            session.feeling = report.feeling
+        if report.note:
+            session.note = "\n".join(filter(None, [session.note, report.note]))[:2000]
+        await db.commit()
 
-    # 5. Delete user message if parsing succeeded
+    # 6. Delete user message if parsing succeeded
     with contextlib.suppress(Exception):
         await message.delete()
 
-    # 6. Render updated draft card
-    card_html = render.render_draft_card(draft_items, feeling=session.feeling or "normal")
-    kb = get_draft_keyboard(session.id, session.revision, current_feeling=session.feeling or "normal")
+    # 7. Render updated draft card
+    unparsed_left = [it for it in draft_items if it.status == "unparsed"]
+    await _render_draft_state(message, state, session, prior_items=_session_items(session) + unparsed_left)
 
-    # Edit anchor message
-    edited = False
-    if anchor_id:
-        with contextlib.suppress(Exception):
-            await message.bot.edit_message_text(
-                chat_id=message.chat.id,
-                message_id=anchor_id,
-                text=card_html,
-                parse_mode="HTML",
-                reply_markup=kb,
-            )
-            edited = True
 
-    if not edited:
-        sent = await message.answer(card_html, parse_mode="HTML", reply_markup=kb)
-        await state.update_data(anchor_message_id=sent.message_id)
+async def _resolve_pending(callback: CallbackQuery, state: FSMContext, action: str) -> None:
+    parts = callback.data.split(":")
+    session_id, rev, idx = int(parts[2]), int(parts[3]), int(parts[4])
+    uid = callback.from_user.id
+    data = await state.get_data()
+    pending = list(data.get("draft_pending") or [])
+    if idx >= len(pending):
+        await callback.answer(t("stale"))
+        return
+    entry = pending.pop(idx)
+    item = parser.DraftItem(**entry["item"])
+
+    async with AsyncSessionLocal() as db:
+        session = await db.get(WorkoutSession, session_id)
+        if not session or session.user_id != uid:
+            await callback.answer(t("stale_alert"), show_alert=True)
+            return
+        if action != "drop":
+            if action == "map" and entry.get("near"):
+                item.name = entry["near"]
+            else:
+                user = await db.get(User, uid)
+                await library.get_or_create_canonical(
+                    db, user_id=uid, name=item.name, kind=item.kind, tag_with_llm=True,
+                    lang=user.language if user and user.language else "ru",
+                )
+            item.status = "ok"
+            session = await db.get(WorkoutSession, session_id)
+            full = await sessions.get_session_full(db, session_id, user_id=uid)
+            session = await sessions.add_draft_items(db, full, [item])
+        else:
+            session.revision += 1
+        await db.commit()
+        session = await sessions.get_session_full(db, session_id, user_id=uid)
+
+    await state.update_data(draft_pending=pending)
+    await callback.answer()
+    await _render_draft_state(callback, state, session)
+
+
+@router.callback_query(F.data.startswith("t2:dn_add:"))
+async def handle_new_name_add(callback: CallbackQuery, state: FSMContext):
+    await _resolve_pending(callback, state, "add")
+
+
+@router.callback_query(F.data.startswith("t2:dn_map:"))
+async def handle_new_name_map(callback: CallbackQuery, state: FSMContext):
+    await _resolve_pending(callback, state, "map")
+
+
+@router.callback_query(F.data.startswith("t2:dn_drop:"))
+async def handle_new_name_drop(callback: CallbackQuery, state: FSMContext):
+    await _resolve_pending(callback, state, "drop")
 
 
 @router.callback_query(F.data.startswith("t2:dfeel:"))
@@ -156,6 +264,10 @@ async def handle_save_draft(callback: CallbackQuery, state: FSMContext):
     parts = callback.data.split(":")
     session_id = int(parts[2])
     rev = int(parts[3])
+
+    if (await state.get_data()).get("draft_pending"):
+        await callback.answer(t("dn_pending"), show_alert=True)
+        return
 
     async with AsyncSessionLocal() as db:
         session = await db.get(WorkoutSession, session_id)

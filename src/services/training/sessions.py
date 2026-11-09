@@ -124,7 +124,13 @@ async def add_draft_items(
     # Find next position index
     max_pos = max((e.position for e in session.entries), default=-1)
 
+    skipped: List[str] = []
     for item in items:
+        if item.status in ("unparsed", "new_name"):
+            # Never turn unrecognised text into library machines; keep it as a session note instead.
+            if item.status == "unparsed" and item.raw:
+                skipped.append(item.raw)
+            continue
         max_pos += 1
         # Ensure canonical exercise exists
         canonical = await get_or_create_canonical(
@@ -161,6 +167,8 @@ async def add_draft_items(
             )
             db.add(ws)
 
+    if skipped:
+        session.note = "\n".join(filter(None, [session.note, *skipped]))[:2000]
     session.revision += 1
     await db.flush()
 

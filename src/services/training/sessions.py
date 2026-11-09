@@ -200,7 +200,13 @@ async def start_from_plan(
         name = item.get("name", "Exercise")
         cat_key = item.get("catalog_key")
         kind = item.get("kind", "strength")
-        canonical = await get_or_create_canonical(db, user_id, name, cat_key, kind)
+        canonical = None
+        if item.get("exercise_id"):
+            canonical = await db.get(CanonicalExercise, item["exercise_id"])
+            if canonical is not None and canonical.user_id != user_id:
+                canonical = None
+        if canonical is None:  # legacy plans without exercise ids
+            canonical = await get_or_create_canonical(db, user_id, name, cat_key, kind)
 
         entry = WorkoutSessionEntry(
             session_id=session.id,

@@ -191,6 +191,11 @@ async def handle_start_workout(event: Message | CallbackQuery, state: FSMContext
         energy="normal",
     )
 
+    if not plan_items:
+        # Library has nothing suitable: do not invent exercises, send the user to the goal flow instead.
+        await target_message.answer(t("gap_empty_plan"))
+        return
+
     now = datetime.now(UTC)
     async with AsyncSessionLocal() as db:
         plan_record = TrainingPlan(

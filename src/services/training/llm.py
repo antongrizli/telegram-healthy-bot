@@ -231,6 +231,77 @@ async def classify_machine(name: str, lang: str = "ru") -> Optional[Dict[str, An
     }
 
 
+def catalog_candidates(groups: List[str], lang: str = "ru", limit: int = 6) -> List[str]:
+    """Deterministic fallback: localized catalog machine names matching the goal groups."""
+    from src.services.training.catalog import get_catalog
+    from src.services.training.focus import FOCUS_GROUPS
+
+    wanted = set()
+    for g in groups:
+        wanted |= FOCUS_GROUPS.get(g, set())
+    names: List[str] = []
+    for entry in get_catalog().entries.values():
+        if entry.get("muscle_primary") not in wanted:
+            continue
+        by_lang = entry.get("names", {})
+        candidates = by_lang.get(lang) or by_lang.get("de") or by_lang.get("en") or []
+        if candidates:
+            names.append(candidates[0])
+        if len(names) >= limit:
+            break
+    return names
+
+
+async def suggest_machines(
+    groups: List[str],
+    goal: Optional[str],
+    limitations: List[str],
+    existing: List[str],
+    lang: str = "ru",
+) -> List[str]:
+    """Ask the LLM to pick 2-3 machines per goal group, preferring catalog names. Returns [] on any failure."""
+    cands = catalog_candidates(groups, lang=lang, limit=12)
+    prompt = (
+        "Pick gym machines for a user's workout goals. Prefer names from the candidate list; "
+        "add a different well-known machine only if the list is too short.\n"
+        f"Target groups: {', '.join(groups)}. User goal: {goal or 'general'}. "
+        f"Limitations to avoid loading: {', '.join(limitations) or 'none'}.\n"
+        f"Candidates: {', '.join(cands) or 'none'}.\n"
+        f"Already in the user's library (do not repeat): {', '.join(existing[:40]) or 'none'}.\n"
+        f"Return 2-3 machines per group, names in language '{lang}' or the candidate spelling.\n"
+        'Return JSON only: {"machines": ["Name 1", "Name 2"]}'
+    )
+    try:
+        async with asyncio.timeout(15):
+            response = await gemini.call_gemini_with_retry([prompt], request_type="equipment_suggest", max_retries=1)
+        if response and response.text:
+            data = gemini.extract_json(response.text)
+            if isinstance(data, str):
+                data = json.loads(data)
+            if isinstance(data, dict):
+                names = _sanitize_machine_names(data.get("machines"))
+                lowered = {e.lower() for e in existing}
+                return [n for n in names if n.lower() not in lowered]
+    except Exception as e:
+        logger.warning("LLM machine suggestion failed or timed out: %s", e)
+    return []
+
+
+async def pick_suggestions(
+    groups: List[str],
+    goal: Optional[str],
+    limitations: List[str],
+    existing: List[str],
+    lang: str = "ru",
+) -> List[str]:
+    """LLM suggestions with a deterministic catalog fallback."""
+    names = await suggest_machines(groups, goal, limitations, existing, lang=lang)
+    if names:
+        return names
+    lowered = {e.lower() for e in existing}
+    return [n for n in catalog_candidates(groups, lang=lang) if n.lower() not in lowered]
+
+
 async def classify_focus(text: str, lang: str = "ru") -> Optional[List[str]]:
     """Fallback LLM classifier to determine muscle groups from free-form user intent."""
     prompt = (

@@ -23,6 +23,60 @@ def slugify(text: str) -> str:
     return s[:100] or "exercise"
 
 
+async def find_by_catalog_key(db: AsyncSession, user_id: int, catalog_key: str) -> Optional[CanonicalExercise]:
+    """Return the user's visible exercise linked to a catalog entry, if any."""
+    stmt = select(CanonicalExercise).where(
+        CanonicalExercise.user_id == user_id,
+        CanonicalExercise.catalog_key == catalog_key,
+        CanonicalExercise.is_hidden == False,
+    )
+    return (await db.scalars(stmt)).first()
+
+
+async def ensure_tags(db: AsyncSession, ex: CanonicalExercise, lang: str = "ru") -> bool:
+    """Fill muscle/pattern metadata of an exercise: catalog first, LLM only when the catalog does not know it."""
+    if ex.muscle_primary:
+        return False
+    from src.services.training import llm
+
+    cat_item = get_catalog().find_by_name(ex.display_name)
+    if cat_item:
+        ex.muscle_primary = cat_item.get("muscle_primary")
+        ex.muscles_secondary = cat_item.get("muscles_secondary", []) or []
+        ex.pattern = ex.pattern or cat_item.get("pattern")
+        ex.equipment = ex.equipment or cat_item.get("equipment")
+        ex.catalog_key = ex.catalog_key or cat_item.get("key")
+        ex.kind = cat_item.get("kind", ex.kind)
+    else:
+        info = await llm.classify_machine(ex.display_name, lang=lang)
+        if not info:
+            return False
+        ex.muscle_primary = info["muscle_primary"]
+        ex.pattern = ex.pattern or info["pattern"]
+        ex.kind = info["kind"]
+        ex.catalog_key = ex.catalog_key or info["catalog_key"]
+    await db.flush()
+    return True
+
+
+async def tag_untagged(db: AsyncSession, user_id: int, lang: str = "ru", limit: int = 20) -> int:
+    """Backfill muscle tags for visible exercises that have none. Returns how many were tagged."""
+    stmt = (
+        select(CanonicalExercise)
+        .where(
+            CanonicalExercise.user_id == user_id,
+            CanonicalExercise.is_hidden == False,
+            CanonicalExercise.muscle_primary.is_(None),
+        )
+        .limit(limit)
+    )
+    count = 0
+    for ex in (await db.scalars(stmt)).all():
+        if await ensure_tags(db, ex, lang=lang):
+            count += 1
+    return count
+
+
 async def get_user_library(db: AsyncSession, user_id: int) -> List[CanonicalExercise]:
     """Get all non-hidden exercises for a user with their aliases."""
     stmt = (
@@ -84,8 +138,13 @@ async def get_or_create_canonical(
     name: str,
     catalog_key: Optional[str] = None,
     kind: str = "strength",
+    tag_with_llm: bool = False,
+    lang: str = "ru",
 ) -> CanonicalExercise:
-    """Find or create canonical exercise and register alias."""
+    """Find or create canonical exercise and register alias.
+
+    With tag_with_llm=True a machine unknown to the catalog is classified by the LLM (one extra call).
+    """
     name = " ".join((name or "").split())[:MAX_NAME_LEN].strip() or "Exercise"
     norm = normalize_catalog_string(name)[:MAX_NAME_LEN]
     catalog = get_catalog()
@@ -136,6 +195,8 @@ async def get_or_create_canonical(
         )
         db.add(ex)
         await db.flush()
+        if tag_with_llm and not ex.muscle_primary:
+            await ensure_tags(db, ex, lang=lang)
     else:
         if ex.is_hidden:
             ex.is_hidden = False

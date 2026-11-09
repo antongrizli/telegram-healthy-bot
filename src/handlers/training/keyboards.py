@@ -104,9 +104,10 @@ def get_plan_card_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=t("kb_start_plan"), callback_data=make_cb("start_plan", plan_id, rev))],
         [
-            InlineKeyboardButton(text=t("kb_length"), callback_data=make_cb("resize_menu", plan_id, rev)),
-            InlineKeyboardButton(text=t("kb_back"), callback_data=make_cb("hub", 0, 0)),
+            InlineKeyboardButton(text=t("kb_min_delta", d="−15"), callback_data=make_cb("resize_menu", plan_id, rev, "-15")),
+            InlineKeyboardButton(text=t("kb_min_delta", d="+15"), callback_data=make_cb("resize_menu", plan_id, rev, "15")),
         ],
+        [InlineKeyboardButton(text=t("kb_back"), callback_data=make_cb("hub", 0, 0))],
     ])
 
 

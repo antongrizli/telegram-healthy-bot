@@ -321,24 +321,32 @@ async def handle_gap_skip(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data.startswith("t2:resize_menu:"))
 async def handle_resize_plan(callback: CallbackQuery, state: FSMContext):
-    """Resize plan by -15 or +15 minutes."""
-    await callback.answer()
+    """Resize the plan by -15 or +15 minutes (callback arg), persisting items, minutes and revision."""
     parts = callback.data.split(":")
     plan_id = int(parts[2])
+    rev = int(parts[3]) if len(parts) > 3 and parts[3].lstrip("-").isdigit() else 0
+    delta = -15 if len(parts) <= 4 or parts[4] not in ("15", "+15") else 15
 
     async with AsyncSessionLocal() as db:
         plan = await db.get(TrainingPlan, plan_id)
-        if not plan:
+        if not plan or plan.user_id != callback.from_user.id or plan.revision != rev:
+            await callback.answer(t("stale"))
             return
 
         items = [planner.PlanItem(**i) for i in (plan.items or [])]
-        # Alternate: shorten by 15 mins
-        resized = planner.resize_plan(items, delta_minutes=-15)
+        resized = planner.resize_plan(items, delta_minutes=delta)
+        constraints = dict(plan.constraints or {})
+        minutes = max(10, int(constraints.get("minutes") or 45) + delta)
+        constraints["minutes"] = minutes
         plan.items = [i.model_dump() for i in resized]
+        plan.constraints = constraints
         plan.revision += 1
-        await db.flush()
+        await db.commit()
+        focus_name = ", ".join(group_label(g) for g in (plan.focus or [])[:2]) or t("plan_word")
+        new_rev, rationale = plan.revision, plan.rationale
 
-    card_html = render.render_plan_card(resized, focus_name=t("plan_word"), minutes=30, rationale=plan.rationale)
-    kb = get_plan_card_keyboard(plan.id, plan.revision)
+    await callback.answer()
+    card_html = render.render_plan_card(resized, focus_name=focus_name, minutes=minutes, rationale=rationale)
+    kb = get_plan_card_keyboard(plan_id, new_rev)
     if callback.message:
         await edit_or_send(callback.message, card_html, parse_mode="HTML", reply_markup=kb)

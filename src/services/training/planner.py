@@ -295,31 +295,30 @@ def get_alternatives(
 
 
 def resize_plan(plan: List[PlanItem], delta_minutes: int) -> List[PlanItem]:
-    """Resize plan by +15 or -15 minutes adjusting sets and exercises."""
+    """Resize plan by -15 or +15 minutes: drop a set (never below 2) or an exercise; or add a set to two exercises."""
     if not plan:
         return []
 
     resized = [PlanItem(**i.model_dump()) for i in plan]
 
     if delta_minutes < 0:
-        # Shorten: first reduce sets on non-compound / isolation
+        # Shorten: first reduce sets on the last strength exercise that has more than 2
         reduced = False
         for item in reversed(resized):
-            if len(item.working) > 2:
+            if item.kind != "cardio" and len(item.working) > 2:
                 item.working.pop()
                 reduced = True
                 break
         if not reduced and len(resized) > 2:
             resized.pop()
     else:
-        # Lengthen: add +1 working set to primary exercises
-        added = False
+        # Lengthen: add +1 working set to the first two strength exercises with room
+        added = 0
         for item in resized:
-            if len(item.working) < 4:
+            if item.kind != "cardio" and item.working and len(item.working) < 4:
                 item.working.append(ParsedSet(**item.working[-1].model_dump()))
-                added = True
-                break
-        if not added:
-            pass
+                added += 1
+                if added == 2:
+                    break
 
     return resized

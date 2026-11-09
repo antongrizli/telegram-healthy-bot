@@ -81,6 +81,9 @@ async def get_or_create_draft(
     )
     db.add(session)
     await db.flush()
+    # Persist right away: callers open a fresh DB session per request and never commit this one,
+    # so an uncommitted draft vanished and later inserts failed with a foreign key violation.
+    await db.commit()
     # Refresh to load relationships
     return await _load_full(db, session.id)
 

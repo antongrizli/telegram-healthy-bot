@@ -124,6 +124,9 @@ async def add_draft_items(
     items: List[DraftItem],
 ) -> WorkoutSession:
     """Add parsed draft items to a draft session."""
+    # Callers often fetch the draft in a different (already closed) DB session; reload it here so the
+    # instance is attached to ``db`` and its entries are loaded.
+    session = await _load_full(db, session.id)
     # Find next position index
     max_pos = max((e.position for e in session.entries), default=-1)
 

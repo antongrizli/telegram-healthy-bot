@@ -47,3 +47,19 @@ async def test_new_draft_survives_session_close(db_session):
     sid = session.id
     await db_session.rollback()  # what closing a request's session without commit does
     assert await db_session.get(WorkoutSession, sid) is not None
+
+
+async def test_add_draft_items_with_detached_session(db_session):
+    """Regression: handlers fetch the draft in one DB session and add items in another (detached instance)."""
+    uid = 4104
+    await make_user(db_session, uid)
+    session = await sessions.get_or_create_draft(db_session, uid, source="text")
+    sid = session.id
+    from src.database.models import WorkoutSession
+
+    db_session.expunge_all()
+    detached = await db_session.get(WorkoutSession, sid)  # entries NOT loaded
+    db_session.expunge(detached)
+    items = parser.parse_text("Brustpresse 40 кг 3х15", lang="ru")
+    out = await sessions.add_draft_items(db_session, detached, items)
+    assert len(out.entries) == 1

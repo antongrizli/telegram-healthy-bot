@@ -45,6 +45,7 @@ async def render_and_send_hub(
         weekly_count = await history.get_user_weekly_workout_count(db, user_id)
         profile = await db.get(TrainingProfile, user_id)
         muscle_stats = await history.get_user_muscle_recovery_stats(db, user_id)
+        ctx = await load_plan_context(db, user_id)
         db_user = await db.get(User, user_id)
 
     user_lang = db_user.language if db_user and db_user.language else "ru"
@@ -58,7 +59,9 @@ async def render_and_send_hub(
         last_str = f"{day_name} {date_str} · {t('n_ex', n=n_ex)}"
 
     # Focus recommendation
-    rec_group, rec_reason = recovery.suggest_focus(profile, muscle_stats)
+    rec_group, rec_reason = recovery.suggest_focus(
+        profile, muscle_stats, covered_groups=ctx.covered_groups
+    )
     rec_label = group_label(rec_group)
     rec_str = f"{rec_label} ({rec_reason})" if not active_session else None
 
@@ -174,9 +177,15 @@ async def handle_start_workout(event: Message | CallbackQuery, state: FSMContext
         return
 
     async with AsyncSessionLocal() as db:
+        db_user = await db.get(User, user_id)
+        user_lang = db_user.language if db_user and db_user.language else "ru"
+        if await library.tag_untagged(db, user_id, lang=user_lang):
+            await db.commit()
         muscle_stats = await history.get_user_muscle_recovery_stats(db, user_id)
-        rec_group, rec_reason = recovery.suggest_focus(profile, muscle_stats)
         ctx = await load_plan_context(db, user_id)
+        rec_group, rec_reason = recovery.suggest_focus(
+            profile, muscle_stats, covered_groups=ctx.covered_groups
+        )
 
     mins = profile.session_minutes or 45
     focus_obj = focus.resolve_focus(selected_groups=[rec_group], minutes=mins, energy="normal")
@@ -190,10 +199,28 @@ async def handle_start_workout(event: Message | CallbackQuery, state: FSMContext
         minutes=mins,
         energy="normal",
     )
+    if not plan_items and lib_dicts:
+        plan_items = planner.build_fallback_plan(
+            profile=profile,
+            library_exercises=lib_dicts,
+            history_index=history_index,
+            focus=focus_obj,
+            minutes=mins,
+            energy="normal",
+        )
+        if plan_items and ctx.covered_groups and rec_group not in ctx.covered_groups:
+            rec_group = "fullbody"
 
     if not plan_items:
-        # Library has nothing suitable: do not invent exercises, send the user to the goal flow instead.
-        await target_message.answer(t("gap_empty_plan"))
+        empty_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=t("kb_equipment"), callback_data=make_cb("settings", 0, 0))],
+            [InlineKeyboardButton(text=t("kb_write_done"), callback_data=make_cb("write_done", 0, 0))],
+            [InlineKeyboardButton(text=t("kb_to_menu_arrow"), callback_data=make_cb("hub", 0, 0))],
+        ])
+        if isinstance(event, CallbackQuery) and event.message:
+            await edit_or_send(event.message, t("gap_empty_plan"), parse_mode="HTML", reply_markup=empty_kb)
+        else:
+            await target_message.answer(t("gap_empty_plan"), parse_mode="HTML", reply_markup=empty_kb)
         return
 
     now = datetime.now(UTC)
@@ -275,6 +302,7 @@ async def handle_goal_menu_from_reply(message: Message, state: FSMContext):
 
 @router.message(
     F.text.startswith("🔁 Повторить")
+    | F.text.startswith("🔁 Повторити")
     | F.text.startswith("🔁 Как в прошлый раз")
     | F.text.startswith("🔁 Like last time")
     | F.text.startswith("🔁 Як минулого")
@@ -345,16 +373,24 @@ async def handle_repeat_from_reply(message: Message, state: FSMContext):
     | F.text.in_(["Записать", "Записать выполненное", "✍️ Записать", "✍️ Записать выполненное"])
 )
 async def handle_write_from_reply(message: Message, state: FSMContext):
-    """Open draft input from bottom reply keyboard."""
+    """Open draft input from bottom reply keyboard, resuming existing entries if present."""
     uid = message.from_user.id
     async with AsyncSessionLocal() as db:
         session = await sessions.get_or_create_draft(db, uid, source="text")
+        await db.commit()
+
+    await state.set_state(TrainingFSM.draft)
+    await state.update_data(session_id=session.id, draft_pending=[], anchor_message_id=None)
+
+    if session.entries:
+        from src.handlers.training.log_text import _render_draft_state
+        await _render_draft_state(message, state, session)
+        return
+
     prompt_text = t("log_prompt")
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=t("kb_cancel_back"), callback_data=make_cb("hub", 0, 0))]
     ])
-    await state.set_state(TrainingFSM.draft)
-    await state.update_data(session_id=session.id)
     sent = await message.answer(prompt_text, parse_mode="HTML", reply_markup=kb)
     await state.update_data(anchor_message_id=sent.message_id)
 
@@ -372,40 +408,12 @@ async def handle_write_from_reply(message: Message, state: FSMContext):
 async def handle_progress_from_reply(message: Message, state: FSMContext):
     """Show training progress from bottom reply keyboard."""
     uid = message.from_user.id
+    from src.handlers.training.progress import build_progress_screen
+
+    await state.set_state(TrainingFSM.hub)
     async with AsyncSessionLocal() as db:
-        weekly_count = await history.get_user_weekly_workout_count(db, uid)
-        last_session = await history.get_last_finished_session(db, uid)
+        text, kb = await build_progress_screen(db, uid, page=0)
 
-    lines = [
-        t("prog_title"),
-        t("prog_week", n=weekly_count),
-    ]
-
-    if last_session and last_session.entries:
-        date_str = last_session.performed_at.strftime("%d.%m.%Y") if last_session.performed_at else ""
-        lines.append(t("prog_last", date=date_str))
-        for entry in last_session.entries[:6]:
-            ex_name = entry.canonical_exercise.display_name if entry.canonical_exercise else entry.raw_input
-            w_sets = [s for s in entry.workout_sets if s.set_type == "working"] or entry.workout_sets
-            n_sets = len(w_sets)
-            w = w_sets[0].weight_kg if w_sets and w_sets[0].weight_kg else 0
-            r = w_sets[0].reps if w_sets and w_sets[0].reps else 0
-            dur = w_sets[0].duration_sec if w_sets and w_sets[0].duration_sec else 0
-            if dur:
-                lines.append(f"• {html.escape(ex_name)}: {int(dur/60)} {t('unit_min')}")
-            elif w:
-                w_str = f"{w:.1f}".rstrip("0").rstrip(".")
-                lines.append(f"• {html.escape(ex_name)}: {n_sets}×{r} @ {w_str} {t('unit_kg')}")
-            else:
-                lines.append(f"• {html.escape(ex_name)}: {n_sets}×{r}")
-
-    from src.config import settings
-    from aiogram.types import WebAppInfo
-    rows = []
-    if settings.WEBAPP_URL:
-        rows.append([InlineKeyboardButton(text=t("kb_webapp"), web_app=WebAppInfo(url=f"{settings.WEBAPP_URL}?tab=workouts"))])
-    rows.append([InlineKeyboardButton(text=t("kb_to_menu_arrow"), callback_data=make_cb("hub", 0, 0))])
-    kb = InlineKeyboardMarkup(inline_keyboard=rows)
-    sent = await message.answer("\n".join(lines), parse_mode="HTML", reply_markup=kb)
+    sent = await message.answer(text, parse_mode="HTML", reply_markup=kb)
     await state.update_data(anchor_message_id=sent.message_id)
 

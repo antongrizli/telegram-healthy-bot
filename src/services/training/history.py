@@ -214,8 +214,62 @@ async def get_last_finished_session(db: AsyncSession, user_id: int) -> Optional[
             WorkoutSession.user_id == user_id,
             WorkoutSession.status == "finished",
         )
-        .order_by(WorkoutSession.performed_at.desc())
+        .order_by(WorkoutSession.performed_at.desc(), WorkoutSession.id.desc())
         .limit(1)
     )
     result = await db.scalars(stmt)
     return result.first()
+
+
+async def get_total_finished_count(db: AsyncSession, user_id: int) -> int:
+    """Return total number of completed workout sessions for user."""
+    stmt = select(func.count(WorkoutSession.id)).where(
+        WorkoutSession.user_id == user_id,
+        WorkoutSession.status == "finished",
+    )
+    return (await db.scalar(stmt)) or 0
+
+
+async def get_finished_sessions(
+    db: AsyncSession,
+    user_id: int,
+    limit: int = 5,
+    offset: int = 0,
+) -> List[WorkoutSession]:
+    """Retrieve paginated completed workout sessions newest first."""
+    stmt = (
+        select(WorkoutSession)
+        .options(
+            selectinload(WorkoutSession.entries).selectinload(WorkoutSessionEntry.workout_sets),
+            selectinload(WorkoutSession.entries).selectinload(WorkoutSessionEntry.canonical_exercise),
+        )
+        .where(
+            WorkoutSession.user_id == user_id,
+            WorkoutSession.status == "finished",
+        )
+        .order_by(WorkoutSession.performed_at.desc(), WorkoutSession.id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    return list((await db.scalars(stmt)).all())
+
+
+async def get_finished_session_by_id(
+    db: AsyncSession,
+    user_id: int,
+    session_id: int,
+) -> Optional[WorkoutSession]:
+    """Retrieve a single completed workout session owned by user_id."""
+    stmt = (
+        select(WorkoutSession)
+        .options(
+            selectinload(WorkoutSession.entries).selectinload(WorkoutSessionEntry.workout_sets),
+            selectinload(WorkoutSession.entries).selectinload(WorkoutSessionEntry.canonical_exercise),
+        )
+        .where(
+            WorkoutSession.id == session_id,
+            WorkoutSession.user_id == user_id,
+            WorkoutSession.status == "finished",
+        )
+    )
+    return (await db.scalars(stmt)).first()

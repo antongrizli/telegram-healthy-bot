@@ -490,3 +490,208 @@ async def test_complete_entry_as_planned_stale_revision(db_session):
     _, s = await _start(db_session, 3191)
     with pytest.raises(sessions.StaleRevisionError):
         await sessions.complete_entry_as_planned(db_session, s.id, s.revision + 5, s.entries[0].id, user_id=3191)
+
+
+async def test_draft_save_keeps_training_hub_and_ux_progress_delegates_to_history(db_session):
+    """After saving a draft workout, state stays TrainingFSM.hub and tapping '📈 Прогресс' shows training history."""
+    from src.database.models import CanonicalExercise, WorkoutSessionEntry
+    from src.handlers import ux as ux_handlers
+    from src.handlers.training import log_text, progress
+    from src.handlers.training.states import TrainingFSM
+
+    await make_user(db_session, 4101)
+    st = _state(4101)
+    await st.set_state(TrainingFSM.draft)
+
+    draft = await sessions.get_or_create_draft(db_session, 4101, source="text")
+    ce = CanonicalExercise(user_id=4101, canonical_slug="latzug", display_name="Latzug", kind="strength")
+    db_session.add(ce)
+    await db_session.flush()
+    entry = WorkoutSessionEntry(session_id=draft.id, canonical_exercise_id=ce.id, raw_input="Latzug", position=0)
+    db_session.add(entry)
+    await db_session.flush()
+    db_session.add(WorkoutSet(entry_id=entry.id, idx=1, set_type="working", weight_kg=45.0, reps=12, completed=False))
+    await db_session.commit()
+
+    cb_save = fake_callback(uid=4101, data=f"t2:save_draft:{draft.id}:{draft.revision}")
+    await log_text.handle_save_draft(cb_save, st)
+    assert await st.get_state() == TrainingFSM.hub.state
+
+    # Tapping reply '📈 Прогресс' goes through ux.progress_section, which must delegate to training progress
+    msg_prog = fake_message(uid=4101, text="📈 Прогресс")
+    await ux_handlers.progress_section(msg_prog, st, "ru")
+    msg_prog.answer.assert_awaited_once()
+    rendered = msg_prog.answer.call_args[0][0]
+    assert "Всего тренировок" in rendered
+    assert "Latzug" in rendered
+    kb = msg_prog.answer.call_args.kwargs["reply_markup"]
+    hist_cb_data = next(
+        b.callback_data for row in kb.inline_keyboard for b in row
+        if (b.callback_data or "").startswith("t2:hist_view:")
+    )
+    cb_detail = fake_callback(uid=4101, data=hist_cb_data)
+    await progress.handle_history_detail(cb_detail, st)
+    detail_html = cb_detail.message.edit_text.call_args[0][0]
+    assert "Latzug" in detail_html and "45×12" in detail_html
+
+
+async def test_start_workout_tags_untagged_and_uses_covered_groups_when_no_legs(db_session):
+    """If user only added upper-body machines (untagged), '▶️ Начать' tags them and builds a plan instead of failing."""
+    from src.database.models import CanonicalExercise, TrainingProfile
+    from src.handlers.training.states import TrainingFSM
+
+    await make_user(db_session, 4102)
+    db_session.add(TrainingProfile(user_id=4102, goal="hypertrophy", days_per_week=3, session_minutes=45))
+    # Untouched muscle_primary (None) matching catalog entry 'Latzug' and 'Brustpresse'
+    db_session.add(CanonicalExercise(user_id=4102, canonical_slug="latzug", display_name="Latzug", kind="strength"))
+    db_session.add(CanonicalExercise(user_id=4102, canonical_slug="brustpresse", display_name="Brustpresse", kind="strength"))
+    await db_session.commit()
+
+    st = _state(4102)
+    msg = fake_message(uid=4102, text="▶️ Начать")
+    await hub.handle_start_workout(msg, st)
+
+    assert await st.get_state() == TrainingFSM.plan.state
+    rendered = msg.answer.call_args[0][0]
+    assert "Latzug" in rendered or "Brustpresse" in rendered
+
+
+async def test_webapp_workout_progress_includes_training_v2_sessions(db_session):
+    """WebApp workouts dashboard includes finished Training v2 WorkoutSessions and CanonicalExercises."""
+    from src.database.models import CanonicalExercise, WorkoutSessionEntry
+    from src.services import workout_progress
+
+    user = await make_user(db_session, 4103)
+    ce = CanonicalExercise(user_id=4103, canonical_slug="bench_press", display_name="Жим лёжа", kind="strength")
+    db_session.add(ce)
+    await db_session.flush()
+    now = datetime.now(UTC).replace(tzinfo=None)
+    sess = WorkoutSession(
+        user_id=4103, status="finished", source="text", performed_at=now, started_at=now, finished_at=now, feeling="normal"
+    )
+    db_session.add(sess)
+    await db_session.flush()
+    entry = WorkoutSessionEntry(session_id=sess.id, canonical_exercise_id=ce.id, raw_input="Жим лёжа", position=0)
+    db_session.add(entry)
+    await db_session.flush()
+    db_session.add(WorkoutSet(entry_id=entry.id, idx=1, set_type="working", weight_kg=60.0, reps=10, completed=True))
+    await db_session.commit()
+
+    data = await workout_progress.dashboard(db_session, user, exercise_id=-ce.id)
+    assert data["totals"]["sessions"] == 1
+    assert len(data["history"]) == 1
+    assert data["history"][0]["entries"][0]["name"] == "Жим лёжа"
+    assert any(item["id"] == -ce.id and item["name"] == "Жим лёжа" for item in data["library"])
+    assert len(data["progress"]) == 1
+    assert data["progress"][0]["metrics"]["max_weight"] == 60.0
+
+
+async def test_webapp_today_plan_v2_configure_generate_and_accept_starts_live_session(db_session, monkeypatch):
+    """WebApp Today's Plan configures, generates and accepts via Training v2 (TrainingProfile + CanonicalExercise)."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from aiohttp.test_utils import TestClient, TestServer
+
+    from src.database.models import CanonicalExercise, TrainingPlan, TrainingProfile
+    from src.services import gemini
+    from src.webapp import server
+    from tests.integration.test_security_and_meal_recovery import signed_data
+
+    user = await make_user(db_session, 4104)
+    db_session.add(TrainingProfile(user_id=4104, goal="hypertrophy", days_per_week=3, session_minutes=45))
+    db_session.add_all([
+        CanonicalExercise(user_id=4104, canonical_slug="latzug", display_name="Latzug", kind="strength", muscle_primary="back_lats", pattern="pull_v"),
+        CanonicalExercise(user_id=4104, canonical_slug="brustpresse", display_name="Brustpresse", kind="strength", muscle_primary="chest", pattern="push_h"),
+    ])
+    await db_session.commit()
+
+    monkeypatch.setattr(gemini, "call_gemini_with_retry", AsyncMock(return_value=SimpleNamespace(text='{"rationale": "Фокус на верх тела.", "cues": {}}')))
+    headers = {"X-Telegram-Init-Data": signed_data(4104)}
+
+    async with TestClient(TestServer(server.create_app(None))) as client:
+        res = await client.get("/api/workouts", headers=headers)
+        assert res.status == 200
+        initial = await res.json()
+        assert initial["preferences"]["sessions_per_week"] == 3
+        assert initial["preferences"]["minutes"] == 45
+        assert initial["today_plan"] is None
+
+        # Updating frequency syncs both User.training_preferences and TrainingProfile
+        res_pref = await client.post("/api/workouts/preferences", headers=headers, json={"sessions_per_week": 4})
+        assert res_pref.status == 200
+        db_session.expire_all()
+        assert (await db_session.get(TrainingProfile, 4104)).days_per_week == 4
+
+        res_cfg = await client.post(
+            "/api/workouts/configure",
+            headers=headers,
+            json={"revision": 0, "preferences": {"focus": "upper", "minutes": 45, "effort": "normal", "wishes": ""}},
+        )
+        assert res_cfg.status == 200
+        cfg = await res_cfg.json()
+        assert cfg["status"] == "draft"
+        assert cfg["preferences"]["focus"] == "upper"
+
+        res_gen = await client.post(f"/api/workouts/today/{cfg['id']}/generate", headers=headers, json={"revision": cfg["revision"]})
+        assert res_gen.status == 200
+        gen = await res_gen.json()
+        assert gen["status"] == "proposed"
+        assert gen["items"]
+        assert all(it["exercise_id"] < 0 for it in gen["items"])
+        assert "Фокус на верх тела." in gen["summary"]
+
+        # Accept starts a Training v2 active WorkoutSession visible on subsequent dashboard load
+        res_acc = await client.post(f"/api/workouts/today/{cfg['id']}/accept", headers=headers, json={"revision": gen["revision"]})
+        assert res_acc.status == 200
+        acc = await res_acc.json()
+        assert acc["ok"] is True
+
+        # Idempotent repeat accept with previous revision returns same session
+        res_acc_dup = await client.post(f"/api/workouts/today/{cfg['id']}/accept", headers=headers, json={"revision": gen["revision"]})
+        assert res_acc_dup.status == 200
+        assert (await res_acc_dup.json())["workout_id"] == acc["workout_id"]
+
+        res_after = await client.get("/api/workouts", headers=headers)
+        assert res_after.status == 200
+        after = await res_after.json()
+        assert after["today_plan"]["status"] == "accepted"
+        assert after["active"]["id"] == acc["workout_id"]
+        assert after["active"]["status"] == "active"
+
+        db_session.expire_all()
+        stored_plan = await db_session.get(TrainingPlan, cfg["id"])
+        assert stored_plan.status == "in_progress"
+
+        # Foreign user cannot act on another user's TrainingPlan
+        await make_user(db_session, 4105)
+        foreign_headers = {"X-Telegram-Init-Data": signed_data(4105)}
+        assert (await client.post(f"/api/workouts/today/{cfg['id']}/accept", headers=foreign_headers, json={"revision": gen["revision"]})).status == 409
+
+
+async def test_webapp_today_plan_v2_pain_returns_safety_without_items(db_session):
+    """WebApp Today's Plan v2 checks pain keywords in wishes before proposing exercises."""
+    from aiohttp.test_utils import TestClient, TestServer
+    from src.database.models import CanonicalExercise, TrainingProfile
+    from src.webapp import server
+    from tests.integration.test_security_and_meal_recovery import signed_data
+
+    await make_user(db_session, 4106)
+    db_session.add(TrainingProfile(user_id=4106, goal="hypertrophy", days_per_week=3, session_minutes=45))
+    db_session.add(CanonicalExercise(user_id=4106, canonical_slug="latzug", display_name="Latzug", kind="strength", muscle_primary="back_lats", pattern="pull_v"))
+    await db_session.commit()
+
+    headers = {"X-Telegram-Init-Data": signed_data(4106)}
+    async with TestClient(TestServer(server.create_app(None))) as client:
+        res_cfg = await client.post(
+            "/api/workouts/configure",
+            headers=headers,
+            json={"revision": 0, "preferences": {"focus": "custom", "minutes": 40, "effort": "normal", "wishes": "Болит спина"}},
+        )
+        assert res_cfg.status == 200
+        cfg = await res_cfg.json()
+        res_gen = await client.post(f"/api/workouts/today/{cfg['id']}/generate", headers=headers, json={"revision": cfg["revision"]})
+        assert res_gen.status == 200
+        gen = await res_gen.json()
+        assert gen["status"] == "proposed"
+        assert gen["items"] == []
+        assert gen["summary"]

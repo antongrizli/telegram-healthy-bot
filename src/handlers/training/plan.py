@@ -237,6 +237,15 @@ async def _generate_plan(event: Message | CallbackQuery, state: FSMContext, feed
         minutes=mins,
         energy=en,
     )
+    if not plan_items and skip_gaps and lib_dicts:
+        plan_items = planner.build_fallback_plan(
+            profile=profile,
+            library_exercises=lib_dicts,
+            history_index=history_index,
+            focus=focus_obj,
+            minutes=mins,
+            energy=en,
+        )
     if not plan_items:
         await _show(event, t("gap_empty_plan"), _gap_keyboard(), feedback)
         return

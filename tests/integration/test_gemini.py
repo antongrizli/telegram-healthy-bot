@@ -303,3 +303,31 @@ async def test_openrouter_analyze_food_input(monkeypatch):
         args, kwargs = mock_post.call_args
         assert kwargs["json"]["model"] == "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
 
+
+async def test_call_gemini_caches_rejected_response_schema(mock_gemini_client, monkeypatch):
+    monkeypatch.setattr(gemini, "_models_without_response_schema", set())
+    mock_response = MagicMock()
+    mock_response.text = '{"food_items": [{"name": "Egg", "portion": "1", "calories": 70, "protein": 6.0, "fat": 5.0, "carb": 0.5}]}'
+
+    calls = 0
+
+    def side_effect(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        config = kwargs.get("config")
+        if getattr(config, "response_schema", None) is not None:
+            raise Exception("400 INVALID_ARGUMENT. Request contains an invalid argument.")
+        return mock_response
+
+    mock_gemini_client.models.generate_content.side_effect = side_effect
+
+    from google.genai import types
+    cfg1 = types.GenerateContentConfig(response_schema=gemini.FoodAnalysisResponse, response_mime_type="application/json")
+    await gemini.call_gemini_with_retry(contents=["test1"], config=cfg1, model="gemini-3.5-flash-lite")
+    assert calls == 2
+
+    cfg2 = types.GenerateContentConfig(response_schema=gemini.FoodAnalysisResponse, response_mime_type="application/json")
+    await gemini.call_gemini_with_retry(contents=["test2"], config=cfg2, model="gemini-3.5-flash-lite")
+    assert calls == 3  # Second call skipped response_schema immediately without a 400 round-trip
+    assert cfg2.response_schema is None
+

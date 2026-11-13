@@ -14,6 +14,11 @@ import re
 
 logger = logging.getLogger(__name__)
 
+# Remember models that reject response_schema / response_mime_type with 400 INVALID_ARGUMENT
+# so subsequent calls skip them without wasting an extra failed API round-trip.
+_models_without_response_schema: set[str] = set()
+_models_without_response_mime_type: set[str] = set()
+
 def is_gemma_model(model_name: Optional[str] = None) -> bool:
     name = (model_name or settings.GEMINI_MODEL or "").lower()
     return "gemma" in name
@@ -337,6 +342,11 @@ async def call_gemini_with_retry(
         )
     if model is None:
         model = settings.GEMINI_MODEL
+    if config is not None:
+        if model in _models_without_response_schema and getattr(config, "response_schema", None) is not None:
+            config.response_schema = None
+        if model in _models_without_response_mime_type and getattr(config, "response_mime_type", None) is not None:
+            config.response_mime_type = None
     delay = initial_delay
     for attempt in range(max_retries):
         from src.services.ai_quota import reserve_attempt
@@ -376,6 +386,7 @@ async def call_gemini_with_retry(
                         f"Model {model} rejected response_schema with 400 INVALID_ARGUMENT. "
                         "Retrying without response_schema..."
                     )
+                    _models_without_response_schema.add(model)
                     config.response_schema = None
                     continue
                 if getattr(config, "response_mime_type", None) is not None:
@@ -383,6 +394,7 @@ async def call_gemini_with_retry(
                         f"Model {model} rejected response_mime_type with 400 INVALID_ARGUMENT. "
                         "Retrying without response_mime_type..."
                     )
+                    _models_without_response_mime_type.add(model)
                     config.response_mime_type = None
                     continue
 

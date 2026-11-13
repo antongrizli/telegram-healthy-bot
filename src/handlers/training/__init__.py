@@ -45,12 +45,12 @@ router = Router(name="training_router")
 router.message.outer_middleware(TrainingLangMiddleware())
 router.callback_query.outer_middleware(TrainingLangMiddleware())
 router.include_router(hub.router)
+router.include_router(settings.router)
 router.include_router(log_text.router)
 router.include_router(live.router)
 router.include_router(plan.router)
 router.include_router(repeat.router)
 router.include_router(machines_confirm.router)
-router.include_router(settings.router)
 router.include_router(progress.router)
 
 __all__ = ["router"]

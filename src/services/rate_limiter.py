@@ -5,6 +5,7 @@ from datetime import datetime, UTC, timedelta
 from typing import Optional, Tuple
 
 from sqlalchemy import select, delete, func, update
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from aiogram import Bot
 from aiogram.exceptions import TelegramForbiddenError
@@ -715,13 +716,16 @@ async def start_queue_worker(bot: Bot, storage):
                 AiRequestQueue.request_type.in_(crud.EXECUTABLE_QUEUE_TYPES),
             ).values(status="pending"))
             await db.commit()
+        poll_interval = 2.0
         while _worker_running:
             record_worker_heartbeat()
             try:
                 # Pulse is independent of provider retries. A truly stuck operation
                 # still has a bounded deadline and leaves a recoverable claim.
                 await asyncio.wait_for(process_next_queue_item(bot, storage), timeout=900)
+                poll_interval = 2.0
             except asyncio.TimeoutError:
+                poll_interval = 2.0
                 logger.error("Queue item operation exceeded deadline (900s); handling timed out processing items")
                 try:
                     async with AsyncSessionLocal() as db:
@@ -747,10 +751,18 @@ async def start_queue_worker(bot: Bot, storage):
                 except Exception as db_err:
                     logger.error(f"Failed to reset timed out queue items: {db_err}")
             except Exception as e:
-                logger.error(f"Error in queue worker iteration: {e}", exc_info=True)
+                if isinstance(e, (SQLAlchemyError, OSError)) or type(e).__module__.startswith("asyncpg."):
+                    poll_interval = min(poll_interval * 2, 30.0)
+                    logger.warning(
+                        "Queue worker transient DB/network error (retrying in %.1fs): %s",
+                        poll_interval, e,
+                    )
+                else:
+                    poll_interval = 2.0
+                    logger.error(f"Error in queue worker iteration: {e}", exc_info=True)
             record_worker_heartbeat()
             try:
-                await asyncio.wait_for(_worker_stop_event.wait(), timeout=2.0)
+                await asyncio.wait_for(_worker_stop_event.wait(), timeout=poll_interval)
             except asyncio.TimeoutError:
                 pass
     except Exception as exc:

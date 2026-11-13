@@ -1,3 +1,4 @@
+import asyncio
 import contextlib
 import logging
 import hashlib
@@ -11,7 +12,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_ERROR, EVENT_JOB_MISSED
 from aiogram import Bot
-from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramForbiddenError
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramForbiddenError, TelegramNetworkError
 from src.database.connection import AsyncSessionLocal
 from src.database.models import AiRequestQueue
 from src.database import crud
@@ -200,14 +201,24 @@ async def send_daily_reminder(bot: Bot, user_id: int):
         if any(log.meal_type == 'dinner' for log in logs) or (not user.ux_preferences and len(logs) > 0):
             return
 
-        try:
-            msg = i18n_locales.get_text('ux_evening' if logs else 'ux_empty', user.language)
-            from src.handlers.ux import today_keyboard
-            await bot.send_message(user_id, msg, reply_markup=today_keyboard(user.language))
-        except TelegramForbiddenError:
-            await handle_user_blocked_bot(user_id, db=db)
-        except Exception as e:
-            logger.error("Error sending daily reminder to %s: %s", user_id, e)
+        msg = i18n_locales.get_text('ux_evening' if logs else 'ux_empty', user.language)
+        from src.handlers.ux import today_keyboard
+        for attempt in range(2):
+            try:
+                await bot.send_message(user_id, msg, reply_markup=today_keyboard(user.language))
+                break
+            except TelegramForbiddenError:
+                await handle_user_blocked_bot(user_id, db=db)
+                break
+            except TelegramNetworkError as e:
+                if attempt == 0:
+                    logger.warning("Transient network error sending daily reminder to %s, retrying: %s", user_id, e)
+                    await asyncio.sleep(2.0)
+                    continue
+                logger.error("Error sending daily reminder to %s: %s", user_id, e)
+            except Exception as e:
+                logger.error("Error sending daily reminder to %s: %s", user_id, e)
+                break
 
 async def deliver_saved_report(bot, db, user, delivery):
     """Delivery retries reference an owned snapshot, never another provider call."""

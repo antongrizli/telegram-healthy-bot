@@ -26,20 +26,24 @@ router = Router(name="training_log_text_router")
 @router.callback_query(F.data.startswith("t2:write_done"))
 @router.callback_query(F.data.startswith("t2:log_first"))
 async def start_text_logging(callback: CallbackQuery, state: FSMContext):
-    """Prompt user for multiline text input."""
+    """Prompt user for multiline text input, or resume existing non-empty draft."""
     await callback.answer()
     uid = callback.from_user.id
+    anchor_id = callback.message.message_id if callback.message else None
     async with AsyncSessionLocal() as db:
-        session = await sessions.get_or_create_draft(db, uid, source="text", anchor_message_id=callback.message.message_id)
+        session = await sessions.get_or_create_draft(db, uid, source="text", anchor_message_id=anchor_id)
+        await db.commit()
 
-    prompt_text = (
-        t("log_prompt")
-    )
+    await state.set_state(TrainingFSM.draft)
+    await state.update_data(session_id=session.id, draft_pending=[], anchor_message_id=anchor_id)
+    if session.entries and callback.message:
+        await _render_draft_state(callback, state, session)
+        return
+
+    prompt_text = t("log_prompt")
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=t("kb_cancel_back"), callback_data=make_cb("hub", 0, 0))]
     ])
-    await state.set_state(TrainingFSM.draft)
-    await state.update_data(session_id=session.id, draft_pending=[])
     if callback.message:
         await edit_or_send(callback.message, prompt_text, parse_mode="HTML", reply_markup=kb)
 
@@ -112,10 +116,11 @@ async def handle_draft_text_input(message: Message, state: FSMContext):
         lib_names = [e["display_name"] for e in ctx.library]
         history_index = ctx.history_index
         session = await db.get(WorkoutSession, session_id) if session_id else None
-        if not session:
+        if not session or session.user_id != uid or session.status != "draft":
             session = await sessions.get_or_create_draft(db, uid, source="text", anchor_message_id=anchor_id)
             session_id = session.id
             await state.update_data(session_id=session_id)
+            await db.commit()
 
     # 2. Deterministic parsing
     draft_items = parser.parse_text(text, lang=lang, library_names=lib_names, history_index=history_index)
@@ -142,6 +147,9 @@ async def handle_draft_text_input(message: Message, state: FSMContext):
 
     # 5. Save the rest to the draft session in DB (unparsed/new_name rows never create library machines)
     async with AsyncSessionLocal() as db:
+        session = await sessions.get_session_full(db, session_id, user_id=uid)
+        if not session or session.status != "draft":
+            session = await sessions.get_or_create_draft(db, uid, source="text", anchor_message_id=anchor_id)
         session = await sessions.add_draft_items(db, session, draft_items)
         if report.feeling:
             session.feeling = report.feeling
@@ -220,42 +228,22 @@ async def handle_draft_feeling_toggle(callback: CallbackQuery, state: FSMContext
     session_id = int(parts[2])
     rev = int(parts[3])
     feel_val = parts[4]
+    uid = callback.from_user.id
 
     async with AsyncSessionLocal() as db:
         session = await db.get(WorkoutSession, session_id)
-        if not session or session.user_id != callback.from_user.id or session.revision != rev:
+        if not session or session.user_id != uid or session.revision != rev:
             await callback.answer(t("stale"), show_alert=False)
             return
 
         session.feeling = feel_val
         session.revision += 1
-        await db.flush()
-
-        # Re-fetch session entries
-        session = await sessions.get_or_create_draft(db, session.user_id)
+        await db.commit()
+        session = await sessions.get_session_full(db, session_id, user_id=uid)
 
     await callback.answer()
-    # Re-render
-    async with AsyncSessionLocal() as db:
-        session = await sessions.get_or_create_draft(db, callback.from_user.id)
-        # Build items representation
-        items = []
-        for idx, entry in enumerate(session.entries, 1):
-            items.append(
-                parser.DraftItem(
-                    line_no=idx,
-                    raw=entry.raw_input,
-                    name=entry.canonical_exercise.display_name if entry.canonical_exercise else entry.raw_input,
-                    sets=[parser.ParsedSet(weight_kg=s.weight_kg, reps=s.reps, duration_sec=s.duration_sec, distance_m=s.distance_m) for s in entry.workout_sets],
-                    note=entry.note,
-                    status="ok",
-                )
-            )
-
-    card_html = render.render_draft_card(items, feeling=feel_val)
-    kb = get_draft_keyboard(session.id, session.revision, current_feeling=feel_val)
-    if callback.message:
-        await edit_or_send(callback.message, card_html, parse_mode="HTML", reply_markup=kb)
+    if session:
+        await _render_draft_state(callback, state, session)
 
 
 @router.callback_query(F.data.startswith("t2:save_draft:"))
@@ -278,9 +266,11 @@ async def handle_save_draft(callback: CallbackQuery, state: FSMContext):
         feeling = session.feeling or "normal"
         finished_session = await sessions.finish_session(db, session_id, rev, feeling=feeling, user_id=callback.from_user.id)
         summary_data = await summary.build_session_summary(db, finished_session)
+        await db.commit()
 
     await callback.answer(t("saved"))
-    await state.clear()
+    await state.set_state(TrainingFSM.hub)
+    await state.set_data({})
 
     summary_html = render.render_summary_card(summary_data)
     kb = get_summary_keyboard(session_id)
@@ -294,40 +284,33 @@ async def handle_undo_last_draft_item(callback: CallbackQuery, state: FSMContext
     parts = callback.data.split(":")
     session_id = int(parts[2])
     rev = int(parts[3])
+    uid = callback.from_user.id
 
     async with AsyncSessionLocal() as db:
         # entries must be eagerly loaded: a lazy load on an async session raises MissingGreenlet
-        session = await sessions.get_session_full(db, session_id, user_id=callback.from_user.id)
+        session = await sessions.get_session_full(db, session_id, user_id=uid)
         if not session or session.revision != rev:
             await callback.answer(t("stale_alert"))
             return
 
         if session.entries:
-            last_entry = session.entries[-1]
+            last_entry = sorted(session.entries, key=lambda e: e.position)[-1]
             await db.delete(last_entry)
             session.revision += 1
             await db.flush()
-
-        session = await sessions.get_or_create_draft(db, callback.from_user.id)
+            await db.commit()
+            db.expire_all()
+            session = await sessions.get_session_full(db, session_id, user_id=uid)
 
     await callback.answer(t("removed"))
-    # Redraw
-    items = []
-    for idx, entry in enumerate(session.entries, 1):
-        items.append(
-            parser.DraftItem(
-                line_no=idx,
-                raw=entry.raw_input,
-                name=entry.canonical_exercise.display_name if entry.canonical_exercise else entry.raw_input,
-                sets=[parser.ParsedSet(weight_kg=s.weight_kg, reps=s.reps, duration_sec=s.duration_sec, distance_m=s.distance_m) for s in entry.workout_sets],
-                note=entry.note,
-                status="ok",
-            )
-        )
-    card_html = render.render_draft_card(items, feeling=session.feeling or "normal")
-    kb = get_draft_keyboard(session.id, session.revision, current_feeling=session.feeling or "normal")
-    if callback.message:
-        await edit_or_send(callback.message, card_html, parse_mode="HTML", reply_markup=kb)
+    pending = (await state.get_data()).get("draft_pending") or []
+    if session and (session.entries or pending):
+        await _render_draft_state(callback, state, session)
+    elif callback.message:
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=t("kb_cancel_back"), callback_data=make_cb("hub", 0, 0))]
+        ])
+        await edit_or_send(callback.message, t("log_prompt"), parse_mode="HTML", reply_markup=kb)
 
 
 @router.callback_query(F.data.startswith("t2:cancel_draft:"))
@@ -338,8 +321,14 @@ async def handle_cancel_draft(callback: CallbackQuery, state: FSMContext):
     rev = int(parts[3])
 
     async with AsyncSessionLocal() as db:
-        await sessions.cancel_session(db, session_id, rev, user_id=callback.from_user.id)
+        try:
+            await sessions.cancel_session(db, session_id, rev, user_id=callback.from_user.id)
+        except sessions.StaleRevisionError:
+            await callback.answer(t("stale_alert"), show_alert=True)
+            return
+        await db.commit()
 
+    await state.set_data({})
     await callback.answer(t("draft_cancelled"))
     from src.handlers.training.hub import render_and_send_hub
     if callback.message:

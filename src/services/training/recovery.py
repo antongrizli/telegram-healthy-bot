@@ -1,7 +1,7 @@
 """Recovery tracking and focus recommendation."""
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 from src.utils.training_locales import t
 
 EXPERIENCE_TARGET_SETS = {
@@ -58,6 +58,7 @@ def suggest_focus(
     profile: Optional[Any],
     muscle_stats: Dict[str, Dict[str, Any]],
     last_session_focus: Optional[List[str]] = None,
+    covered_groups: Optional[Set[str]] = None,
 ) -> Tuple[str, str]:
     """Suggest focus group and rationale for today's session based on split or recovery.
     Returns: (group_key, reason_text)
@@ -87,6 +88,15 @@ def suggest_focus(
 
     # 2. Auto split based on fresh muscle groups with biggest deficit
     groups_priority = ["legs", "back", "chest", "arms", "shoulders"]
+    if covered_groups:
+        available = [g for g in groups_priority if g in covered_groups]
+        if available:
+            groups_priority = available
+        elif len(covered_groups) == 1:
+            only_group = next(iter(covered_groups))
+            return only_group, t("rec_fresh")
+        else:
+            groups_priority = sorted(covered_groups)
     best_group = "fullbody"
     best_deficit = -999.0
     best_days_since = 0.0

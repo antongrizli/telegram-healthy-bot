@@ -70,7 +70,7 @@ function renderWorkoutCard(parent, item, draft = false) {
     if (draft) woNode('span', wtr('draft'), summary, 'text-secondary');
     woEntries(card, item.entries);
     if (draft && !item.entries.length) {
-        woEntries(card, (item.schedule || []).map(i => ({...i, name: workoutData.library.find(e=>e.id===i.exercise_id)?.name || '?'})));
+        woEntries(card, (item.schedule || []).map(i => ({...i, name: workoutData.library.find(e=>e.id===i.exercise_id)?.name || i.name || '?'})));
     }
     if (item.feedback?.effort) woNode('p', `${wtr('effort')} ${wtr(item.feedback.effort === 'unknown' ? 'skip' : item.feedback.effort)}`, card);
     if (item.feedback?.comment) woNode('p', item.feedback.comment, card);
@@ -93,7 +93,7 @@ async function renderTodayPlan(parent) {
         woNode('p', wtr(plan.status === 'accepted' ? 'plan_accepted' : 'proposal'), section);
         woNode('p', plan.summary, section);
         if (plan.stale) woNode('p', wtr('changed'), section);
-        woEntries(section, plan.items.map(i=>({...i, name:workoutData.library.find(e=>e.id===i.exercise_id)?.name || '?'})));
+        woEntries(section, plan.items.map(i=>({...i, name:workoutData.library.find(e=>e.id===i.exercise_id)?.name || i.name || '?'})));
         if (plan.status === 'proposed') {
             if (plan.items.length) woAction(section, wtr('accept'), async () => {
                 await woApi(`/today/${plan.id}/accept`, 'POST', {revision:plan.revision}); await loadWorkouts();

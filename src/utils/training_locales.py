@@ -209,6 +209,14 @@ COPY.update({
     "rest_pref_off": ("⏱ Auto rest after each set: OFF (tap to turn on)", "⏱ Авто-отдых после подхода: ВЫКЛ (нажмите, чтобы включить)", "⏱ Авто-відпочинок після підходу: ВИМК (натисніть, щоб увімкнути)", "⏱ Auto-odpoczynek po serii: WYŁ. (naciśnij, aby włączyć)", "⏱ Auto-Pause nach jedem Satz: AUS (tippen zum Einschalten)", "⏱ Set sonrası otomatik dinlenme: KAPALI (açmak için dokunun)", "⏱ Descanso automático tras cada serie: NO (toca para activar)"),
     "rest_pref_hint": ("Rest timer", "Таймер отдыха", "Таймер відпочинку", "Timer odpoczynku", "Pausen-Timer", "Dinlenme zamanlayıcısı", "Temporizador de descanso"),
     "set_undone": ("Last set undone", "Последний подход отменён", "Останній підхід скасовано", "Ostatnia seria cofnięta", "Letzter Satz rückgängig", "Son set geri alındı", "Última serie deshecha"),
+    "prog_total": ("📊 Total workouts: <b>{n}</b>", "📊 Всего тренировок: <b>{n}</b>", "📊 Всього тренувань: <b>{n}</b>", "📊 Łącznie treningów: <b>{n}</b>", "📊 Trainings gesamt: <b>{n}</b>", "📊 Toplam antrenman: <b>{n}</b>", "📊 Entrenamientos totales: <b>{n}</b>"),
+    "prog_empty": ("<i>No completed workouts yet. Start one from the menu or log it by text.</i>", "<i>Пока нет завершённых тренировок. Начните с меню или запишите текстом.</i>", "<i>Поки немає завершених тренувань. Почніть з меню або запишіть текстом.</i>", "<i>Brak ukończonych treningów. Rozpocznij z menu lub zapisz tekstem.</i>", "<i>Noch keine abgeschlossenen Trainings. Starte im Menü oder trage per Text ein.</i>", "<i>Henüz tamamlanmış antrenman yok. Menüden başlatın veya metinle kaydedin.</i>", "<i>Aún no hay entrenamientos completados. Empieza desde el menú o regístralo por texto.</i>"),
+    "prog_list_title": ("\n📋 <b>Past workouts:</b>", "\n📋 <b>Прошлые тренировки:</b>", "\n📋 <b>Минулі тренування:</b>", "\n📋 <b>Poprzednie treningi:</b>", "\n📋 <b>Vergangene Trainings:</b>", "\n📋 <b>Geçmiş antrenmanlar:</b>", "\n📋 <b>Entrenamientos anteriores:</b>"),
+    "hist_detail_title": ("🗓 <b>Workout · {date}</b>", "🗓 <b>Тренировка · {date}</b>", "🗓 <b>Тренування · {date}</b>", "🗓 <b>Trening · {date}</b>", "🗓 <b>Training · {date}</b>", "🗓 <b>Antrenman · {date}</b>", "🗓 <b>Entrenamiento · {date}</b>"),
+    "hist_volume": ("💪 Volume: <b>{v}</b>", "💪 Объём: <b>{v}</b>", "💪 Обсяг: <b>{v}</b>", "💪 Objętość: <b>{v}</b>", "💪 Volumen: <b>{v}</b>", "💪 Hacim: <b>{v}</b>", "💪 Volumen: <b>{v}</b>"),
+    "kb_hist_back": ("⬅️ History", "⬅️ К истории", "⬅️ До історії", "⬅️ Historia", "⬅️ Verlauf", "⬅️ Geçmiş", "⬅️ Historial"),
+    "kb_hist_prev": ("⬅️ Newer", "⬅️ Новее", "⬅️ Новіші", "⬅️ Nowsze", "⬅️ Neuer", "⬅️ Daha yeni", "⬅️ Más recientes"),
+    "kb_hist_next": ("Older ➡️", "Старее ➡️", "Старіші ➡️", "Starsze ➡️", "Älter ➡️", "Daha eski ➡️", "Más antiguos ➡️"),
 })
 
 

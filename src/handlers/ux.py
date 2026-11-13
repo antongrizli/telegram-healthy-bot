@@ -66,6 +66,11 @@ async def today(message: Message, state: FSMContext, user_language: str, db_user
 
 @router.message(F.text.in_(get_all_translations('ux_progress')))
 async def progress_section(message: Message, state: FSMContext, user_language: str):
+    current_state = await state.get_state() or ""
+    if current_state.startswith("TrainingFSM:"):
+        from src.handlers.training.hub import handle_progress_from_reply
+        await handle_progress_from_reply(message, state)
+        return
     await state.clear()
     await message.answer(tr('ux_progress', user_language),
                          reply_markup=reply.get_progress_keyboard(user_language))

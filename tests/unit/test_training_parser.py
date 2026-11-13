@@ -160,3 +160,42 @@ def test_live_shorthand():
     assert res3[0].reps == 10
     assert res3[1].weight_kg == 40.0
     assert res3[1].reps == 8
+
+
+def test_conversational_russian_formats():
+    """Common colloquial formats: weight at end, missing reps word, bodyweight sets, comma reps, single set."""
+    # Weight at end of sets x reps phrase
+    items1 = parse_line("Жим лежа 4 подхода по 15 раз 35кг")
+    assert len(items1) == 1 and items1[0].status == "ok"
+    assert items1[0].name == "Жим лежа"
+    assert len(items1[0].sets) == 4
+    assert items1[0].sets[0].weight_kg == 35.0 and items1[0].sets[0].reps == 15
+
+    # Omitted 'раз' after 'по 12'
+    items2 = parse_line("Жим 50кг 3 подхода по 12")
+    assert len(items2) == 1 and items2[0].status == "ok"
+    assert len(items2[0].sets) == 3
+    assert items2[0].sets[0].weight_kg == 50.0 and items2[0].sets[0].reps == 12
+
+    # Bodyweight sets without weight
+    items3 = parse_line("Отжимания 3 подхода по 15 раз")
+    assert len(items3) == 1 and items3[0].status == "ok"
+    assert items3[0].kind == "bodyweight"
+    assert len(items3[0].sets) == 3 and items3[0].sets[0].reps == 15
+
+    # Weight + comma-separated reps
+    items4 = parse_line("Жим 20 кг: 10, 10, 8 повторений")
+    assert len(items4) == 1 and items4[0].status == "ok"
+    assert [(s.weight_kg, s.reps) for s in items4[0].sets] == [(20.0, 10), (20.0, 10), (20.0, 8)]
+
+    # Single set with weight and reps word
+    items5 = parse_line("Жим лежа 50 кг 10 раз")
+    assert len(items5) == 1 and items5[0].status == "ok"
+    assert len(items5[0].sets) == 1
+    assert items5[0].sets[0].weight_kg == 50.0 and items5[0].sets[0].reps == 10
+
+    # Bodyweight single set with reps word
+    items6 = parse_line("Подтягивания 12 раз")
+    assert len(items6) == 1 and items6[0].status == "ok"
+    assert items6[0].kind == "bodyweight"
+    assert len(items6[0].sets) == 1 and items6[0].sets[0].reps == 12

@@ -135,7 +135,8 @@ async def render_current_live_card(
 
         summary_html = render.render_summary_card(summary_data)
         kb = get_summary_keyboard(session.id)
-        await state.clear()
+        await state.set_state(TrainingFSM.hub)
+        await state.set_data({})
         if edit:
             await edit_or_send(target_message, summary_html, parse_mode="HTML", reply_markup=kb)
         else:
@@ -582,7 +583,8 @@ async def handle_finish_live(callback: CallbackQuery, state: FSMContext):
         scheduler.remove_job(f"rest_timer_{session_id}")
 
     await callback.answer(t("workout_finished"))
-    await state.clear()
+    await state.set_state(TrainingFSM.hub)
+    await state.set_data({})
 
     summary_html = render.render_summary_card(summary_data)
     kb = get_summary_keyboard(session.id)

@@ -235,20 +235,65 @@ def parse_line(
         ]
 
     # -------------------------------------------------------------
-    # Rule R1: "35кг x 4 подхода по 15 раз" or "4 подхода по 15 раз 35кг"
+    # Rule R1: "35кг x 4 подхода по 15 раз" / "35кг 4 подхода по 15" / "4 подхода по 15 раз 35кг"
     # -------------------------------------------------------------
     r1_pattern = (
         r"(\d+(?:\.\d+)?)\s*(?:" + RE_WEIGHT_UNIT + r")\s*(?:x\s*)?"
-        r"(\d+)\s*" + RE_SETS_WORD + r"\s*(?:по\s*)?(\d+)\s*" + RE_REPS_WORD
+        r"(\d+)\s*" + RE_SETS_WORD + r"\s*(?:по\s*(\d+)(?:\s*" + RE_REPS_WORD + r")?|(\d+)\s*" + RE_REPS_WORD + r")"
     )
     r1_match = re.search(r1_pattern, normalized, re.IGNORECASE)
     if r1_match:
         w = float(r1_match.group(1))
         n_sets = int(r1_match.group(2))
-        reps = int(r1_match.group(3))
-        name, note = _extract_name_and_tail(raw_line, r1_match.start(), r1_match.end())
+        reps = int(r1_match.group(3) or r1_match.group(4))
+        name, note = _extract_name_and_tail(normalized, r1_match.start(), r1_match.end())
         sets = [ParsedSet(weight_kg=w, reps=reps) for _ in range(n_sets)]
         return _make_draft_items(name, sets, raw_line, line_no, note, "strength", catalog, library_names)
+
+    r1b_pattern = (
+        r"(\d+)\s*" + RE_SETS_WORD + r"\s*(?:по\s*(\d+)(?:\s*" + RE_REPS_WORD + r")?|(\d+)\s*" + RE_REPS_WORD + r")"
+        r"\s*(?:x\s*|по\s*|@\s*)?(\d+(?:\.\d+)?)\s*(?:" + RE_WEIGHT_UNIT + r")"
+    )
+    r1b_match = re.search(r1b_pattern, normalized, re.IGNORECASE)
+    if r1b_match:
+        n_sets = int(r1b_match.group(1))
+        reps = int(r1b_match.group(2) or r1b_match.group(3))
+        w = float(r1b_match.group(4))
+        name, note = _extract_name_and_tail(normalized, r1b_match.start(), r1b_match.end())
+        sets = [ParsedSet(weight_kg=w, reps=reps) for _ in range(n_sets)]
+        return _make_draft_items(name, sets, raw_line, line_no, note, "strength", catalog, library_names)
+
+    r1c_match = re.search(
+        r"^(.*?)\s+(\d+)\s*" + RE_SETS_WORD + r"\s*(?:по\s*(\d+)(?:\s*" + RE_REPS_WORD + r")?|(\d+)\s*" + RE_REPS_WORD + r")$",
+        normalized,
+        re.IGNORECASE,
+    )
+    if r1c_match:
+        name = clean_name(r1c_match.group(1))
+        n_sets = int(r1c_match.group(2))
+        reps = int(r1c_match.group(3) or r1c_match.group(4))
+        cat_entry = catalog.find_by_name(name)
+        is_bodyweight = bool(cat_entry and cat_entry.get("kind") == "bodyweight")
+        if is_bodyweight:
+            sets = [ParsedSet(weight_kg=None, reps=reps) for _ in range(n_sets)]
+            return _make_draft_items(name, sets, raw_line, line_no, None, "bodyweight", catalog, library_names)
+        hist = history_index.get(name.lower())
+        weight = _hist_get(hist, "top_weight") if hist else None
+        sets = [ParsedSet(weight_kg=weight, reps=reps) for _ in range(n_sets)]
+        return _make_draft_items(name, sets, raw_line, line_no, None, "strength", catalog, library_names)
+
+    # Weight + comma-separated reps: "Жим 20 кг: 10, 10, 8 повторений"
+    comma_reps_match = re.search(
+        r"^(.*?)\s+(\d+(?:\.\d+)?)\s*(?:" + RE_WEIGHT_UNIT + r")\s*[:\-]?\s*(\d+(?:\s*,\s*\d+)+)\s*(?:" + RE_REPS_WORD + r")?$",
+        normalized,
+        re.IGNORECASE,
+    )
+    if comma_reps_match:
+        name = clean_name(comma_reps_match.group(1))
+        w = float(comma_reps_match.group(2))
+        reps_vals = [int(r.strip()) for r in comma_reps_match.group(3).split(",")]
+        sets = [ParsedSet(weight_kg=w, reps=r) for r in reps_vals]
+        return _make_draft_items(name, sets, raw_line, line_no, None, "strength", catalog, library_names)
 
     # -------------------------------------------------------------
     # Rule R4: List of W x R: "60x10, 70x8, 80x6"
@@ -446,7 +491,7 @@ def parse_line(
         ]
 
     # -------------------------------------------------------------
-    # Rule R14: "Brustpresse 35 кг x 12" -> sets unknown (1 set suggested)
+    # Rule R14: "Brustpresse 35 кг x 12" or "Жим лежа 50 кг 10 раз" -> 1 set
     # -------------------------------------------------------------
     r14_match = re.search(
         r"^(.*?)\s+(\d+(?:\.\d+)?)\s*(?:" + RE_WEIGHT_UNIT + r")\s*x\s*(\d+)$",
@@ -459,6 +504,32 @@ def parse_line(
         reps = int(r14_match.group(3))
         sets = [ParsedSet(weight_kg=w, reps=reps)]
         return _make_draft_items(name, sets, raw_line, line_no, None, "strength", catalog, library_names)
+
+    r14b_match = re.search(
+        r"^(.*?)\s+(\d+(?:\.\d+)?)\s*(?:" + RE_WEIGHT_UNIT + r")\s*(?:на\s*)?(\d+)\s*" + RE_REPS_WORD + r"$",
+        normalized,
+        re.IGNORECASE,
+    )
+    if r14b_match:
+        name = clean_name(r14b_match.group(1))
+        w = float(r14b_match.group(2))
+        reps = int(r14b_match.group(3))
+        sets = [ParsedSet(weight_kg=w, reps=reps)]
+        return _make_draft_items(name, sets, raw_line, line_no, None, "strength", catalog, library_names)
+
+    r14c_match = re.search(
+        r"^(.*?)\s+(\d+)\s*" + RE_REPS_WORD + r"$",
+        normalized,
+        re.IGNORECASE,
+    )
+    if r14c_match:
+        name = clean_name(r14c_match.group(1))
+        reps = int(r14c_match.group(2))
+        cat_entry = catalog.find_by_name(name)
+        is_bodyweight = bool(cat_entry and cat_entry.get("kind") == "bodyweight")
+        kind = "bodyweight" if is_bodyweight else "strength"
+        sets = [ParsedSet(weight_kg=None, reps=reps)]
+        return _make_draft_items(name, sets, raw_line, line_no, None, kind, catalog, library_names)
 
     # -------------------------------------------------------------
     # Fallback unparsed

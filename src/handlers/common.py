@@ -218,6 +218,39 @@ async def recover_menu(message: Message, state: FSMContext, user_language: str, 
 async def recover_stale_keyboard(message: Message, state: FSMContext, user_language: str, db_user, album=None):
     # Telegram keeps reply keyboards after MemoryStorage is lost on restart.
     # Never infer which pending meal a stale Accept button refers to.
+    if db_user and not db_user.is_blocked and message.text and not message.text.startswith("/"):
+        from datetime import UTC, datetime, timedelta
+        from sqlalchemy import select
+        from src.database.models import WorkoutSession
+        from src.services.training import parser as training_parser
+
+        async with AsyncSessionLocal() as db:
+            cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=2)
+            draft = (await db.scalars(
+                select(WorkoutSession)
+                .where(
+                    WorkoutSession.user_id == message.from_user.id,
+                    WorkoutSession.status == "draft",
+                    WorkoutSession.performed_at >= cutoff,
+                )
+                .order_by(WorkoutSession.id.desc())
+                .limit(1)
+            )).first()
+        if draft is not None:
+            parsed_items = training_parser.parse_text(message.text, lang=user_language)
+            if any(it.status in ("ok", "ambiguous") for it in parsed_items):
+                from src.handlers.training.log_text import handle_draft_text_input
+                from src.handlers.training.states import TrainingFSM
+
+                await state.set_state(TrainingFSM.draft)
+                await state.update_data(
+                    session_id=draft.id,
+                    anchor_message_id=draft.anchor_message_id,
+                    draft_pending=[],
+                )
+                await handle_draft_text_input(message, state)
+                return
+
     from src.services.ux import is_food_entry
     if db_user and not db_user.is_blocked and is_food_entry(message):
         from src.handlers.food import process_food_input, FoodLoggingState

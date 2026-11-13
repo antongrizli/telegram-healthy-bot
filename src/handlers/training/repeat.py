@@ -154,9 +154,11 @@ async def handle_save_checked_repeat_items(callback: CallbackQuery, state: FSMCo
 
         await db.flush()
         summary_data = await summary.build_session_summary(db, session)
+        await db.commit()
 
     await callback.answer(t("workout_saved"))
-    await state.clear()
+    await state.set_state(TrainingFSM.hub)
+    await state.set_data({})
 
     summary_html = render.render_summary_card(summary_data)
     kb = get_summary_keyboard(session.id)

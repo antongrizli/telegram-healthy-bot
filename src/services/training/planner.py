@@ -175,7 +175,89 @@ def build_plan(
         selected.remove(lowest)
         total_time = sum(exercise_duration_seconds(base_sets, rest_sec) for _ in selected)
 
-    # 5. Build PlanItems
+    return _build_plan_items_from_selected(
+        selected=selected,
+        catalog=catalog,
+        goal=goal,
+        rest_sec=rest_sec,
+        base_sets=base_sets,
+        current_energy=current_energy,
+        focus=focus,
+        history_index=history_index,
+    )
+
+
+def build_fallback_plan(
+    profile: Optional[Any],
+    library_exercises: List[Dict[str, Any]],
+    history_index: Dict[str, Any],
+    focus: Focus,
+    minutes: Optional[int] = None,
+    energy: Optional[str] = None,
+) -> List[PlanItem]:
+    """Build a plan using whatever non-conflicting machines exist in the user's library."""
+    if not library_exercises:
+        return []
+
+    from src.services.training.focus import FOCUS_GROUPS
+
+    # Try expanding focus to fullbody + cardio while keeping user's limitations
+    broad_muscles = sorted(
+        {m for grp in FOCUS_GROUPS.values() for m in grp}
+    )
+    broad_focus = focus.model_copy(update={"primary_muscles": broad_muscles, "accent": None})
+    items = build_plan(
+        profile=profile,
+        library_exercises=library_exercises,
+        history_index=history_index,
+        focus=broad_focus,
+        minutes=minutes,
+        energy=energy,
+    )
+    if items:
+        return items
+
+    # Last resort when library machines have no muscle tags yet: pick non-conflicting items directly.
+    catalog = get_catalog()
+    goal = getattr(profile, "goal", "hypertrophy") or "hypertrophy"
+    goal_defaults = GOAL_DEFAULTS.get(goal.lower(), GOAL_DEFAULTS["hypertrophy"])
+    rest_sec = goal_defaults["rest_sec"]
+    base_sets = goal_defaults["sets"]
+    current_energy = energy or focus.energy or "normal"
+    if current_energy == "low":
+        base_sets = max(2, base_sets - 1)
+
+    selected = [
+        cand for cand in library_exercises
+        if score_candidate(cand, focus, False, False, False) >= 0.0
+    ][:5]
+    if not selected:
+        return []
+
+    selected.sort(key=lambda c: PATTERN_ORDER.get(c.get("pattern") or "isolation", 8))
+    return _build_plan_items_from_selected(
+        selected=selected,
+        catalog=catalog,
+        goal=goal,
+        rest_sec=rest_sec,
+        base_sets=base_sets,
+        current_energy=current_energy,
+        focus=focus,
+        history_index=history_index,
+    )
+
+
+def _build_plan_items_from_selected(
+    selected: List[Dict[str, Any]],
+    catalog,
+    goal: str,
+    rest_sec: int,
+    base_sets: int,
+    current_energy: str,
+    focus: Focus,
+    history_index: Dict[str, Any],
+) -> List[PlanItem]:
+    """Build concrete PlanItems with targets, warmups and cues from selected library candidates."""
     plan_items: List[PlanItem] = []
     first_in_group_seen: Set[str] = set()
 

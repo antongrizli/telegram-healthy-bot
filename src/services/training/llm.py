@@ -320,6 +320,8 @@ async def classify_focus(text: str, lang: str = "ru") -> Optional[List[str]]:
             )
         if response and response.text:
             data = gemini.extract_json(response.text)
+            if isinstance(data, str):
+                data = json.loads(data)
             if isinstance(data, dict) and "groups" in data:
                 return data["groups"]
     except Exception as e:
@@ -360,6 +362,8 @@ async def polish_plan(
             )
         if response and response.text:
             data = gemini.extract_json(response.text)
+            if isinstance(data, str):
+                data = json.loads(data)
             if isinstance(data, dict):
                 cues_map = data.get("cues", {})
                 new_rationale = data.get("rationale") or rationale_default
